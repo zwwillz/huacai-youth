@@ -1,20 +1,39 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { boolean, index, integer, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
-export const users = sqliteTable("users", {
+export const users = pgTable("users", {
   id: text("id").primaryKey(),
-  email: text("email").notNull(),
+  username: text("username").notNull(),
+  email: text("email"),
   displayName: text("display_name").notNull(),
+  passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("referee"),
   status: text("status").notNull().default("active"),
+  passwordUpdatedAt: text("password_updated_at").notNull(),
   lastLoginAt: text("last_login_at"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [
+  uniqueIndex("users_username_unique").on(table.username),
   uniqueIndex("users_email_unique").on(table.email),
   index("users_role_idx").on(table.role),
 ]);
 
-export const series = sqliteTable("series", {
+export const adminSessions = pgTable("admin_sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  lastSeenAt: text("last_seen_at").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("admin_sessions_token_unique").on(table.tokenHash),
+  index("admin_sessions_user_idx").on(table.userId),
+  index("admin_sessions_expires_idx").on(table.expiresAt),
+]);
+
+export const series = pgTable("series", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   shortName: text("short_name"),
@@ -25,7 +44,7 @@ export const series = sqliteTable("series", {
   updatedAt: text("updated_at").notNull(),
 });
 
-export const venues = sqliteTable("venues", {
+export const venues = pgTable("venues", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   province: text("province"),
@@ -39,7 +58,7 @@ export const venues = sqliteTable("venues", {
   updatedAt: text("updated_at").notNull(),
 });
 
-export const events = sqliteTable("events", {
+export const events = pgTable("events", {
   id: text("id").primaryKey(),
   seriesId: text("series_id").notNull().references(() => series.id),
   year: integer("year").notNull(),
@@ -68,7 +87,7 @@ export const events = sqliteTable("events", {
   index("events_status_idx").on(table.status, table.publishStatus),
 ]);
 
-export const eventMembers = sqliteTable("event_members", {
+export const eventMembers = pgTable("event_members", {
   id: text("id").primaryKey(),
   eventId: text("event_id").notNull().references(() => events.id),
   userId: text("user_id").notNull().references(() => users.id),
@@ -81,7 +100,7 @@ export const eventMembers = sqliteTable("event_members", {
   index("event_members_role_idx").on(table.eventId, table.role),
 ]);
 
-export const eventOrganizations = sqliteTable("event_organizations", {
+export const eventOrganizations = pgTable("event_organizations", {
   id: text("id").primaryKey(),
   eventId: text("event_id").notNull().references(() => events.id),
   organizationType: text("organization_type").notNull(),
@@ -91,7 +110,7 @@ export const eventOrganizations = sqliteTable("event_organizations", {
   updatedAt: text("updated_at").notNull(),
 }, (table) => [index("event_organizations_event_idx").on(table.eventId)]);
 
-export const eventGroups = sqliteTable("event_groups", {
+export const eventGroups = pgTable("event_groups", {
   id: text("id").primaryKey(),
   eventId: text("event_id").notNull().references(() => events.id),
   name: text("name").notNull(),
@@ -111,7 +130,7 @@ export const eventGroups = sqliteTable("event_groups", {
   index("event_groups_event_idx").on(table.eventId),
 ]);
 
-export const eventDocuments = sqliteTable("event_documents", {
+export const eventDocuments = pgTable("event_documents", {
   id: text("id").primaryKey(),
   eventId: text("event_id").notNull().references(() => events.id),
   documentType: text("document_type").notNull(),
@@ -119,14 +138,14 @@ export const eventDocuments = sqliteTable("event_documents", {
   fileKey: text("file_key"),
   externalUrl: text("external_url"),
   versionNo: integer("version_no").notNull().default(1),
-  isPublished: integer("is_published", { mode: "boolean" }).notNull().default(false),
+  isPublished: boolean("is_published").notNull().default(false),
   publishedAt: text("published_at"),
   createdBy: text("created_by").references(() => users.id),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [index("event_documents_event_type_idx").on(table.eventId, table.documentType)]);
 
-export const eventGuides = sqliteTable("event_guides", {
+export const eventGuides = pgTable("event_guides", {
   id: text("id").primaryKey(),
   eventId: text("event_id").notNull().references(() => events.id),
   guideType: text("guide_type").notNull(),
@@ -145,7 +164,7 @@ export const eventGuides = sqliteTable("event_guides", {
   index("event_guides_event_idx").on(table.eventId),
 ]);
 
-export const eventSponsors = sqliteTable("event_sponsors", {
+export const eventSponsors = pgTable("event_sponsors", {
   id: text("id").primaryKey(),
   eventId: text("event_id").notNull().references(() => events.id),
   name: text("name").notNull(),
@@ -153,12 +172,12 @@ export const eventSponsors = sqliteTable("event_sponsors", {
   logoKey: text("logo_key"),
   websiteUrl: text("website_url"),
   sortOrder: integer("sort_order").notNull().default(0),
-  isPublished: integer("is_published", { mode: "boolean" }).notNull().default(false),
+  isPublished: boolean("is_published").notNull().default(false),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [index("event_sponsors_event_idx").on(table.eventId, table.sortOrder)]);
 
-export const players = sqliteTable("players", {
+export const players = pgTable("players", {
   id: text("id").primaryKey(),
   fullName: text("full_name").notNull(),
   gender: text("gender"),
@@ -180,19 +199,19 @@ export const players = sqliteTable("players", {
   index("players_birth_date_idx").on(table.birthDate),
 ]);
 
-export const guardians = sqliteTable("guardians", {
+export const guardians = pgTable("guardians", {
   id: text("id").primaryKey(),
   playerId: text("player_id").notNull().references(() => players.id),
   fullName: text("full_name").notNull(),
   relationship: text("relationship").notNull(),
   phone: text("phone").notNull(),
   email: text("email"),
-  isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(true),
+  isPrimary: boolean("is_primary").notNull().default(true),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [index("guardians_player_idx").on(table.playerId)]);
 
-export const registrations = sqliteTable("registrations", {
+export const registrations = pgTable("registrations", {
   id: text("id").primaryKey(),
   eventId: text("event_id").notNull().references(() => events.id),
   groupId: text("group_id").notNull().references(() => eventGroups.id),
@@ -213,7 +232,7 @@ export const registrations = sqliteTable("registrations", {
   index("registrations_review_idx").on(table.eventId, table.status),
 ]);
 
-export const publications = sqliteTable("publications", {
+export const publications = pgTable("publications", {
   id: text("id").primaryKey(),
   eventId: text("event_id").notNull().references(() => events.id),
   moduleType: text("module_type").notNull(),
@@ -230,7 +249,7 @@ export const publications = sqliteTable("publications", {
   index("publications_status_idx").on(table.eventId, table.status),
 ]);
 
-export const auditLogs = sqliteTable("audit_logs", {
+export const auditLogs = pgTable("audit_logs", {
   id: text("id").primaryKey(),
   actorUserId: text("actor_user_id").references(() => users.id),
   eventId: text("event_id").references(() => events.id),

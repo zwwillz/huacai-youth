@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as { id?: string; status?: "draft" | "published" };
     if (!body.id || !body.status) throw new Error("缺少发布参数。");
-    return Response.json({ data: await setPublicationStatus(viewer.email, body.id, body.status) });
+    return Response.json({ data: await setPublicationStatus(viewer.username, body.id, body.status) });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "发布状态更新失败。" }, { status: 400 });
   }

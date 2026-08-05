@@ -15,6 +15,35 @@
 .backend-login-actions>a:first-child{background:linear-gradient(135deg,#f449a0,#9540e4);box-shadow:0 13px 30px #ec459642}
 .backend-login-actions>a:last-child{border:1px solid #ffffff32;background:#ffffff10}
 .backend-login-card footer{margin-top:30px;padding-top:20px;border-top:1px solid #ffffff1e;display:flex;gap:26px;color:#c8b9e4;font-size:10px}
+.backend-login-card footer a{margin-left:auto;color:#fff;text-decoration:none}
+.backend-login-form{width:min(430px,100%);display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.backend-login-form label{display:flex;flex-direction:column;gap:7px}
+.backend-login-form label span{color:#d9cdef;font-size:10px;font-weight:700}
+.backend-login-form input{width:100%;height:44px;padding:0 13px;border:1px solid #ffffff2c;border-radius:11px;outline:0;color:#fff;background:#ffffff12}
+.backend-login-form input::placeholder{color:#c8bbdc90}
+.backend-login-form input:focus{border-color:#f26ab1;background:#ffffff18}
+.backend-login-form button{grid-column:1/-1;min-height:44px;border:0;border-radius:12px;color:#fff;background:linear-gradient(135deg,#f449a0,#9540e4);box-shadow:0 13px 30px #ec459642;font-weight:800;cursor:pointer}
+.backend-login-form button:disabled{opacity:.6;cursor:wait}
+.backend-login-error{grid-column:1/-1;margin:0;padding:9px 11px;border-radius:9px;color:#ffd7e9;background:#ff4d9524;font-size:10px}
+.backend-first-setup{grid-column:1/-1;padding:13px 15px;border:1px solid #ffffff28;border-radius:11px;background:#ffffff0d}
+.backend-first-setup strong{font-size:12px}
+.backend-first-setup p{margin:4px 0 0!important;font-size:10px!important}
+.backend-confirm-password{grid-column:1/-1}
+.backend-config-warning{width:min(560px,100%);padding:18px 20px;border:1px solid #ffffff28;border-radius:14px;background:#ffffff10}
+.backend-config-warning strong{font-size:13px}
+.backend-config-warning p{margin:6px 0 0!important;font-size:11px!important}
+.backend-account-list>header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.backend-account-list>header h3{margin:5px 0 0}
+.backend-account-head,.backend-account-row{display:grid;grid-template-columns:minmax(170px,1.5fr) 100px 80px 110px minmax(150px,1fr);gap:12px;align-items:center}
+.backend-account-head{padding:9px 12px;color:var(--admin-muted);font-size:9px;background:#f7f5fa;border-radius:9px}
+.backend-account-row{min-height:62px;padding:9px 12px;border-bottom:1px solid var(--admin-line);font-size:10px}
+.backend-account-row>div:first-child{display:flex;flex-direction:column;gap:4px}
+.backend-account-row small{color:var(--admin-muted)}
+.backend-account-actions{display:flex;justify-content:flex-end;gap:6px}
+.backend-account-actions button{padding:6px 8px;border:1px solid var(--admin-line);border-radius:7px;background:#fff;color:#5e3a9d;font-size:9px;cursor:pointer}
+.backend-account-actions button:disabled{opacity:.5}
+.backend-account-editor{width:min(690px,calc(100% - 24px))}
+.backend-editor-tip{margin:0 24px 18px;padding:11px 13px;border-radius:10px;color:var(--admin-muted);background:#f6f3f9;font-size:10px;line-height:1.7}
 
 .backend-state{min-height:100vh;padding:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:#f7f6fa}
 .backend-state-logo{width:68px;height:68px;margin-bottom:24px;border-radius:21px;color:#fff;background:linear-gradient(145deg,#ef48a0,#6732d3);display:grid;place-items:center;font-size:22px;font-weight:900;box-shadow:0 17px 40px #6b36cf38}
@@ -256,7 +285,15 @@
   .backend-login-copy h1{font-size:36px}
   .backend-login-actions{align-items:stretch;flex-direction:column}
   .backend-login-actions a{justify-content:center}
+  .backend-login-form{grid-template-columns:1fr}
+  .backend-login-form button,.backend-login-error{grid-column:auto}
+  .backend-first-setup,.backend-confirm-password{grid-column:auto}
   .backend-login-card footer{gap:12px;flex-wrap:wrap}
+  .backend-login-card footer a{width:100%;margin-left:0}
+  .backend-account-head{display:none}
+  .backend-account-row{grid-template-columns:1fr auto;gap:8px}
+  .backend-account-row>span{font-size:9px}
+  .backend-account-actions{grid-column:1/-1;justify-content:flex-start}
   .backend-topbar{grid-template-columns:36px 1fr auto}
   .backend-event-select{grid-column:1/-1;grid-row:2;height:42px;margin:0 -13px;padding-left:16px;padding-right:16px;border-radius:0;border-left:0;border-right:0}
   .backend-topbar{height:110px;align-content:center}

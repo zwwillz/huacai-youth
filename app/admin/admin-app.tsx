@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-type Viewer = { email: string; displayName: string };
-type Account = { id: string; email: string; displayName: string; role: string; roleLabel: string };
+type Viewer = { username: string; displayName: string };
+type Account = { id: string; username: string; displayName: string; role: string; roleLabel: string };
+type ManagedAccount = { id: string; username: string; displayName: string; role: string; status: string; lastLoginAt: string | null; createdAt: string };
 type EventRow = {
   id: string;
   year: number;
@@ -40,6 +41,7 @@ type Snapshot = {
   documents: DocumentRow[];
   guides: GuideRow[];
   sponsors: SponsorRow[];
+  accounts: ManagedAccount[];
   auditLogs: AuditRow[];
 };
 type SectionId = "dashboard" | "events" | "content" | "registrations" | "players" | "competition" | "rankings" | "accounts";
@@ -59,6 +61,7 @@ type EventDraft = {
   status: string;
   publishStatus: string;
 };
+type AccountDraft = { username: string; displayName: string; password: string; role: "committee" | "referee" };
 
 const navItems: { id: SectionId; icon: string; title: string; hint: string }[] = [
   { id: "dashboard", icon: "首", title: "工作台", hint: "赛事总览与待办" },
@@ -87,6 +90,10 @@ const actionLabels: Record<string, string> = {
   update: "修改赛事资料",
   publish: "发布内容",
   unpublish: "撤回内容",
+  create_account: "创建后台账号",
+  enable_account: "启用后台账号",
+  disable_account: "停用后台账号",
+  reset_password: "重设账号密码",
 };
 
 function emptyDraft(events: EventRow[]): EventDraft {
@@ -128,8 +135,8 @@ function draftFromEvent(event: EventRow): EventDraft {
 }
 
 async function readResponse(response: Response) {
-  const payload = await response.json() as { data?: Snapshot; error?: string; setupAvailable?: boolean };
-  if (!response.ok) throw Object.assign(new Error(payload.error ?? "操作失败，请稍后重试。"), { setupAvailable: payload.setupAvailable });
+  const payload = await response.json() as { data?: Snapshot; error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "操作失败，请稍后重试。");
   if (!payload.data) throw new Error("后台没有返回数据。");
   return payload.data;
 }
@@ -137,13 +144,13 @@ async function readResponse(response: Response) {
 export default function AdminApp({ viewer }: { viewer: Viewer }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [section, setSection] = useState<SectionId>("dashboard");
-  const [setupAvailable, setSetupAvailable] = useState(false);
   const [denied, setDenied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState("");
   const [selectedEventId, setSelectedEventId] = useState("");
   const [editor, setEditor] = useState<EventDraft | null>(null);
+  const [accountEditor, setAccountEditor] = useState<AccountDraft | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const load = async () => {
@@ -154,9 +161,8 @@ export default function AdminApp({ viewer }: { viewer: Viewer }) {
       setSelectedEventId((current) => current || data.events[0]?.id || "");
       setDenied(false);
     } catch (error) {
-      const failure = error as Error & { setupAvailable?: boolean };
-      setSetupAvailable(Boolean(failure.setupAvailable));
-      setDenied(!failure.setupAvailable);
+      const failure = error as Error;
+      setDenied(true);
       setNotice(failure.message);
     } finally {
       setLoading(false);
@@ -173,31 +179,14 @@ export default function AdminApp({ viewer }: { viewer: Viewer }) {
         setSelectedEventId(data.events[0]?.id ?? "");
         setDenied(false);
       })
-      .catch((error: Error & { setupAvailable?: boolean }) => {
+      .catch((error: Error) => {
         if (!active) return;
-        setSetupAvailable(Boolean(error.setupAvailable));
-        setDenied(!error.setupAvailable);
+        setDenied(true);
         setNotice(error.message);
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
-
-  const initialize = async () => {
-    setWorking(true);
-    setNotice("");
-    try {
-      const data = await readResponse(await fetch("/api/admin/bootstrap", { method: "POST" }));
-      setSnapshot(data);
-      setSelectedEventId(data.events[0]?.id ?? "");
-      setSetupAvailable(false);
-      setNotice("后台初始化完成，三站赛事基础资料已经写入数据库。");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "初始化失败。");
-    } finally {
-      setWorking(false);
-    }
-  };
 
   const saveEvent = async (event: FormEvent) => {
     event.preventDefault();
@@ -232,45 +221,52 @@ export default function AdminApp({ viewer }: { viewer: Viewer }) {
     }
   };
 
-  if (loading) return <main className="backend-state"><span className="backend-spinner"/><h1>正在进入赛事后台</h1><p>正在读取账号权限和赛事数据。</p></main>;
+  const manageAccount = async (body: Record<string, unknown>, success: string) => {
+    setWorking(true);
+    setNotice("");
+    try {
+      const data = await readResponse(await fetch("/api/admin/accounts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+      setSnapshot(data);
+      setAccountEditor(null);
+      setNotice(success);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "账号操作失败。");
+    } finally {
+      setWorking(false);
+    }
+  };
 
-  if (!snapshot && setupAvailable) return <main className="backend-state backend-setup">
-    <div className="backend-state-logo">华</div>
-    <small>首次使用设置</small>
-    <h1>初始化赛事管理后台</h1>
-    <p>当前后台还没有管理员。确认后，账号 <b>{viewer.email}</b> 将成为首位系统管理员，并自动导入密云、太原、廊坊三站的基础资料。</p>
-    <button onClick={initialize} disabled={working}>{working ? "正在初始化…" : "确认并开始使用"}</button>
-    <Link href="/">暂不设置，返回公众页面</Link>
-    {notice && <div className="backend-error">{notice}</div>}
-  </main>;
+  if (loading) return <main className="backend-state"><span className="backend-spinner"/><h1>正在进入赛事后台</h1><p>正在读取账号权限和赛事数据。</p></main>;
 
   if (!snapshot && denied) return <main className="backend-state backend-denied">
     <div className="backend-state-logo">锁</div>
     <small>无后台权限</small>
     <h1>这个账号还不能进入后台</h1>
-    <p>{viewer.email}<br/>{notice || "请由系统管理员把你加入某场赛事，并选择“组委会、裁判长或裁判员”角色。"}</p>
-    <a href="/signout-with-chatgpt?return_to=/admin">切换登录账号</a>
+    <p>{viewer.username}<br/>{notice || "请联系系统管理员检查该账号的后台权限。"}</p>
+    <a href="/api/auth/logout">切换登录账号</a>
     <Link href="/">返回公众页面</Link>
   </main>;
 
   if (!snapshot) return <main className="backend-state"><h1>后台暂时无法打开</h1><p>{notice || "请稍后重试。"}</p><button onClick={load}>重新加载</button></main>;
 
   const currentEvent = snapshot.events.find((event) => event.id === selectedEventId) ?? snapshot.events[0];
-  const currentTitle = navItems.find((item) => item.id === section)?.title ?? "工作台";
-  const sectionContent = section === "dashboard" ? <Dashboard snapshot={snapshot} currentEvent={currentEvent} go={setSection} />
-    : section === "events" ? <EventsPage snapshot={snapshot} edit={setEditor} create={() => setEditor(emptyDraft(snapshot.events))} />
-    : section === "content" ? <ContentPage snapshot={snapshot} event={currentEvent} toggle={togglePublication} working={working} />
-    : section === "registrations" ? <RegistrationPage snapshot={snapshot} />
-    : section === "players" ? <PlayersPage snapshot={snapshot} />
-    : section === "competition" ? <CompetitionPage event={currentEvent} />
-    : section === "rankings" ? <RankingsPage event={currentEvent} />
-    : <AccountsPage snapshot={snapshot} />;
+  const visibleNavItems = snapshot.account.role === "system_admin" ? navItems : navItems.filter((item) => item.id !== "accounts");
+  const effectiveSection = section === "accounts" && snapshot.account.role !== "system_admin" ? "dashboard" : section;
+  const currentTitle = visibleNavItems.find((item) => item.id === effectiveSection)?.title ?? "工作台";
+  const sectionContent = effectiveSection === "dashboard" ? <Dashboard snapshot={snapshot} currentEvent={currentEvent} go={setSection} />
+    : effectiveSection === "events" ? <EventsPage snapshot={snapshot} edit={setEditor} create={() => setEditor(emptyDraft(snapshot.events))} />
+    : effectiveSection === "content" ? <ContentPage snapshot={snapshot} event={currentEvent} toggle={togglePublication} working={working} />
+    : effectiveSection === "registrations" ? <RegistrationPage snapshot={snapshot} />
+    : effectiveSection === "players" ? <PlayersPage snapshot={snapshot} />
+    : effectiveSection === "competition" ? <CompetitionPage event={currentEvent} />
+    : effectiveSection === "rankings" ? <RankingsPage event={currentEvent} />
+    : <AccountsPage snapshot={snapshot} create={() => setAccountEditor({ username: "", displayName: "", password: "", role: "committee" })} manage={manageAccount} working={working} />;
 
   return <main className="backend-shell">
     <aside className={menuOpen ? "backend-sidebar open" : "backend-sidebar"}>
       <div className="backend-brand"><span>华</span><div><strong>华彩赛事后台</strong><small>赛事运营与竞赛执行</small></div></div>
-      <nav>{navItems.map((item) => <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => { setSection(item.id); setMenuOpen(false); }}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div>{item.id === "registrations" && snapshot.metrics.pendingRegistrationCount > 0 && <b>{snapshot.metrics.pendingRegistrationCount}</b>}</button>)}</nav>
-      <div className="backend-sidebar-foot"><Link href="/">查看公众前端</Link><a href="/signout-with-chatgpt?return_to=/admin">退出后台</a></div>
+      <nav>{visibleNavItems.map((item) => <button key={item.id} className={effectiveSection === item.id ? "active" : ""} onClick={() => { setSection(item.id); setMenuOpen(false); }}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div>{item.id === "registrations" && snapshot.metrics.pendingRegistrationCount > 0 && <b>{snapshot.metrics.pendingRegistrationCount}</b>}</button>)}</nav>
+      <div className="backend-sidebar-foot"><Link href="/">查看公众前端</Link><a href="/api/auth/logout">退出后台</a></div>
     </aside>
     <section className="backend-main">
       <header className="backend-topbar">
@@ -283,6 +279,7 @@ export default function AdminApp({ viewer }: { viewer: Viewer }) {
       <div className="backend-content">{sectionContent}</div>
     </section>
     {editor && <EventEditor draft={editor} setDraft={setEditor} close={() => setEditor(null)} save={saveEvent} working={working} />}
+    {accountEditor && <AccountEditor draft={accountEditor} setDraft={setAccountEditor} close={() => setAccountEditor(null)} save={(event) => { event.preventDefault(); manageAccount({ action: "create", ...accountEditor }, "后台账号已创建，可以把用户名和初始密码交给使用人。"); }} working={working} />}
   </main>;
 }
 
@@ -336,16 +333,21 @@ function CompetitionPage({ event }: { event?: EventRow }) {
     ["03", "正赛第一阶段", "64人分组双败", "待配置"],
     ["04", "正赛第二阶段", "32强单败至冠军", "待配置"],
   ];
-  return <div className="backend-stack"><section className="backend-page-head"><div><small>裁判长与裁判工作区</small><h2>竞赛执行</h2><p>{event?.shortTitle} · 抽签、赛程、比分和晋级将在这里形成闭环。</p></div><button>配置赛事阶段</button></section><section className="backend-role-note"><span>裁</span><div><strong>简化权限规则</strong><p>裁判员只能录入本人负责场次；裁判长负责抽签、锁定签表、确认比分和晋级；组委会负责最终发布。</p></div></section><section className="backend-stage-grid">{stages.map(([number, title, description, status]) => <article className="backend-panel" key={number}><header><span>{number}</span><b className="backend-badge draft">{status}</b></header><h3>{title}</h3><p>{description}</p><dl><div><dt>抽签版本</dt><dd>未建立</dd></div><div><dt>比赛场次</dt><dd>0</dd></div><div><dt>已确认比分</dt><dd>0</dd></div></dl><button>进入阶段配置</button></article>)}</section><section className="backend-panel backend-next-build"><div><small>下一开发阶段</small><h3>签表和比赛执行引擎</h3><p>会在这套正式后台上继续加入：种子规则、单败和双败签表、球台编排、比分提交与更正、自动晋级和排名确认。</p></div><span>第二期</span></section></div>;
+  return <div className="backend-stack"><section className="backend-page-head"><div><small>裁判工作区</small><h2>竞赛执行</h2><p>{event?.shortTitle} · 抽签、赛程、比分和晋级将在这里形成闭环。</p></div><button>配置赛事阶段</button></section><section className="backend-role-note"><span>裁</span><div><strong>简化权限规则</strong><p>裁判负责抽签、赛程和比分录入；关键签表、晋级与排名由组委会确认后正式发布。</p></div></section><section className="backend-stage-grid">{stages.map(([number, title, description, status]) => <article className="backend-panel" key={number}><header><span>{number}</span><b className="backend-badge draft">{status}</b></header><h3>{title}</h3><p>{description}</p><dl><div><dt>抽签版本</dt><dd>未建立</dd></div><div><dt>比赛场次</dt><dd>0</dd></div><div><dt>已确认比分</dt><dd>0</dd></div></dl><button>进入阶段配置</button></article>)}</section><section className="backend-panel backend-next-build"><div><small>下一开发阶段</small><h3>签表和比赛执行引擎</h3><p>会在这套正式后台上继续加入：种子规则、单败和双败签表、球台编排、比分提交与更正、自动晋级和排名确认。</p></div><span>第二期</span></section></div>;
 }
 
 function RankingsPage({ event }: { event?: EventRow }) {
-  return <div className="backend-stack"><section className="backend-page-head"><div><small>确认后才进入公众前端</small><h2>排名与积分</h2><p>{event?.shortTitle}</p></div><button>设置积分规则</button></section><section className="backend-dashboard-grid"><EmptyModule icon="榜" title="本站排名尚未确认" text="系统会根据最终签表自动生成名次，裁判长确认后由组委会发布。" action="查看排名规则" compact /><article className="backend-panel backend-points-rule"><header><div><small>积分原则</small><h3>采用积分流水，不直接改总分</h3></div></header><ol><li>每条积分都对应具体赛事和名次</li><li>调整必须填写增加、扣减原因</li><li>总积分由有效流水实时汇总</li><li>历史调整不可被直接覆盖</li></ol></article></section></div>;
+  return <div className="backend-stack"><section className="backend-page-head"><div><small>确认后才进入公众前端</small><h2>排名与积分</h2><p>{event?.shortTitle}</p></div><button>设置积分规则</button></section><section className="backend-dashboard-grid"><EmptyModule icon="榜" title="本站排名尚未确认" text="系统会根据最终签表自动生成名次，由组委会确认后发布。" action="查看排名规则" compact /><article className="backend-panel backend-points-rule"><header><div><small>积分原则</small><h3>采用积分流水，不直接改总分</h3></div></header><ol><li>每条积分都对应具体赛事和名次</li><li>调整必须填写增加、扣减原因</li><li>总积分由有效流水实时汇总</li><li>历史调整不可被直接覆盖</li></ol></article></section></div>;
 }
 
-function AccountsPage({ snapshot }: { snapshot: Snapshot }) {
-  const roles = [["系统管理员", "管理全部赛事、账号和系统设置"], ["组委会", "赛事、报名、球员和前端发布"], ["裁判长", "抽签、赛程、比分、晋级与排名确认"], ["裁判员", "查看分配场次并录入比分"]];
-  return <div className="backend-stack"><section className="backend-page-head"><div><small>四个角色即可覆盖第一版</small><h2>账号与日志</h2><p>不做复杂的按钮级权限，账号只按角色和所属赛事控制。</p></div><button>＋ 添加账号</button></section><section className="backend-role-grid">{roles.map(([title, text], index) => <article className="backend-panel" key={title}><span>{index + 1}</span><h3>{title}</h3><p>{text}</p>{index === 0 && <b>全局角色</b>}{index > 0 && <b>按赛事分配</b>}</article>)}</section><section className="backend-panel backend-log-list"><header><div><small>操作审计</small><h3>最近操作记录</h3></div><b>不可直接删除</b></header>{snapshot.auditLogs.length ? snapshot.auditLogs.map((log) => <div key={log.id}><span>{actionLabels[log.action] ?? log.action}</span><small>{log.moduleType} · {log.targetType}</small><time>{formatDateTime(log.createdAt)}</time></div>) : <p>暂无操作记录</p>}</section></div>;
+function AccountsPage({ snapshot, create, manage, working }: { snapshot: Snapshot; create: () => void; manage: (body: Record<string, unknown>, success: string) => Promise<void>; working: boolean }) {
+  const roles = [["系统管理员", "管理全部赛事、账号和系统设置"], ["组委会", "赛事、报名、球员和前端发布"], ["裁判", "抽签、赛程、比分、晋级与排名确认"]];
+  const resetPassword = async (account: ManagedAccount) => {
+    const password = window.prompt(`请为“${account.displayName}”设置新的临时密码（至少8个字符）：`);
+    if (!password) return;
+    await manage({ action: "password", id: account.id, password }, `${account.displayName}的密码已重设。`);
+  };
+  return <div className="backend-stack"><section className="backend-page-head"><div><small>三个角色覆盖第一版</small><h2>账号与日志</h2><p>系统管理员创建用户名和初始密码，再分发给组委会或裁判使用。</p></div><button onClick={create}>＋ 添加账号</button></section><section className="backend-role-grid">{roles.map(([title, text], index) => <article className="backend-panel" key={title}><span>{index + 1}</span><h3>{title}</h3><p>{text}</p>{index === 0 && <b>全局角色</b>}{index > 0 && <b>按赛事分配</b>}</article>)}</section><section className="backend-panel backend-account-list"><header><div><small>登录账号</small><h3>账号管理</h3></div><b>{snapshot.accounts.length}个</b></header><div className="backend-account-head"><span>账号</span><span>角色</span><span>状态</span><span>最近登录</span><span>操作</span></div>{snapshot.accounts.map((account) => <div className="backend-account-row" key={account.id}><div><strong>{account.displayName}</strong><small>{account.username}</small></div><span>{account.role === "system_admin" ? "系统管理员" : account.role === "committee" ? "组委会" : "裁判"}</span><span><b className={account.status === "active" ? "backend-badge published" : "backend-badge draft"}>{account.status === "active" ? "启用" : "停用"}</b></span><span>{account.lastLoginAt ? formatDateTime(account.lastLoginAt) : "尚未登录"}</span><div className="backend-account-actions"><button disabled={working} onClick={() => resetPassword(account)}>重设密码</button>{account.role !== "system_admin" && <button disabled={working} onClick={() => manage({ action: "status", id: account.id, status: account.status === "active" ? "disabled" : "active" }, account.status === "active" ? `${account.displayName}已停用。` : `${account.displayName}已启用。`)}>{account.status === "active" ? "停用" : "启用"}</button>}</div></div>)}</section><section className="backend-panel backend-log-list"><header><div><small>操作审计</small><h3>最近操作记录</h3></div><b>不可直接删除</b></header>{snapshot.auditLogs.length ? snapshot.auditLogs.map((log) => <div key={log.id}><span>{actionLabels[log.action] ?? log.action}</span><small>{log.moduleType} · {log.targetType}</small><time>{formatDateTime(log.createdAt)}</time></div>) : <p>暂无操作记录</p>}</section></div>;
 }
 
 function EmptyModule({ icon, title, text, action, compact = false }: { icon: string; title: string; text: string; action: string; compact?: boolean }) {
@@ -355,6 +357,11 @@ function EmptyModule({ icon, title, text, action, compact = false }: { icon: str
 function EventEditor({ draft, setDraft, close, save, working }: { draft: EventDraft; setDraft: (draft: EventDraft | null) => void; close: () => void; save: (event: FormEvent) => void; working: boolean }) {
   const update = (key: keyof EventDraft, value: string | number) => setDraft({ ...draft, [key]: value });
   return <div className="backend-modal"><form className="backend-editor" onSubmit={save}><header><div><small>{draft.id ? "修改已存在的赛事" : "建立新的赛事分站"}</small><h2>{draft.id ? "编辑赛事资料" : "新增赛事"}</h2></div><button type="button" onClick={close}>×</button></header><div className="backend-form"><label className="wide"><span>完整赛事名称</span><input value={draft.fullTitle} onChange={(event) => update("fullTitle", event.target.value)} required /></label><label className="wide"><span>前端显示简称</span><input value={draft.shortTitle} onChange={(event) => update("shortTitle", event.target.value)} required /></label><label><span>赛季年份</span><input type="number" value={draft.year} onChange={(event) => update("year", Number(event.target.value))} min="2025" /></label><label><span>第几站</span><input type="number" value={draft.stationNo} onChange={(event) => update("stationNo", Number(event.target.value))} min="1" /></label><label><span>城市</span><input value={draft.city} onChange={(event) => update("city", event.target.value)} placeholder="例如：河北廊坊" required /></label><label><span>比赛场馆</span><input value={draft.venueName} onChange={(event) => update("venueName", event.target.value)} placeholder="比赛场馆名称" /></label><label><span>比赛开始日期</span><input type="date" value={draft.startDate} onChange={(event) => update("startDate", event.target.value)} required /></label><label><span>比赛结束日期</span><input type="date" value={draft.endDate} onChange={(event) => update("endDate", event.target.value)} required /></label><label><span>报名开始时间</span><input type="datetime-local" value={draft.registrationStartAt} onChange={(event) => update("registrationStartAt", event.target.value)} /></label><label><span>报名截止时间</span><input type="datetime-local" value={draft.registrationEndAt} onChange={(event) => update("registrationEndAt", event.target.value)} /></label><label><span>赛事状态</span><select value={draft.status} onChange={(event) => update("status", event.target.value)}>{Object.entries(eventStatusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label><span>前端发布状态</span><select value={draft.publishStatus} onChange={(event) => update("publishStatus", event.target.value)}><option value="draft">草稿</option><option value="published">已发布</option></select></label><label className="wide"><span>赛事简介</span><textarea value={draft.summary} onChange={(event) => update("summary", event.target.value)} rows={4} placeholder="写入概览页的赛事简介" /></label></div><footer><button type="button" onClick={close}>取消</button><button type="submit" disabled={working}>{working ? "正在保存…" : "保存赛事资料"}</button></footer></form></div>;
+}
+
+function AccountEditor({ draft, setDraft, close, save, working }: { draft: AccountDraft; setDraft: (draft: AccountDraft | null) => void; close: () => void; save: (event: FormEvent) => void; working: boolean }) {
+  const update = (key: keyof AccountDraft, value: string) => setDraft({ ...draft, [key]: value } as AccountDraft);
+  return <div className="backend-modal"><form className="backend-editor backend-account-editor" onSubmit={save}><header><div><small>由系统管理员创建并分发</small><h2>新增后台账号</h2></div><button type="button" onClick={close}>×</button></header><div className="backend-form"><label><span>用户名</span><input value={draft.username} onChange={(event) => update("username", event.target.value.toLowerCase())} placeholder="例如：langfang01" minLength={3} maxLength={32} required /></label><label><span>显示名称</span><input value={draft.displayName} onChange={(event) => update("displayName", event.target.value)} placeholder="例如：廊坊站组委会" required /></label><label><span>账号角色</span><select value={draft.role} onChange={(event) => update("role", event.target.value)}><option value="committee">组委会</option><option value="referee">裁判</option></select></label><label><span>初始密码</span><input type="password" value={draft.password} onChange={(event) => update("password", event.target.value)} minLength={8} maxLength={72} placeholder="至少8个字符" autoComplete="new-password" required /></label></div><p className="backend-editor-tip">保存后，请通过安全方式把用户名和初始密码交给使用人。系统不会在页面中再次显示原密码。</p><footer><button type="button" onClick={close}>取消</button><button type="submit" disabled={working}>{working ? "正在创建…" : "创建账号"}</button></footer></form></div>;
 }
 
 function formatRange(start?: string | null, end?: string | null) {
@@ -373,5 +380,5 @@ function moduleIcon(type: string) {
 }
 
 function moduleDescription(type: string) {
-  return ({ overview: "赛事介绍、时间地点、组织机构和参赛提示", regulation: "规程摘要、完整PDF和裁判员名单", documents: "管理赛事相关PDF、名单及附件", schedule: "赛事阶段、日期、状态和赛程表入口", matches: "按日期发布对阵名单、球台和比赛状态", rankings: "发布裁判长已经确认的名次与积分" } as Record<string, string>)[type] ?? "赛事内容模块";
+  return ({ overview: "赛事介绍、时间地点、组织机构和参赛提示", regulation: "规程摘要、完整PDF和裁判员名单", documents: "管理赛事相关PDF、名单及附件", schedule: "赛事阶段、日期、状态和赛程表入口", matches: "按日期发布对阵名单、球台和比赛状态", rankings: "发布已经确认的名次与积分" } as Record<string, string>)[type] ?? "赛事内容模块";
 }

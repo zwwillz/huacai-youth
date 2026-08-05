@@ -1,7 +1,9 @@
 import { and, count, desc, eq } from "drizzle-orm";
+import { hash } from "bcryptjs";
 import { getDb } from "./index";
 import {
   auditLogs,
+  adminSessions,
   eventDocuments,
   eventGroups,
   eventGuides,
@@ -16,7 +18,7 @@ import {
   venues,
 } from "./schema";
 
-export type AdminRole = "system_admin" | "committee" | "chief_referee" | "referee";
+export type AdminRole = "system_admin" | "committee" | "referee";
 
 export type EventInput = {
   id?: string;
@@ -35,11 +37,15 @@ export type EventInput = {
   publishStatus: string;
 };
 
+export type ManagedAccountInput =
+  | { action: "create"; username: string; displayName: string; password: string; role: "committee" | "referee" }
+  | { action: "status"; id: string; status: "active" | "disabled" }
+  | { action: "password"; id: string; password: string };
+
 const roleLabels: Record<AdminRole, string> = {
   system_admin: "系统管理员",
   committee: "组委会",
-  chief_referee: "裁判长",
-  referee: "裁判员",
+  referee: "裁判",
 };
 
 function now() {
@@ -50,33 +56,25 @@ function id(prefix: string) {
   return prefix + "_" + crypto.randomUUID().replaceAll("-", "");
 }
 
-export async function getAccessState(email: string) {
-  const db = getDb();
-  const [account] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  const [{ total }] = await db.select({ total: count() }).from(users);
-  return {
-    account: account ?? null,
-    setupAvailable: Number(total) === 0 || (email.endsWith("@local.invalid") && !account),
-  };
-}
-
-export async function bootstrapSystemAdmin(email: string, displayName: string) {
+export async function bootstrapSystemAdmin(username: string, displayName: string, passwordHash: string) {
   const db = getDb();
   const [{ total }] = await db.select({ total: count() }).from(users);
-  const [existingAccount] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  const [existingAccount] = await db.select().from(users).where(eq(users.username, username)).limit(1);
   const [{ publicationCountBefore }] = await db.select({ publicationCountBefore: count() }).from(publications);
-  const isLocalPreview = email.endsWith("@local.invalid");
-  if (Number(total) > 0 && !existingAccount && !isLocalPreview) throw new Error("后台已经完成初始化，不能再次创建首位管理员。");
+  if (Number(total) > 0 && !existingAccount) throw new Error("后台已经完成初始化，不能再次创建首位管理员。");
 
   const createdAt = now();
   const userId = existingAccount?.id ?? id("usr");
   if (!existingAccount) {
     await db.insert(users).values({
       id: userId,
-      email,
+      username,
+      email: null,
       displayName,
+      passwordHash,
       role: "system_admin",
       status: "active",
+      passwordUpdatedAt: createdAt,
       lastLoginAt: createdAt,
       createdAt,
       updatedAt: createdAt,
@@ -92,12 +90,12 @@ export async function bootstrapSystemAdmin(email: string, displayName: string) {
       targetType: "users",
       targetId: userId,
       action: existingAccount ? "resume_bootstrap" : "bootstrap_admin",
-      afterJson: JSON.stringify({ email, role: "system_admin" }),
+      afterJson: JSON.stringify({ username, role: "system_admin" }),
       createdAt,
     });
   }
 
-  return getAdminSnapshot(email);
+  return getAdminSnapshot(username);
 }
 
 async function seedCompetitionData(userId: string, createdAt: string) {
@@ -233,9 +231,9 @@ async function seedCompetitionData(userId: string, createdAt: string) {
   }
 }
 
-export async function getAdminSnapshot(email: string) {
+export async function getAdminSnapshot(username: string) {
   const db = getDb();
-  const [account] = await db.select().from(users).where(and(eq(users.email, email), eq(users.status, "active"))).limit(1);
+  const [account] = await db.select().from(users).where(and(eq(users.username, username), eq(users.status, "active"))).limit(1);
   if (!account) throw new Error("当前账号尚未获得后台权限。");
 
   const eventRows = await db.select().from(events).orderBy(desc(events.year), desc(events.stationNo));
@@ -245,6 +243,9 @@ export async function getAdminSnapshot(email: string) {
   const guideRows = await db.select().from(eventGuides);
   const sponsorRows = await db.select().from(eventSponsors);
   const logs = await db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(12);
+  const accountRows = account.role === "system_admin"
+    ? await db.select({ id: users.id, username: users.username, displayName: users.displayName, role: users.role, status: users.status, lastLoginAt: users.lastLoginAt, createdAt: users.createdAt }).from(users).orderBy(desc(users.createdAt))
+    : [];
   const [{ playerCount }] = await db.select({ playerCount: count() }).from(players);
   const [{ pendingRegistrationCount }] = await db.select({ pendingRegistrationCount: count() }).from(registrations).where(eq(registrations.status, "pending"));
   const [{ registrationCount }] = await db.select({ registrationCount: count() }).from(registrations);
@@ -253,7 +254,7 @@ export async function getAdminSnapshot(email: string) {
   return {
     account: {
       id: account.id,
-      email: account.email,
+      username: account.username,
       displayName: account.displayName,
       role: account.role,
       roleLabel: roleLabels[account.role as AdminRole] ?? "后台账号",
@@ -276,22 +277,23 @@ export async function getAdminSnapshot(email: string) {
     documents: documentRows,
     guides: guideRows,
     sponsors: sponsorRows,
+    accounts: accountRows,
     auditLogs: logs,
   };
 }
 
-async function requireEditor(email: string) {
+async function requireEditor(username: string) {
   const db = getDb();
-  const [account] = await db.select().from(users).where(and(eq(users.email, email), eq(users.status, "active"))).limit(1);
+  const [account] = await db.select().from(users).where(and(eq(users.username, username), eq(users.status, "active"))).limit(1);
   if (!account || !["system_admin", "committee"].includes(account.role)) {
     throw new Error("当前角色没有修改赛事内容的权限。");
   }
   return account;
 }
 
-export async function saveEvent(email: string, input: EventInput) {
+export async function saveEvent(username: string, input: EventInput) {
   const db = getDb();
-  const account = await requireEditor(email);
+  const account = await requireEditor(username);
   const updatedAt = now();
   if (!input.fullTitle.trim() || !input.shortTitle.trim() || !input.city.trim() || !input.startDate || !input.endDate) {
     throw new Error("请填写赛事名称、城市和比赛日期。");
@@ -375,12 +377,12 @@ export async function saveEvent(email: string, input: EventInput) {
     })));
     await db.insert(auditLogs).values({ id: id("log"), actorUserId: account.id, eventId, moduleType: "events", targetType: "event", targetId: eventId, action: "create", afterJson: JSON.stringify(input), createdAt: updatedAt });
   }
-  return getAdminSnapshot(email);
+  return getAdminSnapshot(username);
 }
 
-export async function setPublicationStatus(email: string, publicationId: string, status: "draft" | "published") {
+export async function setPublicationStatus(username: string, publicationId: string, status: "draft" | "published") {
   const db = getDb();
-  const account = await requireEditor(email);
+  const account = await requireEditor(username);
   const [before] = await db.select().from(publications).where(eq(publications.id, publicationId)).limit(1);
   if (!before) throw new Error("没有找到要发布的内容模块。");
   const updatedAt = now();
@@ -393,5 +395,70 @@ export async function setPublicationStatus(email: string, publicationId: string,
   };
   await db.update(publications).set(next).where(eq(publications.id, publicationId));
   await db.insert(auditLogs).values({ id: id("log"), actorUserId: account.id, eventId: before.eventId, moduleType: "publications", targetType: "publication", targetId: publicationId, action: status === "published" ? "publish" : "unpublish", beforeJson: JSON.stringify(before), afterJson: JSON.stringify(next), createdAt: updatedAt });
-  return getAdminSnapshot(email);
+  return getAdminSnapshot(username);
+}
+
+async function requireSystemAdmin(username: string) {
+  const db = getDb();
+  const [account] = await db.select().from(users).where(and(eq(users.username, username), eq(users.status, "active"))).limit(1);
+  if (!account || account.role !== "system_admin") throw new Error("只有系统管理员可以管理后台账号。");
+  return account;
+}
+
+function validateUsername(username: string) {
+  const normalized = username.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(normalized)) {
+    throw new Error("用户名需为3至32位小写字母、数字、点、横线或下划线。");
+  }
+  return normalized;
+}
+
+function validatePassword(password: string) {
+  if (password.length < 8 || password.length > 72) throw new Error("密码需为8至72个字符。");
+}
+
+export async function manageAccount(actorUsername: string, input: ManagedAccountInput) {
+  const db = getDb();
+  const actor = await requireSystemAdmin(actorUsername);
+  const updatedAt = now();
+
+  if (input.action === "create") {
+    const username = validateUsername(input.username);
+    validatePassword(input.password);
+    if (!['committee', 'referee'].includes(input.role)) throw new Error("账号角色只能选择组委会或裁判。");
+    if (!input.displayName.trim()) throw new Error("请填写账号显示名称。");
+    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
+    if (existing) throw new Error("该用户名已经存在。");
+    const accountId = id("usr");
+    await db.insert(users).values({
+      id: accountId,
+      username,
+      email: null,
+      displayName: input.displayName.trim(),
+      passwordHash: await hash(input.password, 12),
+      role: input.role,
+      status: "active",
+      passwordUpdatedAt: updatedAt,
+      createdAt: updatedAt,
+      updatedAt,
+    });
+    await db.insert(auditLogs).values({ id: id("log"), actorUserId: actor.id, moduleType: "accounts", targetType: "user", targetId: accountId, action: "create_account", afterJson: JSON.stringify({ username, displayName: input.displayName.trim(), role: input.role }), createdAt: updatedAt });
+  } else {
+    const [target] = await db.select().from(users).where(eq(users.id, input.id)).limit(1);
+    if (!target) throw new Error("没有找到该后台账号。");
+    if (target.role === "system_admin" && target.username === actorUsername && input.action === "status" && input.status === "disabled") {
+      throw new Error("不能停用当前登录的系统管理员账号。");
+    }
+    if (input.action === "status") {
+      await db.update(users).set({ status: input.status, updatedAt }).where(eq(users.id, input.id));
+      if (input.status === "disabled") await db.delete(adminSessions).where(eq(adminSessions.userId, input.id));
+      await db.insert(auditLogs).values({ id: id("log"), actorUserId: actor.id, moduleType: "accounts", targetType: "user", targetId: input.id, action: input.status === "active" ? "enable_account" : "disable_account", beforeJson: JSON.stringify({ status: target.status }), afterJson: JSON.stringify({ status: input.status }), createdAt: updatedAt });
+    } else {
+      validatePassword(input.password);
+      await db.update(users).set({ passwordHash: await hash(input.password, 12), passwordUpdatedAt: updatedAt, updatedAt }).where(eq(users.id, input.id));
+      await db.delete(adminSessions).where(eq(adminSessions.userId, input.id));
+      await db.insert(auditLogs).values({ id: id("log"), actorUserId: actor.id, moduleType: "accounts", targetType: "user", targetId: input.id, action: "reset_password", createdAt: updatedAt });
+    }
+  }
+  return getAdminSnapshot(actorUsername);
 }

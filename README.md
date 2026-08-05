@@ -1,108 +1,70 @@
-# vinext-starter
+# 华彩十六球青少年系列赛
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+公众赛事网站与赛事管理后台，使用标准 Next.js 16 开发，部署目标为腾讯云 EdgeOne Pages，后台数据存储在 Supabase PostgreSQL。
 
-## Prerequisites
+## 系统结构
 
-- Node.js `>=22.13.0`
-- Linux with `flock`, `curl`, and GNU `timeout`
+- 公众前端：赛事、规程、赛程、对阵、排名和球员资料。
+- 管理后台：赛事管理、内容发布、报名、球员、竞赛执行、排名积分和账号管理。
+- 登录方式：系统自有用户名和密码，不开放注册。
+- 角色：系统管理员、组委会、裁判。
+- 数据库：Supabase PostgreSQL，通过 Drizzle ORM 访问。
 
-## Sites Lifecycle
+## 本地开发
 
-The Sites lifecycle CLI runs the locked dependency install before returning this checkout. Edit the source under `app/`, then checkpoint when a coherent milestone is ready to inspect or share. The remote Sites builder runs `npm run build` against the pushed commit. Do not repeat install or build as a normal pre-checkpoint step.
+需要 Node.js 22.17 或更高版本。
 
-This starter does not use `wrangler.jsonc`.
-
-`install:ci` is intentionally a single, non-retrying `npm ci`. It refuses a concurrent install for the same project, consumes a matching image-seeded npm cache with `--prefer-offline` while retaining registry fallback for a missing cache object, otherwise downloads and verifies the complete vinext tarball recorded in `package-lock.json`, limits npm to one socket, and terminates a stalled install. `build` applies a short timeout and then validates the Sites artifact. These helpers target Linux and use GNU `timeout`; they are not native macOS scripts.
-
-Scripts that need writable project-scoped home, npm, XDG, and temporary paths use `scripts/sites-env.sh`. The `dev` and `start` scripts honor the caller's runtime environment and keep Wrangler logs inside the checkout. The generated `.sites-runtime/` directory is disposable and ignored by Git.
-
-## Included Shape
-
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```bash
+npm ci
+cp .env.example .env.local
+npm run dev
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+在 `.env.local` 中填写 Supabase 提供的 PostgreSQL 连接池地址：
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+```env
+DATABASE_URL=postgresql://...
+```
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+## 初始化数据库
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+先在 Supabase 创建项目，再将 `drizzle` 目录中的 PostgreSQL 迁移应用到数据库。也可以在配置好 `DATABASE_URL` 后运行：
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+```bash
+npm run db:migrate
+```
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+数据库迁移完成后打开 `/admin/login`：
 
-## Diagnostic Commands
+1. 系统检测到没有后台账号时进入首次设置。
+2. 首位系统管理员用户名固定为 `admin`。
+3. 页面要求立即设置至少 8 位密码。
+4. 设置完成后首次设置入口永久关闭。
+5. `admin` 在“账号与日志”中创建组委会和裁判账号，并分发用户名与初始密码。
 
-- `npm run install:ci`: perform the one bounded lockfile install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build and validate the deployable Sites artifact
-- `npm run start`: start the built Vinext application
-- `npm test`: build, validate, and verify the rendered development-preview metadata
-- `npm run validate:artifact`: recheck an existing artifact's manifest and ESM `default.fetch` export
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+原始密码不会写入数据库、日志或 GitHub；数据库只保存 bcrypt 密码哈希。
 
-Use build and validation commands for targeted diagnosis after a remote failure, not as part of the normal checkpoint path.
+## EdgeOne Pages 部署
 
-The timeout defaults can be overridden for a controlled canary with `SITES_INSTALL_TIMEOUT`, `SITES_INSTALL_KILL_AFTER`, `SITES_BUILD_TIMEOUT`, and `SITES_BUILD_KILL_AFTER`. A timeout fails the command; the helpers never retry an unchanged install or build.
+在 EdgeOne Pages 中导入 GitHub 仓库 `zwwillz/huacai-youth`，使用以下配置：
 
-## Learn More
+- Framework Preset：Next.js
+- Production Branch：`main`
+- Node.js：`22.17.1`
+- Install Command：`npm ci`
+- Build Command：`npm run build`
+- Output Directory：`.next`
+- Environment Variable：`DATABASE_URL`
+- Auto Deploy：开启
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+以后推送到 GitHub `main` 分支后，EdgeOne Pages 会自动构建并更新正式网站。
+
+## 常用命令
+
+```bash
+npm run dev
+npm run lint
+npm run build
+npm run db:generate
+npm run db:migrate
+```
