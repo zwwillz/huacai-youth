@@ -15,7 +15,7 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
   const events = snapshot.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }));
   const currentEvent = snapshot.events.find((event) => event.id === currentEventId);
 
-  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role, roleLabel: viewer.roleLabel }} events={events} active="competition" pageTitle="竞赛执行" pageHint="裁判工作区 · 动态竞赛数据" currentEventId={currentEventId} eventScoped>
+  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="竞赛执行" pageHint="裁判工作区 · 动态竞赛数据" currentEventId={currentEventId} eventScoped>
     <main className="competition-workspace-page">
       <section className="competition-workspace-shell">
         <header className="competition-workspace-head"><div><small>COMPETITION OPERATIONS</small><h1>{currentEvent?.shortTitle || "竞赛执行工作区"}</h1><p>签表、赛程、球台、对阵、比分和晋级属于动态竞赛数据。裁判组负责执行，组委会负责关键确认和最终发布。</p></div><b>规划版</b></header>
