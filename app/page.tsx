@@ -11,9 +11,8 @@ export const revalidate = 0;
 export default async function Home() {
   const data = await getPublicSiteData();
   const langfangEventId = data.stations.find((station) => station.id === "langfang")?.eventId;
-  const [rankings, competitionMatches] = langfangEventId
-    ? await Promise.all([getPublicRankings(langfangEventId), getCompetitionMatches(langfangEventId)])
-    : [[], []];
+  const rankings = langfangEventId ? await getPublicRankings(langfangEventId) : [];
+  const competitionMatches = langfangEventId ? await getCompetitionMatches(langfangEventId) : [];
 
   return <>
     <EventApp data={data} />
