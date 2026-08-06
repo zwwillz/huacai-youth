@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminSnapshot } from "@/db/admin";
 import { getAdminViewer } from "../admin-viewer";
+import "./event-settings-index.css";
 
 export const dynamic = "force-dynamic";
 
