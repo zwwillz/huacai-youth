@@ -27,7 +27,7 @@ function activeDay(root: ParentNode) {
 
 function scoreValue(value: string | null) {
   if (value == null || value === "") return null;
-  if (value.toUpperCase() === "X") return 0;
+  if (value.trim().toUpperCase() === "X") return 0;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -37,6 +37,15 @@ function winner(match: CompetitionMatch) {
   const b = scoreValue(match.scoreB);
   if (a == null || b == null || a === b) return "晋级者待定";
   return a > b ? match.playerA : match.playerB;
+}
+
+function isThirdPlace(match: CompetitionMatch) {
+  const value = match.round.replace(/\s/g, "");
+  return /三[、,，]?四名/.test(value) || value.includes("季军赛") || value.includes("季军决赛");
+}
+
+function isFinal(match: CompetitionMatch) {
+  return !isThirdPlace(match) && match.round.replace(/\s/g, "") === "决赛";
 }
 
 function patchMatchList(allMatches: CompetitionMatch[]) {
@@ -103,6 +112,8 @@ function patchMainOne(bracket: HTMLElement, allMatches: CompetitionMatch[], grou
     const poolMatches = phase.filter(match => match.matchCode.startsWith(pool));
     const byCode = new Map(poolMatches.map(match => [match.matchCode, match]));
     const articles = Array.from(section.querySelectorAll<HTMLElement>(".stage-tree-match"));
+
+    // 保持 main 当前签表 DOM 顺序：首轮1-4、胜部7-8、败部5-6、败部晋级9-10。
     const codes = [`${pool}1`,`${pool}2`,`${pool}3`,`${pool}4`,`${pool}7`,`${pool}8`,`${pool}5`,`${pool}6`,`${pool}9`,`${pool}10`];
     articles.forEach((article, articleIndex) => patchArticle(article, byCode.get(codes[articleIndex]), codes[articleIndex]));
 
@@ -114,49 +125,81 @@ function patchMainOne(bracket: HTMLElement, allMatches: CompetitionMatch[], grou
   });
 }
 
-function ensureThirdPlace(stage: HTMLElement, finalWrap: HTMLElement, match: CompetitionMatch) {
+function removeThirdPlace(tree: HTMLElement) {
+  tree.querySelector<HTMLElement>("[data-db-third-place]")?.remove();
+}
+
+function ensureThirdPlace(tree: HTMLElement, finalWrap: HTMLElement, match: CompetitionMatch) {
+  const stage = tree.querySelector<HTMLElement>(".stage-knockout-stage");
+  if (!stage) return;
+
   let wrap = stage.querySelector<HTMLElement>("[data-db-third-place]");
   if (!wrap) {
-    wrap = finalWrap.cloneNode(true) as HTMLElement;
+    const left = Number.parseFloat(finalWrap.style.left || "0");
+    const top = Number.parseFloat(finalWrap.style.top || "0") + 105;
+    const width = Number.parseFloat(finalWrap.style.width || "116");
+
+    wrap = document.createElement("div");
     wrap.dataset.dbThirdPlace = "true";
-    wrap.classList.add("db-third-place-wrap");
-    const top = Number.parseFloat(finalWrap.style.top || "0");
-    wrap.style.top = `${top + 112}px`;
+    wrap.style.position = "absolute";
+    wrap.style.left = `${left}px`;
+    wrap.style.top = `${top}px`;
+    wrap.style.width = `${width}px`;
+    wrap.style.zIndex = "4";
+
+    const label = document.createElement("div");
+    label.dataset.dbThirdPlaceLabel = "true";
+    label.textContent = "三、四名决赛";
+    label.style.marginBottom = "6px";
+    label.style.fontSize = "10px";
+    label.style.fontWeight = "800";
+    label.style.textAlign = "center";
+    label.style.color = "#d8dff8";
+
+    const article = document.createElement("article");
+    article.className = "stage-tree-match";
+    article.dataset.dbThirdPlaceCard = "true";
+    article.style.width = `${width}px`;
+    article.innerHTML = `<div class="stage-competitor no-slot"><span></span><b></b></div><div class="stage-between"><time></time><span></span></div><div class="stage-competitor no-slot"><span></span><b></b></div><b class="stage-game-no"></b>`;
+
+    wrap.append(label, article);
     stage.appendChild(wrap);
   }
+
+  const label = wrap.querySelector<HTMLElement>("[data-db-third-place-label]");
+  if (label) setText(label, "三、四名决赛");
   const article = wrap.querySelector<HTMLElement>(".stage-tree-match");
-  if (article) {
-    article.title = "三、四名决赛";
-    patchArticle(article, match, `三、四名决赛 · ${match.matchCode || 31}`);
-  }
+  if (article) patchArticle(article, match, match.matchCode || String(match.order));
 }
 
 function patchMainTwo(bracket: HTMLElement, allMatches: CompetitionMatch[], group: Group) {
   const tree = bracket.querySelector<HTMLElement>(".stage-knockout-tree");
   if (!tree) return;
-  const phase = allMatches.filter(match => match.group === group && match.phaseId === "main-two");
-  const byOrder = new Map(phase.map(match => [match.order, match]));
-  const articles = Array.from(tree.querySelectorAll<HTMLElement>(".stage-tree-match:not([data-third-place-inner])"))
+
+  const phase = allMatches
+    .filter(match => match.group === group && match.phaseId === "main-two")
+    .sort((a,b) => a.order - b.order || a.id.localeCompare(b.id));
+
+  // 三、四名决赛不属于冠军晋级连线，单独放在决赛下方。
+  // 以后只要数据库 round_name 标记为“三、四名…/季军赛”，都会自动进入此独立节点。
+  const thirdPlace = phase.find(isThirdPlace);
+  const bracketMatches = phase.filter(match => !isThirdPlace(match));
+  const articles = Array.from(tree.querySelectorAll<HTMLElement>(".stage-tree-match"))
     .filter(article => !article.closest("[data-db-third-place]"));
-  const orders = [
-    ...Array.from({length:16},(_,i)=>i+1),
-    ...Array.from({length:8},(_,i)=>i+17),
-    ...Array.from({length:4},(_,i)=>i+25),
-    29,30,32,
-  ];
-  articles.slice(0, orders.length).forEach((article, index) => {
-    const match = byOrder.get(orders[index]);
-    patchArticle(article, match, match?.matchCode || String(orders[index]));
+
+  bracketMatches.slice(0, articles.length).forEach((match, index) => {
+    patchArticle(articles[index], match, match.matchCode || String(match.order));
   });
 
-  const final = byOrder.get(32);
+  const final = bracketMatches.find(isFinal) ?? bracketMatches.at(-1);
   if (final) setText(tree.querySelector(".terminal-player strong"), winner(final));
 
-  const third = byOrder.get(31);
-  const finalArticle = articles[orders.length - 1];
-  const finalWrap = finalArticle?.parentElement as HTMLElement | null;
-  const stage = tree.querySelector<HTMLElement>(".stage-knockout-stage");
-  if (third && finalWrap && stage) ensureThirdPlace(stage, finalWrap, third);
+  const finalIndex = final ? bracketMatches.findIndex(match => match.id === final.id) : -1;
+  const finalArticle = finalIndex >= 0 ? articles[finalIndex] : articles.at(-1);
+  const finalWrap = finalArticle?.closest<HTMLElement>(".stage-tree-match-wrap");
+
+  if (thirdPlace && finalWrap) ensureThirdPlace(tree, finalWrap, thirdPlace);
+  else removeThirdPlace(tree);
 }
 
 function applyBracketSearch(bracket: HTMLElement, lastQuery: {value:string}) {
