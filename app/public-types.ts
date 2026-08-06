@@ -18,6 +18,12 @@ export type Match = {
   table: string;
   isTv: boolean;
   status: string;
+  playerAId?: string | null;
+  playerBId?: string | null;
+  matchCode?: string;
+  scoreA?: string | null;
+  scoreB?: string | null;
+  resultType?: string | null;
 };
 
 export type Phase = {
