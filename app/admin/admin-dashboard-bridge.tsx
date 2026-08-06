@@ -29,14 +29,17 @@ export default function AdminDashboardBridge() {
         if (eventSelect) eventSelect.style.display = globalTitles.has(title) ? "none" : "";
 
         if (!initialized.current) {
+          const navButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".backend-sidebar nav button"));
+          if (!navButtons.length) return;
+
           const params = new URLSearchParams(window.location.search);
           const requestedSection = params.get("section");
           const requestedTitle = requestedSection ? sectionTitles[requestedSection] : "";
           if (requestedTitle) {
-            const navButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".backend-sidebar nav button"));
             const target = navButtons.find((button) => button.querySelector("strong")?.textContent?.trim() === requestedTitle);
             if (target && !target.classList.contains("active")) target.click();
           }
+
           const requestedEvent = params.get("event");
           const select = document.querySelector<HTMLSelectElement>(".backend-event-select select");
           if (requestedEvent && select && Array.from(select.options).some((option) => option.value === requestedEvent)) {
