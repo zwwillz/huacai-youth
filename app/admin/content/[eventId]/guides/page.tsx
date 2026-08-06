@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../../admin-viewer";
-import { getAdminSnapshot } from "@/db/admin";
+import { getAdminNavigationEvents } from "@/db/admin-ui";
 import { getGuideManagementData } from "@/db/guides";
 import AdminWorkspaceShell from "../../../admin-workspace-shell";
 import GuideManagementClient from "./guide-management-client";
@@ -16,13 +16,13 @@ export default async function GuideManagementPage({ params }: { params: Promise<
   }
   const { eventId } = await params;
   try {
-    const [data, snapshot] = await Promise.all([
+    const [data, navEvents] = await Promise.all([
       getGuideManagementData(viewer.username, eventId),
-      getAdminSnapshot(viewer.username),
+      getAdminNavigationEvents(viewer.username),
     ]);
     return <AdminWorkspaceShell
       viewer={{ displayName: viewer.displayName, role: viewer.role }}
-      events={snapshot.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }))}
+      events={navEvents}
       active="content"
       pageTitle="参赛友好提示"
       pageHint="内容发布 · 富内容编辑"
