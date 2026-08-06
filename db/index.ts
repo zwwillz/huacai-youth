@@ -4,7 +4,7 @@ import * as schema from "./schema";
 
 let client: ReturnType<typeof postgres> | null = null;
 
-export function getDb() {
+export function getSqlClient() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error("后台数据库尚未配置，请在 EdgeOne Pages 中设置 DATABASE_URL。");
@@ -15,5 +15,9 @@ export function getDb() {
     connect_timeout: 10,
     idle_timeout: 20,
   });
-  return drizzle(client, { schema });
+  return client;
+}
+
+export function getDb() {
+  return drizzle(getSqlClient(), { schema });
 }
