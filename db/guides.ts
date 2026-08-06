@@ -99,12 +99,13 @@ export async function saveGuideManagementData(username: string, eventId: string,
     const blocks = normalizeBlocks(item.blocks);
     const fallbackBody = blocks.filter((block) => block.type === "paragraph").map((block) => block.text).filter(Boolean).join("\n\n") || null;
     const publishedAt = item.publishStatus === "published" ? updatedAt : null;
+    const contentJson = JSON.stringify(blocks);
 
     await sql`
       insert into public.event_guides
         (id, event_id, guide_type, title, content_type, body, content_json, sort_order, publish_status, published_at, created_by, created_at, updated_at)
       values
-        (${id}, ${eventId}, ${guideType}, ${title}, 'blocks', ${fallbackBody}, ${sql.json(blocks)}, ${index}, ${item.publishStatus}, ${publishedAt}, ${account.id}, ${updatedAt}, ${updatedAt})
+        (${id}, ${eventId}, ${guideType}, ${title}, 'blocks', ${fallbackBody}, ${contentJson}::jsonb, ${index}, ${item.publishStatus}, ${publishedAt}, ${account.id}, ${updatedAt}, ${updatedAt})
       on conflict (event_id, guide_type) do update set
         title = excluded.title,
         content_type = 'blocks',
