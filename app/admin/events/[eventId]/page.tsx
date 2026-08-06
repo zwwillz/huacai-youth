@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
+import { getAdminSnapshot } from "@/db/admin";
 import { getEventManagementData } from "@/db/event-management";
+import AdminWorkspaceShell from "../../admin-workspace-shell";
 import EventManagementClient from "../event-management-client";
 import "../event-management.css";
 
@@ -12,8 +14,20 @@ export default async function EventManagementPage({ params }: { params: Promise<
   const { eventId } = await params;
 
   try {
-    const data = await getEventManagementData(viewer.username, eventId);
-    return <EventManagementClient initialData={data} />;
+    const [data, snapshot] = await Promise.all([
+      getEventManagementData(viewer.username, eventId),
+      getAdminSnapshot(viewer.username),
+    ]);
+    return <AdminWorkspaceShell
+      viewer={{ displayName: viewer.displayName, role: viewer.role, roleLabel: viewer.roleLabel }}
+      events={snapshot.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }))}
+      active="events"
+      pageTitle="赛事设置"
+      pageHint="赛事管理 · 分站主数据"
+      currentEventId={eventId}
+    >
+      <EventManagementClient initialData={data} />
+    </AdminWorkspaceShell>;
   } catch (error) {
     return <main className="backend-state backend-denied">
       <div className="backend-state-logo">锁</div>
