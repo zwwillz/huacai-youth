@@ -7,6 +7,7 @@ import { getPublicContentState } from "@/db/public-content";
 import { getPublicRankings } from "@/db/rankings";
 import { getCompetitionMatches } from "@/db/competition-matches";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
