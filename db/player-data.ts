@@ -3,6 +3,7 @@ import { getSqlClient } from "./index";
 export type PublicPlayerSummary = {
   id: string;
   name: string;
+  displayName: string;
   nationalityCode: string;
   avatarKey: string | null;
   group: "少年组" | "青年组";
@@ -32,7 +33,9 @@ export type PublicPlayerEvent = {
 export type PublicPlayerDetail = {
   id: string;
   name: string;
+  displayName: string;
   nationalityCode: string;
+  gender: string | null;
   avatarKey: string | null;
   currentGroup: "少年组" | "青年组";
   currentGroupCode: "U16" | "U20";
@@ -42,6 +45,7 @@ export type PublicPlayerDetail = {
 type SummaryRow = {
   id: string;
   full_name: string;
+  display_name: string;
   nationality_code: string | null;
   avatar_key: string | null;
   group_name: string;
@@ -54,7 +58,9 @@ type SummaryRow = {
 type PlayerRow = {
   id: string;
   full_name: string;
+  display_name: string;
   nationality_code: string | null;
+  gender: string | null;
   avatar_key: string | null;
   group_name: string;
   group_code: string;
@@ -98,12 +104,6 @@ function scoreForStats(value: string | null) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/**
- * 当前华彩系列赛按用户确认的中台协 E 级赛事规则计算：
- * 1) 名次积分 = 获得奖金金额（元） / 100 × 1.0；
- * 2) 参赛积分 = 参赛费金额（元） / 100，低于 100 元不计。
- * 积分由数据库中的奖金、报名费动态计算，不写死到球员档案。
- */
 function participationPoints(registrationFeeCents: number) {
   return registrationFeeCents >= 10_000 ? registrationFeeCents / 10_000 : 0;
 }
@@ -158,13 +158,26 @@ export async function getPublicPlayerSummaries(): Promise<PublicPlayerSummary[]>
        and er.player_id = ar.player_id
        and er.status = 'published'
       group by ar.player_id
+    ),
+    name_counts as (
+      select full_name, count(*)::int as name_count
+      from players
+      where merged_into_player_id is null
+      group by full_name
     )
-    select p.id, p.full_name, p.nationality_code, p.avatar_key,
+    select p.id, p.full_name,
+           case
+             when nc.name_count > 1 and nullif(p.identity_no_masked, '') is not null
+               then p.full_name || ' ' || upper(right(p.identity_no_masked, 4))
+             else p.full_name
+           end as display_name,
+           p.nationality_code, p.avatar_key,
            lr.group_name, lr.group_code, sc.station_count,
            br.placement_label, coalesce(pt.total_points, 0) as total_points
     from players p
     join latest_reg lr on lr.player_id = p.id
     join station_count sc on sc.player_id = p.id
+    join name_counts nc on nc.full_name = p.full_name
     left join best_rank br on br.player_id = p.id
     left join points_total pt on pt.player_id = p.id
     where p.merged_into_player_id is null
@@ -178,6 +191,7 @@ export async function getPublicPlayerSummaries(): Promise<PublicPlayerSummary[]>
   return rows.map((row) => ({
     id: row.id,
     name: row.full_name,
+    displayName: row.display_name,
     nationalityCode: row.nationality_code || "CN",
     avatarKey: row.avatar_key,
     group: asGroup(row.group_name),
@@ -202,11 +216,25 @@ export async function getPublicPlayerDetail(playerId: string): Promise<PublicPla
         and e.publish_status = 'published'
       order by e.start_date desc, r.event_id desc
       limit 1
+    ),
+    name_count as (
+      select count(*)::int as count
+      from players same_name
+      join players target on target.id = ${playerId}
+      where same_name.full_name = target.full_name
+        and same_name.merged_into_player_id is null
     )
-    select p.id, p.full_name, p.nationality_code, p.avatar_key,
+    select p.id, p.full_name,
+           case
+             when nc.count > 1 and nullif(p.identity_no_masked, '') is not null
+               then p.full_name || ' ' || upper(right(p.identity_no_masked, 4))
+             else p.full_name
+           end as display_name,
+           p.nationality_code, p.gender, p.avatar_key,
            lr.group_name, lr.group_code
     from players p
     join latest_reg lr on lr.player_id = p.id
+    cross join name_count nc
     where p.id = ${playerId} and p.merged_into_player_id is null
     limit 1
   `;
@@ -284,7 +312,9 @@ export async function getPublicPlayerDetail(playerId: string): Promise<PublicPla
   return {
     id: player.id,
     name: player.full_name,
+    displayName: player.display_name,
     nationalityCode: player.nationality_code || "CN",
+    gender: player.gender,
     avatarKey: player.avatar_key,
     currentGroup: asGroup(player.group_name),
     currentGroupCode: asGroupCode(player.group_code),
