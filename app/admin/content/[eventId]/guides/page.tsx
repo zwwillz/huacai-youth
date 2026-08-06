@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../../admin-viewer";
+import { getAdminSnapshot } from "@/db/admin";
 import { getGuideManagementData } from "@/db/guides";
+import AdminWorkspaceShell from "../../../admin-workspace-shell";
 import GuideManagementClient from "./guide-management-client";
 import "./guide-management.css";
 
@@ -14,8 +16,21 @@ export default async function GuideManagementPage({ params }: { params: Promise<
   }
   const { eventId } = await params;
   try {
-    const data = await getGuideManagementData(viewer.username, eventId);
-    return <GuideManagementClient initialData={data} />;
+    const [data, snapshot] = await Promise.all([
+      getGuideManagementData(viewer.username, eventId),
+      getAdminSnapshot(viewer.username),
+    ]);
+    return <AdminWorkspaceShell
+      viewer={{ displayName: viewer.displayName, role: viewer.role, roleLabel: viewer.roleLabel }}
+      events={snapshot.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }))}
+      active="content"
+      pageTitle="参赛友好提示"
+      pageHint="内容发布 · 富内容编辑"
+      currentEventId={eventId}
+      eventScoped
+    >
+      <GuideManagementClient initialData={data} />
+    </AdminWorkspaceShell>;
   } catch (error) {
     return <main className="backend-state backend-denied"><div className="backend-state-logo">!</div><small>参赛提示</small><h1>暂时不能打开这场赛事</h1><p>{error instanceof Error ? error.message : "数据读取失败。"}</p><a href="/admin/content">返回内容发布</a></main>;
   }
