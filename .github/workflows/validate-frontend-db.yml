@@ -1,0 +1,41 @@
+name: Validate Frontend Database Refactor
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify and unpack refactor
+        run: |
+          cat .tmp/refactor-bin/part00.bin .tmp/refactor-bin/part01.bin .tmp/refactor-bin/part02.bin .tmp/refactor-bin/part03.bin > /tmp/frontend-db-refactor.tar.gz
+          echo "de7b697d3a6eb36274b23d2a314bd43ef94b531dfe64b31b0818afe004267adb  /tmp/frontend-db-refactor.tar.gz" | sha256sum -c -
+          git fetch origin main
+          git checkout -B frontend-db-refactor origin/main
+          tar -xzf /tmp/frontend-db-refactor.tar.gz
+      - name: Check static data references removed
+        run: |
+          ! grep -RIn --exclude=appearance.json -E 'import appearance|const stations|const phases|matchDays|isLangfang' app db
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/validation
+      - name: Push validated clean branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/page.tsx app/event-app.tsx app/public-types.ts db/public.ts db/schema.ts
+          git commit -m "feat: read public competition pages from database"
+          git push --force origin frontend-db-refactor
