@@ -183,7 +183,7 @@ export default function ScheduleWorkbenchClient({ initialData }: Props) {
         {data.schedule && <section className="schedule-panel schedule-result-panel">
           <header><div><small>04 · MANUAL ADJUSTMENT</small><h3>赛程草稿与人工调整</h3></div><span>{data.assignments.length} 场</span></header>
           <div className="schedule-slot-tabs">{data.timeSlots.map((slot) => <button type="button" key={slot.id} className={selectedSlotId === slot.id ? "active" : ""} onClick={() => setSelectedSlotId(slot.id)}><b>{slotLabel(slot.matchDate, slot.startTime)}</b><small>{assignmentsBySlot.get(slot.id)?.length || 0}场</small></button>)}</div>
-          <div className="schedule-match-list">{currentAssignments.length ? currentAssignments.map((assignment) => <ScheduleMatchRow key={assignment.id} assignment={assignment} data={data} busy={busy} onSave={updateAssignment}/>) : <div className="schedule-empty">这个时间段暂时没有比赛。</div>}</div>
+          <div className="schedule-match-list">{currentAssignments.length ? currentAssignments.map((assignment) => <ScheduleMatchRow key={`${assignment.id}-${assignment.timeSlotId}-${assignment.tableId}-${assignment.refereeUserId}`} assignment={assignment} data={data} busy={busy} onSave={updateAssignment}/>) : <div className="schedule-empty">这个时间段暂时没有比赛。</div>}</div>
         </section>}
       </div>
 
