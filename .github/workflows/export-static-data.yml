@@ -1,0 +1,21 @@
+name: Export Static Data
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload appearance data
+        uses: actions/upload-artifact@v4
+        with:
+          name: appearance-data
+          path: app/data/appearance.json
+          if-no-files-found: error
+          retention-days: 1
