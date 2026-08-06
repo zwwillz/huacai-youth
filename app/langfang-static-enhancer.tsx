@@ -165,15 +165,19 @@ function patchSecondStage(group:Group){
   if(final)setText(tree.querySelector(".terminal-player strong"),winner(final));
 }
 
-function StaticMatchCards({matches}:{matches:DisplayMatch[]}){
-  return <section className="versus-list static-versus-list">{matches.map(match=><article className="versus-card" key={`${match.code}-${match.playerA}-${match.playerB}`}>
+function StaticMatchRows({matches}:{matches:DisplayMatch[]}){
+  return <>{matches.map(match=><article className="versus-card" key={`${match.code}-${match.playerA}-${match.playerB}`}>
     <header><b>{match.time}</b><span>{match.progress} · {match.round} · 第{match.order}场</span></header>
     <section>
       <div className="match-player"><i>{match.playerA.slice(0,1)}</i><strong>{match.playerA}</strong></div>
       <div className="match-center"><strong>{match.scoreA} : {match.scoreB}</strong><span className="ended">已结束</span><b>{match.code}</b></div>
       <div className="match-player"><i>{match.playerB.slice(0,1)}</i><strong>{match.playerB}</strong></div>
     </section>
-  </article>)}</section>;
+  </article>)}</>;
+}
+
+function StaticEmpty({group}:{group:Group}){
+  return <><i>○</i><h2>当日对阵待公布</h2><p>{group}该日期的球员、比分和球台信息将在组委会确认后更新。</p></>;
 }
 
 export default function LangfangStaticEnhancer(){
@@ -186,33 +190,63 @@ export default function LangfangStaticEnhancer(){
 
   useEffect(()=>{
     let input:HTMLInputElement|null=null;
+    let ownedHost:HTMLElement|null=null;
     const onInput=(event:Event)=>setQuery((event.target as HTMLInputElement).value);
+
+    const restoreOriginal=()=>{
+      const page=document.querySelector<HTMLElement>(".match-list-page");
+      if(!page)return;
+      page.querySelectorAll<HTMLElement>(".versus-list:not(.static-versus-list), .match-empty:not(.static-match-empty)").forEach(el=>el.style.display="");
+      const host=page.querySelector<HTMLElement>("[data-langfang-static-matches]");
+      if(host){host.remove();if(ownedHost===host)ownedHost=null;}
+      setMount(current=>current===null?current:null);
+    };
+
     const sync=()=>{
       const matchPage=document.querySelector<HTMLElement>(".match-list-page");
       if(matchPage){
         const nextGroup=readGroup(matchPage);
         setGroup(current=>current===nextGroup?current:nextGroup);
-        const active=matchPage.querySelector<HTMLElement>(".match-days button.active b")?.textContent?.trim()||"";
-        if(active){const [m,d]=active.split("-");const nextDay=`2026-${Number(m)}-${Number(d)}`;setDay(current=>current===nextDay?current:nextDay);}
+
+        // Keep the original date navigation completely intact. Each button remains
+        // exactly the original weekday + MM-DD pair and remains the only date switch.
+        const activeButton=matchPage.querySelector<HTMLElement>(".match-days button.active");
+        const active=activeButton?.querySelector<HTMLElement>("b")?.textContent?.trim()||"";
+        if(active){
+          const [m,d]=active.split("-");
+          const nextDay=`2026-${Number(m)}-${Number(d)}`;
+          setDay(current=>current===nextDay?current:nextDay);
+        }
+
         const nextInput=matchPage.querySelector<HTMLInputElement>(".match-filter input");
-        if(nextInput!==input){if(input)input.removeEventListener("input",onInput);input=nextInput;if(input){input.addEventListener("input",onInput);setQuery(input.value);}}
+        if(nextInput!==input){
+          if(input)input.removeEventListener("input",onInput);
+          input=nextInput;
+          if(input){input.addEventListener("input",onInput);setQuery(input.value);}
+        }
+
         const needsStatic=!!active&&["07-31","08-01","08-02","08-03","08-04"].includes(active);
         let host=matchPage.querySelector<HTMLElement>("[data-langfang-static-matches]");
         if(needsStatic){
-          const originalList=matchPage.querySelector<HTMLElement>(".versus-list:not(.static-versus-list)");
-          const empty=matchPage.querySelector<HTMLElement>(".match-empty");
-          if(originalList)originalList.style.display="none";
-          if(empty)empty.style.display="none";
-          if(!host){host=document.createElement("div");host.dataset.langfangStaticMatches="true";host.style.display="contents";const count=matchPage.querySelector(".match-count");count?.insertAdjacentElement("afterend",host);}
+          // Hide only the original result area. The header, group switch, date menu
+          // and search field remain untouched and fully controlled by EventApp.
+          matchPage.querySelectorAll<HTMLElement>(".versus-list:not(.static-versus-list), .match-empty:not(.static-match-empty)").forEach(el=>el.style.display="none");
+
+          if(!host){
+            host=document.createElement("section");
+            host.dataset.langfangStaticMatches="true";
+            const count=matchPage.querySelector(".match-count");
+            count?.insertAdjacentElement("afterend",host);
+            ownedHost=host;
+          }
+          host.className=visible.length?"versus-list static-versus-list":"match-empty static-match-empty";
           setMount(current=>current===host?current:host);
+
           const countText=matchPage.querySelector<HTMLElement>(".match-count span");
           if(countText)setText(countText,`${nextGroup} · ${visible.length}场对阵`);
         }else{
-          const originalList=matchPage.querySelector<HTMLElement>(".versus-list:not(.static-versus-list)");
-          const empty=matchPage.querySelector<HTMLElement>(".match-empty");
-          if(originalList)originalList.style.display="";
-          if(empty)empty.style.display="";
-          host?.remove();
+          matchPage.querySelectorAll<HTMLElement>(".versus-list:not(.static-versus-list), .match-empty:not(.static-match-empty)").forEach(el=>el.style.display="");
+          if(host){host.remove();if(ownedHost===host)ownedHost=null;}
           setMount(current=>current===null?current:null);
         }
       }else{
@@ -220,6 +254,8 @@ export default function LangfangStaticEnhancer(){
         setMount(current=>current===null?current:null);
       }
 
+      // The schedule trees keep their original DOM, classes, dark-board styling,
+      // connector geometry, zoom and fullscreen behavior; only text data is filled.
       const bracket=document.querySelector<HTMLElement>(".bracket-page");
       if(bracket){
         const nextGroup=readGroup(bracket);
@@ -228,11 +264,17 @@ export default function LangfangStaticEnhancer(){
         if(title==="正赛第二阶段")patchSecondStage(nextGroup);
       }
     };
+
     sync();
-    const timer=window.setInterval(sync,200);
-    return ()=>{window.clearInterval(timer);if(input)input.removeEventListener("input",onInput);};
+    const timer=window.setInterval(sync,160);
+    return ()=>{
+      window.clearInterval(timer);
+      if(input)input.removeEventListener("input",onInput);
+      if(ownedHost)ownedHost.remove();
+      restoreOriginal();
+    };
   },[visible.length]);
 
   if(!mount)return null;
-  return createPortal(visible.length?<StaticMatchCards matches={visible}/>:<section className="match-empty"><i>○</i><h2>当日对阵待公布</h2><p>{group}该日期的球员、比分和球台信息将在组委会确认后更新。</p></section>,mount);
+  return createPortal(visible.length?<StaticMatchRows matches={visible}/>:<StaticEmpty group={group}/>,mount);
 }
