@@ -113,7 +113,7 @@ export default function ScheduleWorkbenchClient({ initialData }: Props) {
 
   async function updateAssignment(assignmentId: string, timeSlotId: string, tableId: string, refereeUserId: string) {
     const next = await post({ action: "update_assignment", assignmentId, timeSlotId: timeSlotId || null, tableId: tableId || null, refereeUserId: refereeUserId || null });
-    if (next) setMessage("该场比赛已经人工调整并记录日志。裁判信息仅后台可见。之后公众端只映射比赛时间和台号。\n");
+    if (next) setMessage("该场比赛已经人工调整并记录日志。裁判信息仅后台可见。之后公众端只映射比赛时间和台号。");
   }
 
   function changeManualLabel(index: number, value: string) {
