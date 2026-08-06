@@ -130,7 +130,8 @@ export default function ScheduleWorkbenchClient({ initialData }: Props) {
   }
 
   function addNextDayTemplate() {
-    const latestDate = slotDrafts.map((slot) => slot.matchDate).sort().at(-1) || data.bracket.eventStartDate;
+    const dates = slotDrafts.map((slot) => slot.matchDate).sort();
+    const latestDate = dates.length ? dates[dates.length - 1] : data.bracket.eventStartDate;
     const nextDate = addDays(latestDate, 1);
     setSlotDrafts((current) => [...current, ...DEFAULT_TIMES.map((startTime) => ({ matchDate: nextDate, startTime }))]);
   }
