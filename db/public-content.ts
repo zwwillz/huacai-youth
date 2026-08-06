@@ -1,16 +1,13 @@
 import { inArray } from "drizzle-orm";
-import { getDb } from "./index";
-import { eventDocuments, eventGuides, publications } from "./schema";
+import { getDb, getSqlClient } from "./index";
+import { eventDocuments, publications } from "./schema";
 
 export type PublicContentState = {
   stationId: string;
   eventId: string;
   shortTitle: string;
   publishedModules: string[];
-  guides: {
-    transport: { title: string; body: string; published: boolean };
-    clothing: { title: string; body: string; published: boolean };
-  };
+  guides: Array<{ id: string; title: string; guideType: string }>;
   documents: {
     regulation: { url: string; published: boolean };
     referee_list: { url: string; published: boolean };
@@ -20,19 +17,21 @@ export type PublicContentState = {
 export async function getPublicContentState(stations: Array<{ id: string; eventId: string; title: string }>): Promise<PublicContentState[]> {
   if (!stations.length) return [];
   const db = getDb();
+  const sql = getSqlClient();
   const eventIds = stations.map((station) => station.eventId);
-  const [publicationRows, guideRows, documentRows] = await Promise.all([
+  const [publicationRows, documentRows, guideRows] = await Promise.all([
     db.select().from(publications).where(inArray(publications.eventId, eventIds)),
-    db.select().from(eventGuides).where(inArray(eventGuides.eventId, eventIds)),
     db.select().from(eventDocuments).where(inArray(eventDocuments.eventId, eventIds)),
+    sql<Array<{ id: string; event_id: string; guide_type: string; title: string; sort_order: number }>>`
+      select id, event_id, guide_type, title, sort_order
+      from public.event_guides
+      where event_id in ${sql(eventIds)} and publish_status = 'published'
+      order by event_id, sort_order asc, created_at asc
+    `,
   ]);
 
   return stations.map((station) => {
     const modules = publicationRows.filter((row) => row.eventId === station.eventId && row.status === "published").map((row) => row.moduleType);
-    const guide = (type: "transport" | "clothing", fallback: string) => {
-      const row = guideRows.find((item) => item.eventId === station.eventId && item.guideType === type);
-      return { title: row?.title ?? fallback, body: row?.body ?? "", published: row?.publishStatus === "published" };
-    };
     const document = (type: "regulation" | "referee_list") => {
       const row = documentRows.find((item) => item.eventId === station.eventId && item.documentType === type);
       return { url: row?.externalUrl || row?.fileKey || "", published: Boolean(row?.isPublished) && modules.includes("documents") };
@@ -42,10 +41,7 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
       eventId: station.eventId,
       shortTitle: station.title,
       publishedModules: modules,
-      guides: {
-        transport: guide("transport", "交通住宿攻略"),
-        clothing: guide("clothing", "服装要求"),
-      },
+      guides: guideRows.filter((row) => row.event_id === station.eventId).map((row) => ({ id: row.id, title: row.title, guideType: row.guide_type })),
       documents: {
         regulation: document("regulation"),
         referee_list: document("referee_list"),
