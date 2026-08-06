@@ -17,14 +17,6 @@ function countryName(code: string) {
   return code.toUpperCase() === "CN" ? "中国" : code.toUpperCase();
 }
 
-function genderName(value: string | null) {
-  if (!value) return "未录入";
-  const normalized = value.toLowerCase();
-  if (normalized === "male" || value === "男") return "男";
-  if (normalized === "female" || value === "女") return "女";
-  return value;
-}
-
 function formatPoints(value: number) {
   return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value);
 }
@@ -66,8 +58,14 @@ function DetailPanel({detail,onClose}:{detail:PublicPlayerDetail;onClose:()=>voi
   const visibleEvents=useMemo(()=>year === "全部" ? detail.events : detail.events.filter(item=>item.year===year),[detail.events,year]);
   const stats=useMemo(()=>aggregate(visibleEvents),[visibleEvents]);
 
-  return <div className={styles.overlay} onClick={onClose}>
-    <aside className={styles.detailPanel} onClick={event=>event.stopPropagation()}>
+  useEffect(()=>{
+    const previous=document.body.style.overflow;
+    document.body.style.overflow="hidden";
+    return ()=>{document.body.style.overflow=previous};
+  },[]);
+
+  return <div className={styles.overlay}>
+    <aside className={styles.detailPanel}>
       <button className={styles.close} onClick={onClose} aria-label="关闭">×</button>
       <header className={styles.detailHeader}>
         <PlayerAvatar name={detail.name} large/>
@@ -75,7 +73,6 @@ function DetailPanel({detail,onClose}:{detail:PublicPlayerDetail;onClose:()=>voi
           <span className={styles.country}>{flag(detail.nationalityCode)} {countryName(detail.nationalityCode)}</span>
           <h2>{detail.name}</h2>
           <div className={styles.identityMeta}>
-            <span>{genderName(detail.gender)}</span>
             <b>{detail.currentGroupCode}</b>
             <span>{detail.currentGroup}</span>
           </div>
@@ -167,9 +164,9 @@ function PlayerBrowser({players}:{players:PublicPlayerSummary[]}) {
           {(["全部","少年组","青年组"] as FilterGroup[]).map(item=><button className={group===item?styles.active:""} onClick={()=>changeGroup(item)} key={item}>{item}</button>)}
         </div>
       </header>
-      <div className={styles.countLine}><span>共 {filtered.length} 人</span><small>按球员身份 ID 区分同名选手</small></div>
+      <div className={styles.countLine}><span>共 {filtered.length} 人</span><small>按总积分从高到低排序 · 同名选手按身份 ID 区分</small></div>
       <div className={styles.playerGrid}>
-        {visible.map(player=><button className={styles.playerCard} onClick={()=>openPlayer(player.id)} key={player.id}>
+        {visible.map(player=><button className={styles.playerCard} onClick={()=>openPlayer(player.id)} key={player.id} title={`总积分 ${formatPoints(player.totalPoints)}`}>
           <PlayerAvatar name={player.name}/>
           <div className={styles.playerCopy}>
             <strong>{player.name}</strong>
