@@ -1,0 +1,40 @@
+name: Validate Preserve UI DB Refactor
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.event.pull_request.head.ref == 'frontend-db-preserve-ui'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.17.1
+          cache: npm
+      - name: Apply data-source-only codemod
+        run: python .tmp/apply-preserve-ui-db.py
+      - name: Assert styles untouched
+        run: git diff --exit-code origin/main -- app/globals.css
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+        env:
+          DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/validation
+      - name: Commit validated UI-preserving change
+        run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app/event-app.tsx
+            git commit -m "feat: read database without changing frontend layout"
+            git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          fi
