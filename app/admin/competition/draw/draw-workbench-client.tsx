@@ -58,6 +58,22 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
     }
   }
 
+  async function generateBracket(sessionId: string) {
+    try {
+      const response = await fetch("/api/admin/competition/bracket", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "generate", sessionId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "完整签表生成失败。");
+      return true;
+    } catch (error) {
+      setMessage(`抽签已经确认，但完整签表自动生成失败：${error instanceof Error ? error.message : "请进入完整签表页面重试。"}`);
+      return false;
+    }
+  }
+
   async function createDraw() {
     if (!window.confirm(`确认使用当前已审核的 ${entrantCount} 名球员生成抽签草稿？\n\n本阶段只抽签一次，签表将从当前人数一路运行到每区冠军；最后由16名分区冠军直接晋级，并从16名分区决胜轮负者中按局胜率增补 ${rateQualifierCount} 人。`)) return;
     const data = await post({
@@ -98,11 +114,13 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
   }
 
   async function confirmDraw() {
-    if (!session || !window.confirm("确认把当前抽签版本设为正式签表？确认后需要先作废才能重新抽签。")) return;
+    if (!session || !window.confirm("确认把当前抽签版本设为正式签表？确认后需要先作废才能重新抽签。确认后系统会自动生成16个分区的完整比赛关系。")) return;
     const data = await post({ action: "confirm", sessionId: session.session.id });
     if (data) {
-      setSession(data as DrawSessionDetail);
-      setMessage("本次抽签已经正式确认。下一步将由该签位生成完整分区签表和比赛关系。");
+      const confirmed = data as DrawSessionDetail;
+      setSession(confirmed);
+      const generated = await generateBracket(confirmed.session.id);
+      if (generated) setMessage("本次抽签已经正式确认，并已自动生成完整分区签表和每一场比赛关系。下一步再给这些比赛安排时间、球台和裁判。");
       router.refresh();
     }
   }
@@ -113,7 +131,7 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
     if (!reason) return;
     const data = await post({ action: "void", sessionId: session.session.id, reason });
     if (data) {
-      setMessage("抽签版本已作废，可以重新生成新版本。");
+      setMessage("抽签版本已作废，可以重新生成新版本。旧版完整签表会保留为历史版本，不会被作为当前正式数据使用。");
       setSession(null);
       router.refresh();
     }
@@ -169,7 +187,7 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
 
         {session && <section className="draw-panel draw-results-panel">
           <header><div><small>04 · RESULT PREVIEW</small><h3>V{session.session.versionNo} 抽签结果</h3></div><span className={`draw-status ${session.session.status}`}>{statusLabel(session.session.status)}</span></header>
-          <div className="draw-results-actions"><Link target="_blank" href={`/admin/competition/draw/${session.session.id}/screen`}>打开抽签大屏 ↗</Link>{session.session.status === "draft" && initialData.viewerRole !== "referee" && <><button type="button" disabled={busy} onClick={confirmDraw}>确认正式签表</button><button className="danger" type="button" disabled={busy} onClick={voidDraw}>作废并重抽</button></>}{session.session.status === "confirmed" && initialData.viewerRole !== "referee" && <button className="danger" type="button" disabled={busy} onClick={voidDraw}>作废正式签表</button>}</div>
+          <div className="draw-results-actions"><Link target="_blank" href={`/admin/competition/draw/${session.session.id}/screen`}>打开抽签大屏 ↗</Link>{session.session.status === "confirmed" && <Link href={`/admin/competition/bracket?session=${encodeURIComponent(session.session.id)}&event=${encodeURIComponent(session.session.eventId)}`}>完整分区签表 →</Link>}{session.session.status === "draft" && initialData.viewerRole !== "referee" && <><button type="button" disabled={busy} onClick={confirmDraw}>确认正式签表</button><button className="danger" type="button" disabled={busy} onClick={voidDraw}>作废并重抽</button></>}{session.session.status === "confirmed" && initialData.viewerRole !== "referee" && <button className="danger" type="button" disabled={busy} onClick={voidDraw}>作废正式签表</button>}</div>
           <div className="draw-result-summary"><span>参赛 {session.session.entrantCount}</span><span>{session.session.divisionCount} 个分区</span><span>附加赛 {session.session.playoffMatchCount} 场</span><span>轮空 {session.session.byeCount}</span><span>随机承诺 {session.session.randomCommitment.slice(0, 12)}…</span></div>
           <div className="draw-division-tabs">{Array.from({ length: session.session.divisionCount }, (_, index) => index + 1).map((item) => <button type="button" key={item} className={division === item ? "active" : ""} onClick={() => setDivision(item)}>第{item}区</button>)}</div>
           <div className="draw-slot-table">{visibleSlots.map((slot) => {
@@ -183,6 +201,7 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
         <section><small>本轮规则确认</small><h3>一次抽签到底</h3><p>资格赛第一场 / 第二场都不是每轮重抽。名单锁定后只抽一次，之后在同一张分区签表中连续比赛到每区冠军。</p></section>
         <section><small>32强负者增补</small><h3>局胜率前8</h3><p>16个分区各产生1名决胜轮负者，共16人进入候补池。后续比分模块会自动计算局胜率并排序，默认取前8名，由组委会确认。</p></section>
         <section><small>种子与候补</small><h3>从第一版预留</h3><p>正赛第一阶段支持设置是否启用种子以及种子名额。若种子不到场，缺额优先从资格赛候补池按局胜率顺序增补。</p></section>
+        <section><small>赛程层</small><h3>时间稍后配置</h3><p>签表关系不绑定时间。下一步单独设置 09:00、10:45、13:30 等比赛时段，再结合球台和裁判自动编排，临时换台不会改变签表。</p></section>
       </aside>
     </section>
   </main>;
