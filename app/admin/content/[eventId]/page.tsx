@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
+import { getAdminSnapshot } from "@/db/admin";
 import { getContentManagementData } from "@/db/content-management";
+import AdminWorkspaceShell from "../../admin-workspace-shell";
 import ContentManagementClient from "../content-management-client";
 import "../content-management.css";
 import "../content-extensions.css";
@@ -13,8 +15,21 @@ export default async function ContentManagementPage({ params }: { params: Promis
   const { eventId } = await params;
 
   try {
-    const data = await getContentManagementData(viewer.username, eventId);
-    return <ContentManagementClient initialData={data} />;
+    const [data, snapshot] = await Promise.all([
+      getContentManagementData(viewer.username, eventId),
+      getAdminSnapshot(viewer.username),
+    ]);
+    return <AdminWorkspaceShell
+      viewer={{ displayName: viewer.displayName, role: viewer.role, roleLabel: viewer.roleLabel }}
+      events={snapshot.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }))}
+      active="content"
+      pageTitle="内容发布"
+      pageHint="赛事运营 · 静态内容"
+      currentEventId={eventId}
+      eventScoped
+    >
+      <ContentManagementClient initialData={data} />
+    </AdminWorkspaceShell>;
   } catch (error) {
     return <main className="backend-state backend-denied">
       <div className="backend-state-logo">锁</div>
