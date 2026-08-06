@@ -32,7 +32,7 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
 
         {currentEvent && <section className="competition-event-list"><header><div><small>当前赛事</small><h2>竞赛工作区准备状态</h2></div><span>第 {currentEvent.stationNo} 站</span></header><article><div><b>{currentEvent.status}</b><h3>{currentEvent.shortTitle}</h3><p>{currentEvent.city} · {currentEvent.venueName || "场馆待设置"}</p></div><dl><div><dt>赛事状态</dt><dd>{currentEvent.status}</dd></div><div><dt>内容模块</dt><dd>{currentEvent.publicationCount} / 6</dd></div></dl><button disabled>竞赛引擎下一阶段开放</button></article></section>}
 
-        <section className="competition-principles"><article><strong>权限</strong><p>裁判账号只看到被分配的赛事；普通裁判、裁判长和组委会后续可进一步细分操作权限。</p></article><article><strong>自动 + 手工</strong><p>系统自动生成能生成的关系，但所有关键数据保留人工调整入口，并记录审计日志。</p></article><article><strong>发布逻辑</strong><p>赛程、对阵、排名各自具备“草稿 / 已确认 / 已发布”状态，公众端只读取已发布版本。</p></article></section>
+        <section className="competition-principles"><article><strong>权限</strong><p>当前先按系统角色收敛菜单；竞赛引擎阶段再启用“裁判只看到被分配赛事”的严格赛事成员权限，并继续细分普通裁判、裁判长等职责。</p></article><article><strong>自动 + 手工</strong><p>系统自动生成能生成的关系，但所有关键数据保留人工调整入口，并记录审计日志。</p></article><article><strong>发布逻辑</strong><p>赛程、对阵、排名各自具备“草稿 / 已确认 / 已发布”状态，公众端只读取已发布版本。</p></article></section>
       </section>
     </main>
   </AdminWorkspaceShell>;
