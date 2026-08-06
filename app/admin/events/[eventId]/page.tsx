@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
-import { getAdminSnapshot } from "@/db/admin";
+import { getAdminNavigationEvents } from "@/db/admin-ui";
 import { getEventManagementData } from "@/db/event-management";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import EventManagementClient from "../event-management-client";
@@ -14,13 +14,13 @@ export default async function EventManagementPage({ params }: { params: Promise<
   const { eventId } = await params;
 
   try {
-    const [data, snapshot] = await Promise.all([
+    const [data, navEvents] = await Promise.all([
       getEventManagementData(viewer.username, eventId),
-      getAdminSnapshot(viewer.username),
+      getAdminNavigationEvents(viewer.username),
     ]);
     return <AdminWorkspaceShell
       viewer={{ displayName: viewer.displayName, role: viewer.role }}
-      events={snapshot.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }))}
+      events={navEvents}
       active="events"
       pageTitle="赛事设置"
       pageHint="赛事管理 · 分站主数据"
