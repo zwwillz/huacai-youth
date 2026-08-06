@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb } from "./index";
 import { eventGroups, eventPhases, matches } from "./schema";
 import type { Group, PhaseId } from "@/app/public-types";
@@ -32,10 +32,9 @@ export type CompetitionMatch = {
 };
 
 /**
- * Convert the source score into a value usable by future win-rate/statistics code.
  * Official draw sheets may use X for a player who did not play / was directly
- * awarded a loss (and occasionally for a bye marker). It remains X for display,
- * but contributes 0 when a numeric score is required.
+ * awarded a loss (and occasionally for a bye marker). X is kept for display,
+ * but contributes 0 when a numeric score is required for future statistics.
  */
 export function scoreForStats(value: string | null): number | null {
   if (value == null || value === "") return null;
@@ -69,14 +68,14 @@ export async function getCompetitionMatches(eventId: string): Promise<Competitio
       table: matches.tableName,
       isTv: matches.isTv,
       status: matches.status,
-      scoreA: sql<string | null>`"matches"."score_a"`,
-      scoreB: sql<string | null>`"matches"."score_b"`,
-      matchCode: sql<string | null>`"matches"."match_code"`,
-      resultType: sql<string | null>`"matches"."result_type"`,
+      scoreA: matches.scoreA,
+      scoreB: matches.scoreB,
+      matchCode: matches.matchCode,
+      resultType: matches.resultType,
     })
     .from(matches)
     .innerJoin(eventGroups, eq(matches.groupId, eventGroups.id))
-    .leftJoin(eventPhases, sql`"matches"."phase_id" = ${eventPhases.id}`)
+    .leftJoin(eventPhases, eq(matches.phaseId, eventPhases.id))
     .where(eq(matches.eventId, eventId))
     .orderBy(asc(matches.matchDate), asc(matches.matchTime), asc(matches.orderNo), asc(matches.id));
 
