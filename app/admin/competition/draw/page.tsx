@@ -19,6 +19,7 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
 
   try {
     const data = await getDrawWorkspaceData(viewer.username, eventId, query.group, phaseCode);
+    if (data.latestSession?.status === "void") data.latestSession = null;
     return <AdminWorkspaceShell
       viewer={{ displayName: viewer.displayName, role: viewer.role }}
       events={events}
