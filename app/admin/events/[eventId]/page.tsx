@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
 import { getEventManagementData } from "@/db/event-management";
 import EventManagementClient from "../event-management-client";
-import "../event-management.css";
 
 export const dynamic = "force-dynamic";
 
