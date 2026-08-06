@@ -42,7 +42,7 @@ export async function getCompetitionBracketIndex(username: string, eventId: stri
     left join public.competition_schedules s on s.bracket_id=b.id
     left join public.competition_match_schedules ms on ms.schedule_id=s.id
     where b.event_id=${eventId}
-    group by ds.id,b.id,eg.name,ep.title,s.id
+    group by ds.id,b.id,eg.name,eg.code,ep.title,s.id
     order by eg.code,b.phase_code,ds.version_no desc
   `;
 }
