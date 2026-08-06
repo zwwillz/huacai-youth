@@ -14,6 +14,7 @@ export type AdminWorkspaceEvent = {
 };
 
 type ActiveSection = "dashboard" | "events" | "content" | "registrations" | "players" | "competition" | "rankings" | "accounts" | "logs";
+export type CompetitionTool = "overview" | "schedule" | "scoring" | "qualification";
 
 type Props = {
   viewer: { displayName: string; role: string; roleLabel?: string };
@@ -23,6 +24,7 @@ type Props = {
   pageHint?: string;
   currentEventId?: string;
   eventScoped?: boolean;
+  competitionTool?: CompetitionTool;
   children: ReactNode;
 };
 
@@ -37,7 +39,7 @@ const navGroups: Array<{ label?: string; items: Array<{ id: ActiveSection; icon:
     { id: "players", icon: "员", title: "球员管理", hint: "本站球员与球员总库" },
   ] },
   { label: "竞赛", items: [
-    { id: "competition", icon: "执", title: "竞赛执行", hint: "抽签、赛程、比分" },
+    { id: "competition", icon: "执", title: "竞赛执行", hint: "抽签、赛程、比分与晋级" },
     { id: "rankings", icon: "榜", title: "排名积分", hint: "总积分与分站排名" },
   ] },
   { label: "系统", items: [
@@ -46,11 +48,26 @@ const navGroups: Array<{ label?: string; items: Array<{ id: ActiveSection; icon:
   ] },
 ];
 
+const competitionTools: Array<{ id: CompetitionTool; title: string; icon: string }> = [
+  { id: "overview", title: "抽签与签表", icon: "签" },
+  { id: "schedule", title: "赛程编排", icon: "程" },
+  { id: "scoring", title: "比分录入", icon: "分" },
+  { id: "qualification", title: "晋级确认", icon: "晋" },
+];
+
+function competitionToolHref(tool: CompetitionTool, eventId?: string) {
+  const suffix = eventId ? `?event=${encodeURIComponent(eventId)}` : "";
+  if (tool === "schedule") return `/admin/competition/schedules${suffix}`;
+  if (tool === "scoring") return `/admin/competition/scoring${suffix}`;
+  if (tool === "qualification") return `/admin/competition/qualification${suffix}`;
+  return `/admin/competition${suffix}`;
+}
+
 function sectionHref(id: ActiveSection, eventId?: string) {
   if (id === "dashboard") return "/admin";
   if (id === "events") return "/admin/events";
   if (id === "content") return eventId ? `/admin/content/${eventId}` : "/admin/content";
-  if (id === "competition") return eventId ? `/admin/competition?event=${encodeURIComponent(eventId)}` : "/admin/competition";
+  if (id === "competition") return competitionToolHref("overview", eventId);
   if (id === "registrations" || id === "players") return `/admin?section=${id}${eventId ? `&event=${encodeURIComponent(eventId)}` : ""}`;
   if (id === "rankings") return "/admin?section=rankings";
   if (id === "accounts") return "/admin/accounts";
@@ -58,7 +75,7 @@ function sectionHref(id: ActiveSection, eventId?: string) {
   return "/admin";
 }
 
-export default function AdminWorkspaceShell({ viewer, events, active, pageTitle, pageHint, currentEventId, eventScoped = false, children }: Props) {
+export default function AdminWorkspaceShell({ viewer, events, active, pageTitle, pageHint, currentEventId, eventScoped = false, competitionTool = "overview", children }: Props) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const currentEvent = events.find((event) => event.id === currentEventId);
@@ -74,6 +91,10 @@ export default function AdminWorkspaceShell({ viewer, events, active, pageTitle,
 
   const switchEvent = (eventId: string) => {
     if (!eventId) return;
+    if (active === "competition") {
+      router.push(competitionToolHref(competitionTool, eventId));
+      return;
+    }
     router.push(sectionHref(active, eventId));
   };
 
@@ -82,7 +103,10 @@ export default function AdminWorkspaceShell({ viewer, events, active, pageTitle,
       <Link href="/admin" prefetch className="backend-brand admin-workspace-brand"><span>华</span><div><strong>华彩赛事后台</strong><small>赛事运营与竞赛执行</small></div></Link>
       <nav className="admin-workspace-nav">{visibleGroups.map((group, groupIndex) => <div className="admin-nav-group" key={group.label || groupIndex}>
         {group.label && <small className="admin-nav-group-label">{group.label}</small>}
-        {group.items.map((item) => <Link prefetch key={item.id} href={sectionHref(item.id, currentEventId)} className={active === item.id ? "active" : ""} onClick={() => setMenuOpen(false)}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div></Link>)}
+        {group.items.map((item) => <div className="admin-nav-item-wrap" key={item.id}>
+          <Link prefetch href={sectionHref(item.id, currentEventId)} className={active === item.id ? "active" : ""} onClick={() => setMenuOpen(false)}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div></Link>
+          {item.id === "competition" && <div className="admin-competition-subnav">{competitionTools.map((tool) => <Link prefetch key={tool.id} href={competitionToolHref(tool.id, currentEventId)} className={active === "competition" && competitionTool === tool.id ? "active" : ""} onClick={() => setMenuOpen(false)}><span>{tool.icon}</span><strong>{tool.title}</strong></Link>)}</div>}
+        </div>)}
       </div>)}</nav>
       <div className="backend-sidebar-foot"><Link href="/" target="_blank">查看公众前端</Link><a href="/api/auth/logout">退出后台</a></div>
     </aside>
