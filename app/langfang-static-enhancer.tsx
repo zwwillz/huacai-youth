@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -27,7 +26,7 @@ type StaticData = {
 
 const data = staticResults as unknown as StaticData;
 const letters=["A","B","C","D","E","F","G","H"];
-const keyOf=(group:Group)=>group==="少年组"?"s":"y" as const;
+const keyOf=(group:Group):"s"|"y"=>group==="少年组"?"s":"y";
 const dateLabel=(date:string)=>{const [,month,day]=date.split("-");return `${Number(month)}月${Number(day)}日`;};
 const winner=(match:RawMatch)=>{
   const [,a,sa,b,sb]=match;
@@ -35,6 +34,15 @@ const winner=(match:RawMatch)=>{
   if(sb==="X")return a;
   return Number(sa)>Number(sb)?a:b;
 };
+
+function firstStageMatches(group:Group,letter:string):RawMatch[]{
+  const matches=[...(data.f[keyOf(group)][letter]||[])];
+  if(group==="少年组"&&letter==="F"){
+    const index=matches.findIndex(match=>match[0]==="4");
+    if(index>=0)matches[index]=["4","谈炜琦","2","王梓豪元","7"];
+  }
+  return matches;
+}
 
 function firstStageTiming(group:Group,letter:string,no:number){
   const late=letters.indexOf(letter)>=4;
@@ -85,7 +93,7 @@ function secondStageRound(no:number){
 
 function allStaticMatches(group:Group):DisplayMatch[]{
   const key=keyOf(group);
-  const first=letters.flatMap(letter=>(data.f[key][letter]||[]).map(raw=>{
+  const first=letters.flatMap(letter=>firstStageMatches(group,letter).map(raw=>{
     const no=Number(raw[0]);
     const timing=firstStageTiming(group,letter,no);
     return {code:`${letter}${no}`,playerA:raw[1],scoreA:raw[2],playerB:raw[3],scoreB:raw[4],...timing,progress:"正赛第一阶段",round:`${letter}组 · ${firstStageRound(no)}`,order:no};
@@ -118,16 +126,14 @@ function patchTreeArticle(article:Element|undefined,raw:RawMatch|undefined,code:
 function patchFirstStage(group:Group){
   const board=document.querySelector(".double-elim-phase-board");
   if(!board)return;
-  const key=keyOf(group);
   const groups=Array.from(board.querySelectorAll<HTMLElement>(".double-elim-group"));
   groups.forEach((section,index)=>{
     const letter=letters[index];
-    const matches=data.f[key][letter]||[];
+    const matches=firstStageMatches(group,letter);
     const articles=Array.from(section.querySelectorAll<HTMLElement>(".stage-tree-match"));
     const order=[0,1,2,3,6,7,4,5,8,9];
     articles.forEach((article,articleIndex)=>{
-      const rawIndex=order[articleIndex];
-      const raw=matches[rawIndex];
+      const raw=matches[order[articleIndex]];
       if(!raw)return;
       const no=Number(raw[0]);
       const timing=firstStageTiming(group,letter,no);
@@ -144,8 +150,7 @@ function patchFirstStage(group:Group){
 function patchSecondStage(group:Group){
   const tree=document.querySelector(".stage-knockout-tree");
   if(!tree||tree.closest(".qualification-phase-board"))return;
-  const key=keyOf(group);
-  const matches=data.k[key]||[];
+  const matches=data.k[keyOf(group)]||[];
   const byNo=new Map(matches.map(raw=>[Number(raw[0]),raw]));
   const articles=Array.from(tree.querySelectorAll<HTMLElement>(".stage-tree-match"));
   const matchNos=[...Array.from({length:16},(_,i)=>i+1),...Array.from({length:8},(_,i)=>17+i),...Array.from({length:4},(_,i)=>25+i),29,30,32];
@@ -191,7 +196,7 @@ export default function LangfangStaticEnhancer(){
         if(active){const [m,d]=active.split("-");const nextDay=`2026-${Number(m)}-${Number(d)}`;setDay(current=>current===nextDay?current:nextDay);}
         const nextInput=matchPage.querySelector<HTMLInputElement>(".match-filter input");
         if(nextInput!==input){if(input)input.removeEventListener("input",onInput);input=nextInput;if(input){input.addEventListener("input",onInput);setQuery(input.value);}}
-        const needsStatic=!!active&&(["07-31","08-01","08-02","08-03","08-04"].includes(active));
+        const needsStatic=!!active&&["07-31","08-01","08-02","08-03","08-04"].includes(active);
         let host=matchPage.querySelector<HTMLElement>("[data-langfang-static-matches]");
         if(needsStatic){
           const originalList=matchPage.querySelector<HTMLElement>(".versus-list:not(.static-versus-list)");
