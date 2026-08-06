@@ -16,15 +16,15 @@ export default async function ContentPublishingIndexPage() {
   const snapshot = await getAdminSnapshot(viewer.username);
   return <main className="event-settings-index">
     <header className="event-settings-index-head">
-      <div><Link href="/admin">← 返回赛事后台</Link><small>内容发布</small><h1>选择赛事</h1><p>进入具体分站后编辑竞赛规程、赛事文件、参赛提示，并控制各公众模块的发布状态。</p></div>
-      <span>{snapshot.events.length} 场赛事</span>
+      <div><Link href="/admin">← 返回赛事后台</Link><small>静态内容发布</small><h1>选择赛事</h1><p>这里维护赛事简介、竞赛规程、赛事文件和参赛友好提示。赛程签表、对阵、比分和排名已经独立到“竞赛执行”工作区。</p></div>
+      <div className="event-settings-index-head-actions"><Link href="/admin/events">赛事设置</Link><Link href="/admin/competition">竞赛执行</Link><span>{snapshot.events.length} 场赛事</span></div>
     </header>
     <section className="event-settings-index-grid">{snapshot.events.map((event) => <article key={event.id}>
-      <header><span>第 {event.stationNo} 站</span><b>{event.publicationCount} / 6 已发布</b></header>
+      <header><span>第 {event.stationNo} 站</span><b>{event.publicationCount} / 6 当前模块已公开</b></header>
       <h2>{event.shortTitle}</h2>
       <p>{event.city} · {event.venueName || "场馆待设置"}</p>
       <dl><div><dt>比赛时间</dt><dd>{event.startDate} — {event.endDate}</dd></div><div><dt>赛事状态</dt><dd>{event.status}</dd></div><div><dt>前端状态</dt><dd>{event.publishStatus === "published" ? "已发布" : "草稿"}</dd></div></dl>
-      <div className="event-settings-card-actions"><Link href={`/admin/content/${event.id}`}>进入内容发布 →</Link><Link href={`/admin/events/${event.id}`}>赛事设置 →</Link></div>
+      <div className="event-settings-card-actions"><Link href={`/admin/content/${event.id}`}>进入静态内容发布 →</Link><Link href={`/admin/content/${event.id}/guides`}>参赛提示 →</Link><Link href={`/admin/events/${event.id}`}>赛事设置 →</Link></div>
     </article>)}</section>
   </main>;
 }
