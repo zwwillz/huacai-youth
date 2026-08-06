@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminSnapshot } from "@/db/admin";
 import { getAdminViewer } from "../admin-viewer";
+import AdminWorkspaceShell from "../admin-workspace-shell";
 import "./event-settings-index.css";
 
 export const dynamic = "force-dynamic";
@@ -23,17 +24,20 @@ export default async function EventSettingsIndexPage() {
   }
 
   const snapshot = await getAdminSnapshot(viewer.username);
-  return <main className="event-settings-index">
-    <header className="event-settings-index-head">
-      <div><Link href="/admin">← 返回赛事后台</Link><small>赛事管理</small><h1>赛事设置</h1><p>所有分站使用同一套正式设置。赛事设置维护主数据，内容发布维护静态信息，竞赛执行处理签表、赛程、对阵和排名。</p></div>
-      <div className="event-settings-index-head-actions"><Link href="/admin/content">内容发布</Link><Link href="/admin/competition">竞赛执行</Link><span>{snapshot.events.length} 场赛事</span></div>
-    </header>
-    <section className="event-settings-index-grid">{snapshot.events.map((event) => <article key={event.id}>
-      <header><span>第 {event.stationNo} 站</span><b>{statusLabels[event.status] ?? event.status}</b></header>
-      <h2>{event.shortTitle}</h2>
-      <p>{event.city} · {event.venueName || "场馆待设置"}</p>
-      <dl><div><dt>比赛时间</dt><dd>{event.startDate} — {event.endDate}</dd></div><div><dt>前端状态</dt><dd>{event.publishStatus === "published" ? "已发布" : "草稿"}</dd></div><div><dt>发布模块</dt><dd>{event.publicationCount} / 6</dd></div></dl>
-      <div className="event-settings-card-actions"><Link href={`/admin/events/${event.id}`}>赛事设置 →</Link><Link href={`/admin/content/${event.id}`}>内容发布 →</Link><Link href="/admin/competition">竞赛执行 →</Link></div>
-    </article>)}</section>
-  </main>;
+  const events = snapshot.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }));
+  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role, roleLabel: viewer.roleLabel }} events={events} active="events" pageTitle="赛事管理" pageHint="全局 · 创建与管理分站">
+    <main className="event-settings-index">
+      <header className="event-settings-index-head">
+        <div><small>赛事管理</small><h1>赛事设置</h1><p>这里是所有后续业务的起点：先创建赛事，再进入本站的内容发布、报名审核、球员管理与竞赛执行。创建赛事本身不受“当前赛事”切换影响。</p></div>
+        <span>{snapshot.events.length} 场赛事</span>
+      </header>
+      <section className="event-settings-index-grid">{snapshot.events.map((event) => <article key={event.id}>
+        <header><span>第 {event.stationNo} 站</span><b>{statusLabels[event.status] ?? event.status}</b></header>
+        <h2>{event.shortTitle}</h2>
+        <p>{event.city} · {event.venueName || "场馆待设置"}</p>
+        <dl><div><dt>比赛时间</dt><dd>{event.startDate} — {event.endDate}</dd></div><div><dt>前端状态</dt><dd>{event.publishStatus === "published" ? "已发布" : "草稿"}</dd></div><div><dt>发布模块</dt><dd>{event.publicationCount} / 6</dd></div></dl>
+        <div className="event-settings-card-actions"><Link href={`/admin/events/${event.id}`}>赛事设置 →</Link><Link href={`/admin/content/${event.id}`}>内容发布 →</Link><Link href={`/admin/competition?event=${encodeURIComponent(event.id)}`}>竞赛执行 →</Link></div>
+      </article>)}</section>
+    </main>
+  </AdminWorkspaceShell>;
 }
