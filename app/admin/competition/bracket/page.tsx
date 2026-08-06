@@ -32,6 +32,7 @@ export default async function BracketWorkbenchPage({ searchParams }: { searchPar
       currentEventId={eventId}
       eventScoped
     >
+      {bracket && <div className="bracket-next-step"><div><small>NEXT STEP</small><strong>完整比赛关系已生成</strong><span>下一步配置比赛日期、时间段、球台和后台裁判。</span></div><a href={`/admin/competition/schedule?session=${encodeURIComponent(sessionId)}`}>进入赛程与球台 →</a></div>}
       <BracketWorkbenchClient draw={draw} initialBracket={bracket} />
     </AdminWorkspaceShell>;
   } catch (error) {
