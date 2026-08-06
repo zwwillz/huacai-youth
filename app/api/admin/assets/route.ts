@@ -16,13 +16,13 @@ export async function POST(request: Request) {
     const heightValue = Number(form.get("height") || 0);
 
     if (!eventId) throw new Error("缺少赛事ID。");
-    if (!(file instanceof File)) throw new Error("请选择要上传的图片。");
+    if (!(file instanceof File)) throw new Error("请选择要上传的文件。");
 
     const bytes = Buffer.from(await file.arrayBuffer());
     const data = await uploadEventAsset(viewer.username, {
       eventId,
       assetType,
-      fileName: file.name || "image",
+      fileName: file.name || "file",
       mimeType: file.type || "application/octet-stream",
       bytes,
       width: widthValue > 0 ? widthValue : null,
@@ -30,6 +30,6 @@ export async function POST(request: Request) {
     });
     return Response.json({ data });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "图片上传失败。" }, { status: 400 });
+    return Response.json({ error: error instanceof Error ? error.message : "文件上传失败。" }, { status: 400 });
   }
 }
