@@ -1,4 +1,4 @@
-import { boolean, index, integer, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
@@ -177,6 +177,40 @@ export const eventSponsors = pgTable("event_sponsors", {
   updatedAt: text("updated_at").notNull(),
 }, (table) => [index("event_sponsors_event_idx").on(table.eventId, table.sortOrder)]);
 
+export const eventDetails = pgTable("event_details", {
+  eventId: text("event_id").primaryKey().references(() => events.id),
+  sponsorLabel: text("sponsor_label"),
+  durationLabel: text("duration_label"),
+  qualifierDateLabel: text("qualifier_date_label"),
+  mainDateLabel: text("main_date_label"),
+  totalPrizeLabel: text("total_prize_label"),
+  mainSizeLabel: text("main_size_label"),
+  minimumAgeNote: text("minimum_age_note"),
+  signupNote: text("signup_note"),
+  ageRules: jsonb("age_rules").notNull().default({}),
+  competitionFormat: jsonb("competition_format").notNull().default([]),
+  drawRules: jsonb("draw_rules").notNull().default([]),
+  prizes: jsonb("prizes").notNull().default({}),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const eventPhases = pgTable("event_phases", {
+  id: text("id").primaryKey(),
+  eventId: text("event_id").notNull().references(() => events.id),
+  code: text("code").notNull(),
+  phaseNumber: text("phase_number"),
+  title: text("title").notNull(),
+  dateLabel: text("date_label"),
+  status: text("status").notNull().default("pending"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("event_phases_event_code_unique").on(table.eventId, table.code),
+  index("event_phases_event_sort_idx").on(table.eventId, table.sortOrder),
+]);
+
 export const players = pgTable("players", {
   id: text("id").primaryKey(),
   fullName: text("full_name").notNull(),
@@ -197,6 +231,32 @@ export const players = pgTable("players", {
 }, (table) => [
   index("players_name_idx").on(table.fullName),
   index("players_birth_date_idx").on(table.birthDate),
+]);
+
+export const matches = pgTable("matches", {
+  id: text("id").primaryKey(),
+  eventId: text("event_id").notNull().references(() => events.id),
+  groupId: text("group_id").notNull().references(() => eventGroups.id),
+  matchDate: text("match_date").notNull(),
+  matchTime: text("match_time"),
+  roundName: text("round_name"),
+  progress: text("progress"),
+  raceTo: text("race_to"),
+  orderNo: integer("order_no"),
+  playerAId: text("player_a_id").references(() => players.id),
+  playerBId: text("player_b_id").references(() => players.id),
+  playerAName: text("player_a_name").notNull().default(""),
+  playerBName: text("player_b_name").notNull().default(""),
+  tableName: text("table_name"),
+  isTv: boolean("is_tv").notNull().default(false),
+  status: text("status").notNull().default("scheduled"),
+  source: text("source").notNull().default("admin"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("matches_event_group_date_idx").on(table.eventId, table.groupId, table.matchDate),
+  index("matches_player_a_idx").on(table.playerAId),
+  index("matches_player_b_idx").on(table.playerBId),
 ]);
 
 export const guardians = pgTable("guardians", {
