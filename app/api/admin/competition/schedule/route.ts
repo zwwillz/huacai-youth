@@ -5,8 +5,8 @@ import {
   getScheduleWorkspaceData,
   saveCompetitionTables,
   saveCompetitionTimeSlots,
-  updateScheduleAssignment,
 } from "@/db/schedule-engine";
+import { updateScheduleAssignmentWithConflictCheck } from "@/db/schedule-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       return Response.json({ data: await clearCompetitionSchedule(viewer.username, sessionId) });
     }
     if (action === "update_assignment") {
-      return Response.json({ data: await updateScheduleAssignment(viewer.username, sessionId, {
+      return Response.json({ data: await updateScheduleAssignmentWithConflictCheck(viewer.username, sessionId, {
         assignmentId: String(body.assignmentId || ""),
         timeSlotId: body.timeSlotId ? String(body.timeSlotId) : null,
         tableId: body.tableId ? String(body.tableId) : null,
