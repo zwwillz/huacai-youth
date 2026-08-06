@@ -45,6 +45,7 @@ export type Station = {
   active: boolean;
   title: string;
   sponsor: string;
+  coverImage: string;
   date: string;
   duration: string;
   venue: string;
