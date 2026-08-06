@@ -47,14 +47,23 @@ function secondTiming(group:Group,no:number){
   return ["2026-8-4","15:00"] as const;
 }
 
+function firstMatches(group:Group,key:Key,pool:string){
+  const rows=[...(data.f[key][pool]||[])];
+  if(group==="少年组"&&pool==="F"){
+    const i=rows.findIndex(item=>item[0]==="4");
+    if(i>=0)rows[i]=["4","谈炜琦","2","王梓豪元","7"];
+  }
+  return rows;
+}
+
 function build(group:Group,key:Key):FinalMatch[]{
-  const first=pools.flatMap(pool=>(data.f[key][pool]||[]).map(item=>{
+  const first=pools.flatMap(pool=>firstMatches(group,key,pool).map(item=>{
     const no=Number(item[0]); const [date,time]=firstTiming(group,pool,no);
-    return {id:`lf-${key}-m1-${pool}${no}`,group,date,time,round:`${pool}组 · ${firstRound(no)}`,progress:"正赛第一阶段",race:group==="少年组"?"13局7胜":"17局9胜",order:no,playerA:item[1],playerB:item[3],scoreA:item[2],scoreB:item[4],table:`场次 ${pool}${no}`,isTv:false,status:"ended"};
+    return {id:`lf-${key}-m1-${pool}${no}`,group,date,time,round:`${pool}组 · ${firstRound(no)}`,progress:"正赛第一阶段",race:group==="少年组"?"13局7胜":"17局9胜",order:no,playerA:item[1],playerB:item[3],scoreA:item[2],scoreB:item[4],table:`${pool}${no}`,isTv:false,status:"ended"};
   }));
   const second=(data.k[key]||[]).map(item=>{
     const no=Number(item[0]); const [date,time]=secondTiming(group,no);
-    return {id:`lf-${key}-m2-${no}`,group,date,time,round:secondRound(no),progress:"正赛第二阶段",race:group==="少年组"?"17局9胜":"21局11胜",order:no,playerA:item[1],playerB:item[3],scoreA:item[2],scoreB:item[4],table:`场次 M${no}`,isTv:false,status:"ended"};
+    return {id:`lf-${key}-m2-${no}`,group,date,time,round:secondRound(no),progress:"正赛第二阶段",race:group==="少年组"?"17局9胜":"21局11胜",order:no,playerA:item[1],playerB:item[3],scoreA:item[2],scoreB:item[4],table:String(no),isTv:false,status:"ended"};
   });
   return [...first,...second];
 }
