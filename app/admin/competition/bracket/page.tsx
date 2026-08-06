@@ -6,6 +6,7 @@ import { getBracketDetail } from "@/db/bracket-engine";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import BracketWorkbenchClient from "./bracket-workbench-client";
 import "./bracket-workbench.css";
+import "./bracket-next-step.css";
 
 export const dynamic = "force-dynamic";
 
