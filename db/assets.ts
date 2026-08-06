@@ -4,6 +4,7 @@ import { events, users } from "./schema";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_PDF_BYTES = 15 * 1024 * 1024;
 
 function now() {
   return new Date().toISOString();
@@ -17,7 +18,7 @@ async function requireEventEditor(username: string) {
   const db = getDb();
   const [account] = await db.select().from(users).where(and(eq(users.username, username), eq(users.status, "active"))).limit(1);
   if (!account || !["system_admin", "committee"].includes(account.role)) {
-    throw new Error("当前账号没有上传赛事图片的权限。");
+    throw new Error("当前账号没有上传赛事文件的权限。");
   }
   return account;
 }
@@ -49,10 +50,17 @@ export async function uploadEventAsset(
   const account = await requireEventEditor(username);
   const db = getDb();
   const [event] = await db.select({ id: events.id }).from(events).where(eq(events.id, input.eventId)).limit(1);
-  if (!event) throw new Error("没有找到要上传图片的赛事。");
-  if (!IMAGE_TYPES.has(input.mimeType)) throw new Error("仅支持 JPG、PNG 或 WebP 图片。");
-  if (!input.bytes.length) throw new Error("请选择要上传的图片。");
-  if (input.bytes.length > MAX_IMAGE_BYTES) throw new Error("图片不能超过 5MB。");
+  if (!event) throw new Error("没有找到要上传文件的赛事。");
+  if (!input.bytes.length) throw new Error("请选择要上传的文件。");
+
+  const isDocument = input.assetType.startsWith("document_");
+  if (isDocument) {
+    if (input.mimeType !== "application/pdf") throw new Error("赛事文件目前仅支持 PDF。");
+    if (input.bytes.length > MAX_PDF_BYTES) throw new Error("PDF 文件不能超过 15MB。");
+  } else {
+    if (!IMAGE_TYPES.has(input.mimeType)) throw new Error("图片仅支持 JPG、PNG 或 WebP。");
+    if (input.bytes.length > MAX_IMAGE_BYTES) throw new Error("图片不能超过 5MB。");
+  }
 
   const id = assetId();
   const createdAt = now();
