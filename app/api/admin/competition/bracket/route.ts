@@ -1,0 +1,34 @@
+import { getAdminViewer } from "@/app/admin/admin-viewer";
+import { generateBracketFromConfirmedDraw, getBracketDetail } from "@/db/bracket-engine";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+export async function GET(request: Request) {
+  const viewer = await getAdminViewer();
+  if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
+  try {
+    const url = new URL(request.url);
+    const sessionId = url.searchParams.get("sessionId") || "";
+    if (!sessionId) throw new Error("缺少抽签版本ID。");
+    const data = await getBracketDetail(viewer.username, sessionId, true);
+    return Response.json({ data });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "签表读取失败。" }, { status: 400 });
+  }
+}
+
+export async function POST(request: Request) {
+  const viewer = await getAdminViewer();
+  if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
+  try {
+    const body = await request.json() as Record<string, unknown>;
+    const action = String(body.action || "generate");
+    const sessionId = String(body.sessionId || "");
+    if (!sessionId) throw new Error("缺少抽签版本ID。");
+    if (action !== "generate") throw new Error("不支持的签表操作。");
+    return Response.json({ data: await generateBracketFromConfirmedDraw(viewer.username, sessionId) });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "签表生成失败。" }, { status: 400 });
+  }
+}
