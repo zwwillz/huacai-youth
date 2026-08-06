@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getAdminSnapshot } from "@/db/admin";
 import { getAdminViewer } from "../admin-viewer";
 import "./event-management.css";
+import "./event-settings-index.css";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ const statusLabels: Record<string, string> = {
 export default async function EventSettingsIndexPage() {
   const viewer = await getAdminViewer();
   if (!viewer) redirect("/admin/login");
-  if (!['system_admin', 'committee'].includes(viewer.role)) {
+  if (!["system_admin", "committee"].includes(viewer.role)) {
     return <main className="backend-state backend-denied"><div className="backend-state-logo">锁</div><small>赛事管理</small><h1>当前账号没有赛事编辑权限</h1><p>裁判账号主要用于抽签、赛程和比分执行；赛事资料由系统管理员或组委会维护。</p><a href="/admin">返回赛事后台</a></main>;
   }
 
