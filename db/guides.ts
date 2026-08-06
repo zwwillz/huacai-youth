@@ -38,15 +38,24 @@ async function requireEditor(username: string) {
 
 function normalizeBlocks(value: unknown): GuideBlock[] {
   if (!Array.isArray(value)) return [];
-  return value.flatMap((raw) => {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  const blocks: GuideBlock[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const row = raw as Record<string, unknown>;
     const id = String(row.id || newId("block"));
-    if (row.type === "paragraph") return [{ id, type: "paragraph" as const, text: String(row.text || "") }];
-    if (row.type === "image") return [{ id, type: "image" as const, imageUrl: String(row.imageUrl || ""), caption: String(row.caption || "") }];
-    if (row.type === "columns") return [{ id, type: "columns" as const, left: String(row.left || ""), right: String(row.right || "") }];
-    return [];
-  });
+    if (row.type === "paragraph") {
+      blocks.push({ id, type: "paragraph", text: String(row.text || "") });
+      continue;
+    }
+    if (row.type === "image") {
+      blocks.push({ id, type: "image", imageUrl: String(row.imageUrl || ""), caption: String(row.caption || "") });
+      continue;
+    }
+    if (row.type === "columns") {
+      blocks.push({ id, type: "columns", left: String(row.left || ""), right: String(row.right || "") });
+    }
+  }
+  return blocks;
 }
 
 export async function getGuideManagementData(username: string, eventId: string): Promise<GuideManagementData> {
