@@ -214,6 +214,11 @@ export async function getPublicSiteData(): Promise<EventData> {
     const docs = docsByEvent.get(row.id) ?? {};
     const ageRecord = row.ageRules && typeof row.ageRules === "object" && !Array.isArray(row.ageRules) ? row.ageRules as Record<string, unknown> : {};
     const prefix = locationPrefix([row.venueProvince, row.venueCity, row.venueDistrict]);
+    const venuePrefix = row.venueDistrict?.includes("/") ? row.city : prefix;
+    const format = asStringRows(row.competitionFormat);
+    const prizes = asPrizeMap(row.prizes);
+    if (!format.length) format.push(["待公布", "待公布", "待公布", "待公布"]);
+    for (const group of GROUPS) if (!prizes[group].length) prizes[group] = [["冠军", "待公布"]];
     return {
       eventId: row.id,
       year: row.year,
@@ -224,13 +229,13 @@ export async function getPublicSiteData(): Promise<EventData> {
       status: EVENT_STATUS[row.status] ?? row.status,
       active: index === 0,
       title: row.title,
-      sponsor: row.sponsorLabel || (sponsorsByEvent.get(row.id) ?? []).join(" · "),
+      sponsor: row.sponsorLabel || (sponsorsByEvent.get(row.id) ?? []).join(" · ") || "赛事信息待公布",
       date: formatRange(row.startDate, row.endDate),
-      duration: row.durationLabel || "",
-      venue: [prefix, row.venueName].filter(Boolean).join(" · "),
-      venueDetail: row.venueAddress ? `${prefix}${row.venueAddress}` : [prefix, row.venueName].filter(Boolean).join(" · "),
-      rulesPdf: docs.regulation ?? "",
-      refereesPdf: docs.referee_list ?? "",
+      duration: row.durationLabel || "待公布",
+      venue: [venuePrefix, row.venueName].filter(Boolean).join(" · "),
+      venueDetail: row.venueAddress || [prefix, row.venueName].filter(Boolean).join(" · "),
+      rulesPdf: docs.regulation || "#",
+      refereesPdf: docs.referee_list || "#",
       qualDate: row.qualifierDateLabel || "待公布",
       mainDate: row.mainDateLabel || "待公布",
       totalPrize: row.totalPrizeLabel || "待公布",
@@ -242,10 +247,10 @@ export async function getPublicSiteData(): Promise<EventData> {
         青年组: typeof ageRecord.青年组 === "string" ? ageRecord.青年组 : "待公布",
       },
       minimumAge: row.minimumAgeNote || "参赛资格以组委会正式规程为准。",
-      format: asStringRows(row.competitionFormat),
+      format,
       draw: asStringArray(row.drawRules),
       signup: row.signupNote || "报名信息待组委会发布。",
-      prizes: asPrizeMap(row.prizes),
+      prizes,
       phases: phasesByEvent.get(row.id) ?? [],
     };
   });
