@@ -17,6 +17,14 @@ function countryName(code: string) {
   return code.toUpperCase() === "CN" ? "中国" : code.toUpperCase();
 }
 
+function genderName(value: string | null) {
+  if (!value) return "○ 未录入";
+  const normalized = value.toLowerCase();
+  if (normalized === "male" || value === "男") return "♂ 男";
+  if (normalized === "female" || value === "女") return "♀ 女";
+  return value;
+}
+
 function formatPoints(value: number) {
   return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value);
 }
@@ -71,8 +79,9 @@ function DetailPanel({detail,onClose}:{detail:PublicPlayerDetail;onClose:()=>voi
         <PlayerAvatar name={detail.name} large/>
         <div className={styles.identity}>
           <span className={styles.country}>{flag(detail.nationalityCode)} {countryName(detail.nationalityCode)}</span>
-          <h2>{detail.name}</h2>
+          <h2>{detail.displayName}</h2>
           <div className={styles.identityMeta}>
+            <span>{genderName(detail.gender)}</span>
             <b>{detail.currentGroupCode}</b>
             <span>{detail.currentGroup}</span>
           </div>
@@ -131,7 +140,8 @@ function PlayerBrowser({players}:{players:PublicPlayerSummary[]}) {
 
   const filtered=useMemo(()=>players.filter(player=>{
     if(group!=="全部"&&player.group!==group)return false;
-    return player.name.includes(query.trim());
+    const needle=query.trim();
+    return player.name.includes(needle)||player.displayName.includes(needle);
   }),[players,query,group]);
   const visible=filtered.slice(0,limit);
 
@@ -169,7 +179,7 @@ function PlayerBrowser({players}:{players:PublicPlayerSummary[]}) {
         {visible.map(player=><button className={styles.playerCard} onClick={()=>openPlayer(player.id)} key={player.id} title={`总积分 ${formatPoints(player.totalPoints)}`}>
           <PlayerAvatar name={player.name}/>
           <div className={styles.playerCopy}>
-            <strong>{player.name}</strong>
+            <strong>{player.displayName}</strong>
             <small><b>{player.groupCode}</b>{player.group} · {player.stationCount}站 · 最好 {player.bestResult}</small>
           </div>
           <i>{loadingId===player.id?"…":"›"}</i>
