@@ -64,10 +64,20 @@ function nullableNumber(value: string) {
   return value.trim() === "" ? null : Number(value);
 }
 
+async function imageDimensions(file: File) {
+  const bitmap = await createImageBitmap(file);
+  const result = { width: bitmap.width, height: bitmap.height };
+  bitmap.close();
+  return result;
+}
+
+type UploadResponse = { data?: { url: string; width: number | null; height: number | null }; error?: string };
+
 export default function EventManagementClient({ initialData }: { initialData: EventManagementData }) {
   const [data, setData] = useState(initialData);
   const [draft, setDraft] = useState<EventManagementInput>(() => toDraft(initialData));
   const [working, setWorking] = useState(false);
+  const [uploadingTarget, setUploadingTarget] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
@@ -81,7 +91,7 @@ export default function EventManagementClient({ initialData }: { initialData: Ev
   const frontModules = [
     { name: "赛事概览", visible: eventIsPublic, note: "赛事发布后始终作为详情首页" },
     { name: "报名", visible: eventIsPublic && isRegistrationStage, note: draft.status === "registration_open" ? "显示报名入口、时间、费用和组别" : "保留报名须知并显示“报名已截止”" },
-    { name: "竞赛规程", visible: eventIsPublic && modulePublished("regulation"), note: "内容发布后出现" },
+    { name: "竞赛规程", visible: eventIsPublic && modulePublished("regulation"), note: "规程发布后出现" },
     { name: "赛程", visible: eventIsPublic && isCompetitionStage && modulePublished("schedule"), note: "比赛阶段开始且赛程已发布后出现" },
     { name: "对阵", visible: eventIsPublic && isCompetitionStage && modulePublished("matches"), note: "比赛阶段开始且对阵已发布后出现" },
     { name: "排名", visible: eventIsPublic && isCompetitionStage && modulePublished("rankings"), note: "排名模块发布后出现" },
@@ -89,10 +99,10 @@ export default function EventManagementClient({ initialData }: { initialData: Ev
 
   const readiness = [
     { label: "赛事名称、日期与场馆", ok: Boolean(draft.fullTitle.trim() && draft.startDate && draft.endDate && draft.venue.name.trim()) },
-    { label: "赛事主题图片", ok: Boolean(draft.coverImageKey?.trim()) },
     { label: "少年组 / 青年组参数", ok: draft.groups.length > 0 && draft.groups.every((group) => group.name.trim() && group.code.trim()) },
-    { label: "赞助商 Logo 区域", ok: sponsors.some((sponsor) => sponsor.isPublished && sponsor.name.trim() && sponsor.logoKey?.trim()) },
     { label: "报名起止时间", ok: draft.status !== "registration_open" || Boolean(draft.registrationStartAt && draft.registrationEndAt) },
+    { label: "主视觉", ok: true, detail: draft.coverImageKey?.trim() ? "已上传主题图" : "使用默认视觉" },
+    { label: "赞助商展示", ok: true, detail: sponsors.some((sponsor) => sponsor.isPublished && sponsor.name.trim() && sponsor.logoKey?.trim()) ? "已配置 Logo" : "暂无 Logo，可后续补充" },
   ];
 
   const updateRoot = <K extends keyof EventManagementInput>(key: K, value: EventManagementInput[K]) => {
@@ -115,6 +125,46 @@ export default function EventManagementClient({ initialData }: { initialData: Ev
     }]);
   };
 
+  const uploadImage = async (file: File, target: string, assetType: string, onDone: (url: string) => void) => {
+    if (!file.type.match(/^image\/(jpeg|png|webp)$/)) {
+      setError("仅支持 JPG、PNG 或 WebP 图片。");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("图片不能超过 5MB。");
+      return;
+    }
+
+    setUploadingTarget(target);
+    setNotice("");
+    setError("");
+    try {
+      const size = await imageDimensions(file);
+      const form = new FormData();
+      form.append("eventId", draft.eventId);
+      form.append("assetType", assetType);
+      form.append("width", String(size.width));
+      form.append("height", String(size.height));
+      form.append("file", file);
+      const response = await fetch("/api/admin/assets", { method: "POST", body: form });
+      const payload = await response.json() as UploadResponse;
+      if (!response.ok || !payload.data?.url) throw new Error(payload.error || "图片上传失败。");
+      onDone(payload.data.url);
+
+      if (assetType === "cover") {
+        const ratio = size.width / Math.max(1, size.height);
+        const ratioWarning = ratio < 0.68 || ratio > 0.86 ? " 当前图片不是接近 3:4，前端会自动裁切；请重点检查手机端预览。" : "";
+        setNotice(`赛事主题图片已上传（${size.width}×${size.height}）。${ratioWarning}`);
+      } else {
+        setNotice(`Logo 已上传（${size.width}×${size.height}），保存全部设置后即可绑定到当前赞助商。`);
+      }
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "图片上传失败。");
+    } finally {
+      setUploadingTarget("");
+    }
+  };
+
   const save = async (event: FormEvent) => {
     event.preventDefault();
     setWorking(true);
@@ -130,7 +180,7 @@ export default function EventManagementClient({ initialData }: { initialData: Ev
       if (!response.ok || !payload.data) throw new Error(payload.error || "赛事资料保存失败。");
       setData(payload.data);
       setDraft(toDraft(payload.data));
-      setNotice("赛事完整设置已保存到 Supabase，包括主视觉、赞助商和报名阶段设置。");
+      setNotice("赛事完整设置已保存，包括主视觉、赞助商和报名阶段设置。");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "赛事资料保存失败。");
     } finally {
@@ -142,9 +192,10 @@ export default function EventManagementClient({ initialData }: { initialData: Ev
     <header className="event-management-topbar">
       <div>
         <Link href="/admin">← 返回赛事后台</Link>
-        <span>赛事管理 / 完整设置 · Beta</span>
+        <span>赛事管理 / 完整设置</span>
       </div>
       <div className="event-management-actions">
+        <Link href={`/admin/content/${draft.eventId}`}>内容发布</Link>
         <Link href="/" target="_blank">查看公众前端 ↗</Link>
         <button form="event-management-form" type="submit" disabled={working}>{working ? "正在保存…" : "保存全部设置"}</button>
       </div>
@@ -186,28 +237,31 @@ export default function EventManagementClient({ initialData }: { initialData: Ev
         </section>
 
         <section className="event-management-card">
-          <header><div><small>02 · VISUAL</small><h2>赛事主题图片与赞助商</h2><p>每个分站使用自己的主视觉。报名阶段和正式赛事详情沿用同一张主题图，避免重复维护两套页面。</p></div><b>发布前建议完善</b></header>
+          <header><div><small>02 · VISUAL</small><h2>赛事主题图片与赞助商</h2><p>主题图是可选项。没有上传时使用统一的默认赛事视觉；上传后赛事中心卡片和赛事概览共用这一张。</p></div><b>统一模板</b></header>
           <div className="event-brand-layout">
             <div className="event-theme-editor">
               <div className={draft.coverImageKey?.trim() ? "event-theme-preview has-image" : "event-theme-preview"}>
-                {draft.coverImageKey?.trim() ? <img src={draft.coverImageKey} alt="赛事主题图片预览" /> : <div><span>图</span><strong>赛事主题图片</strong><small>建议 16:9 · 1600×900 以上</small></div>}
+                {draft.coverImageKey?.trim() ? <img src={draft.coverImageKey} alt="赛事主题图片预览" /> : <div><span>图</span><strong>未上传主题图</strong><small>前端使用默认图形视觉</small></div>}
               </div>
-              <label><span>主题图片地址 / 文件路径</span><input value={draft.coverImageKey || ""} onChange={(e) => updateRoot("coverImageKey", e.target.value)} placeholder="例如：/events/2026-jinan-cover.jpg" /></label>
-              <p>当前 Beta 先保存图片地址；后续接入对象存储上传按钮时继续使用同一字段，不需要重新改赛事数据结构。移动端会自动裁切，关键信息建议放在画面中央安全区。</p>
+              <div className="event-upload-row">
+                <label className="event-upload-button"><input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(uploadingTarget)} onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadImage(file, "cover", "cover", (url) => updateRoot("coverImageKey", url)); e.currentTarget.value = ""; }} />{uploadingTarget === "cover" ? "正在上传…" : draft.coverImageKey?.trim() ? "重新上传主题图" : "点击上传主题图"}</label>
+                {draft.coverImageKey?.trim() && <button className="event-remove-image" type="button" onClick={() => updateRoot("coverImageKey", "")}>恢复默认视觉</button>}
+              </div>
+              <div className="event-image-guide"><strong>建议比例 3:4</strong><span>建议 1200×1600 px 以上 · JPG / PNG / WebP · ≤5MB</span><p>赛事中心手机端封面接近竖版裁切，概览页会做自适应铺满。标题、人物和 Logo 等重要信息尽量放在画面中央 70% 安全区，避免贴近四边。</p></div>
             </div>
-            <div className="event-publish-check"><header><strong>赛事发布前检查</strong><span>{readiness.filter((item) => item.ok).length} / {readiness.length}</span></header>{readiness.map((item) => <div key={item.label} className={item.ok ? "ok" : "pending"}><i>{item.ok ? "✓" : "!"}</i><span>{item.label}</span><b>{item.ok ? "已完成" : "待完善"}</b></div>)}</div>
+            <div className="event-publish-check"><header><strong>赛事发布前检查</strong><span>{readiness.filter((item) => item.ok).length} / {readiness.length}</span></header>{readiness.map((item) => <div key={item.label} className={item.ok ? "ok" : "pending"}><i>{item.ok ? "✓" : "!"}</i><span>{item.label}{item.detail ? <small>{item.detail}</small> : null}</span><b>{item.ok ? "已确认" : "待完善"}</b></div>)}</div>
           </div>
-          <div className="event-sponsor-head"><div><strong>赞助商 Logo 区域</strong><span>按当前顺序展示在赛事概览底部；每站独立维护。</span></div><button type="button" onClick={addSponsor}>＋ 添加赞助商</button></div>
+          <div className="event-sponsor-head"><div><strong>赞助商 Logo 区域</strong><span>每个分站独立维护；没有赞助商时可以保持为空。</span></div><button type="button" onClick={addSponsor}>＋ 添加赞助商</button></div>
           <div className="event-sponsor-list">{sponsors.length ? sponsors.map((sponsor, index) => <article key={sponsor.id || index}>
             <div className="event-sponsor-preview">{sponsor.logoKey?.trim() ? <img src={sponsor.logoKey} alt={`${sponsor.name || "赞助商"} Logo`} /> : <span>LOGO</span>}</div>
             <div className="event-sponsor-fields">
               <label><span>品牌名称</span><input value={sponsor.name} onChange={(e) => updateSponsor(index, { name: e.target.value })} placeholder="例如：星牌" /></label>
               <label><span>赞助类型</span><select value={sponsor.sponsorType} onChange={(e) => updateSponsor(index, { sponsorType: e.target.value })}>{sponsorTypeOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-              <label className="wide"><span>Logo 图片地址 / 文件路径</span><input value={sponsor.logoKey || ""} onChange={(e) => updateSponsor(index, { logoKey: e.target.value })} placeholder="例如：/sponsors/xingpai.png" /></label>
               <label className="wide"><span>品牌官网（可选）</span><input value={sponsor.websiteUrl || ""} onChange={(e) => updateSponsor(index, { websiteUrl: e.target.value })} placeholder="https://" /></label>
+              <div className="wide event-logo-upload"><label className="event-upload-button"><input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(uploadingTarget)} onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadImage(file, `sponsor-${index}`, "sponsor_logo", (url) => updateSponsor(index, { logoKey: url })); e.currentTarget.value = ""; }} />{uploadingTarget === `sponsor-${index}` ? "正在上传…" : sponsor.logoKey?.trim() ? "重新上传 Logo" : "点击上传 Logo"}</label><span>建议透明 PNG / WebP，主体居中，高度建议 ≥200px。</span></div>
             </div>
             <div className="event-sponsor-actions"><label><input type="checkbox" checked={sponsor.isPublished} onChange={(e) => updateSponsor(index, { isPublished: e.target.checked })} />前端展示</label><button type="button" onClick={() => updateRoot("sponsors", sponsors.filter((_, sponsorIndex) => sponsorIndex !== index))}>移除</button></div>
-          </article>) : <p className="event-management-empty">当前分站还没有单独配置赞助商 Logo。点击“添加赞助商”建立本站的合作伙伴展示区域。</p>}</div>
+          </article>) : <p className="event-management-empty">当前分站没有配置赞助商 Logo。没有赞助商时前端不显示空白区域。</p>}</div>
         </section>
 
         <section className="event-management-card">
@@ -234,7 +288,7 @@ export default function EventManagementClient({ initialData }: { initialData: Ev
         </section>
 
         <section className="event-management-card">
-          <header><div><small>05 · DISPLAY</small><h2>赛事概览参数</h2><p>维护赛事详情页的结构化摘要；完整规程、文件和比赛内容仍由“内容发布”管理。</p></div></header>
+          <header><div><small>05 · DISPLAY</small><h2>赛事概览参数</h2><p>维护赛事详情页的结构化摘要；完整规程、文件和比赛内容由“内容发布”管理。</p></div></header>
           <div className="event-management-grid">
             <label><span>冠名 / 赞助展示</span><input value={draft.details.sponsorLabel || ""} onChange={(e) => updateRoot("details", { ...draft.details, sponsorLabel: e.target.value })} placeholder="例如：铧一 · 星牌 · 南匠" /></label>
             <label><span>赛事时长</span><input value={draft.details.durationLabel || ""} onChange={(e) => updateRoot("details", { ...draft.details, durationLabel: e.target.value })} placeholder="例如：11天" /></label>
