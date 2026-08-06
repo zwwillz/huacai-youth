@@ -49,6 +49,7 @@ function aggregate(events: PublicPlayerEvent[]) {
   return {
     stationCount: events.length,
     matchCount: events.reduce((sum,item)=>sum+item.matchCount,0),
+    scoredMatchCount: events.reduce((sum,item)=>sum+item.scoredMatchCount,0),
     racks: events.reduce((sum,item)=>sum+item.racks,0),
     wonRacks: events.reduce((sum,item)=>sum+item.wonRacks,0),
     champions: events.filter(item=>item.bestResult === "冠军").length,
@@ -95,14 +96,14 @@ function DetailPanel({detail,onClose}:{detail:PublicPlayerDetail;onClose:()=>voi
         <section className={styles.statsGrid}>
           <article><strong>{stats.stationCount}</strong><span>参与赛事</span></article>
           <article><strong>{stats.matchCount}</strong><span>场次</span></article>
-          <article><strong>{stats.racks}</strong><span>局数</span></article>
-          <article><strong>{stats.wonRacks}</strong><span>胜局</span></article>
+          <article><strong>{stats.scoredMatchCount ? stats.racks : "—"}</strong><span>局数</span></article>
+          <article><strong>{stats.scoredMatchCount ? stats.wonRacks : "—"}</strong><span>胜局</span></article>
           <article><strong>{stats.champions}</strong><span>冠军数量</span></article>
           <article><strong>{stats.bestResult}</strong><span>最好成绩</span></article>
           <article><strong>{formatPoints(stats.points)}</strong><span>最新总积分</span></article>
           <article><strong>{formatMoney(stats.prizeYuan)}</strong><span>总奖金</span></article>
         </section>
-        <p className={styles.pointsNote}>积分按当前华彩系列赛 E 级赛事规则计算：名次积分 = 奖金金额÷100；参赛积分 = 参赛费÷100，100元以下不计。</p>
+        <p className={styles.pointsNote}>积分按当前华彩系列赛 E 级赛事规则计算：名次积分 = 奖金金额÷100；参赛积分 = 参赛费÷100，100元以下不计。局数、胜局按数据库已录入比分统计；早期未录入比分的场次不计入局数。</p>
       </> : <section className={styles.eventList}>
         {visibleEvents.length ? visibleEvents.map(item=><article className={styles.eventTag} key={item.eventId}>
           <header>
@@ -112,8 +113,8 @@ function DetailPanel({detail,onClose}:{detail:PublicPlayerDetail;onClose:()=>voi
           <div className={styles.eventMetrics}>
             <span><b>{item.groupCode}</b>{item.group}</span>
             <span><b>{item.matchCount}</b>场次</span>
-            <span><b>{item.racks}</b>局数</span>
-            <span><b>{item.wonRacks}</b>胜局</span>
+            <span><b>{item.scoredMatchCount ? item.racks : "—"}</b>局数</span>
+            <span><b>{item.scoredMatchCount ? item.wonRacks : "—"}</b>胜局</span>
             <span><b>{formatPoints(item.points)}</b>积分</span>
             <span><b>{formatMoney(item.prizeYuan)}</b>奖金</span>
           </div>
@@ -206,14 +207,15 @@ export default function PlayerDbView({players}:{players:PublicPlayerSummary[]}) 
         if(original)original.style.display="";
         original=stack;
       }
-      original.style.display="none";
+      stack.style.display="none";
 
       if(!host||!host.isConnected){
         host=document.createElement("div");
         host.dataset.playerDbHost="true";
-        original.insertAdjacentElement("afterend",host);
+        stack.insertAdjacentElement("afterend",host);
       }
-      setTarget(current=>current===host?current:host);
+      const mount=host;
+      if(mount)setTarget(current=>current===mount?current:mount);
     };
 
     sync();
