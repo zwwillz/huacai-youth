@@ -1,12 +1,12 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
 import {
   confirmDrawSession,
-  createQualificationDraw,
   getDrawSessionDetail,
   getDrawWorkspaceData,
   voidDrawSession,
   type DrawPhaseCode,
 } from "@/db/draw-engine";
+import { createQualificationDrawFast } from "@/db/draw-engine-write";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       const groupId = String(body.groupId || "");
       const phaseCode = String(body.phaseCode || "qualifier-one") as DrawPhaseCode;
       if (!eventId || !groupId) throw new Error("缺少赛事或组别参数。");
-      const data = await createQualificationDraw(viewer.username, {
+      const data = await createQualificationDrawFast(viewer.username, {
         eventId,
         groupId,
         phaseCode,
