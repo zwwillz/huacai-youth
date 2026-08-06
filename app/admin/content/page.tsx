@@ -17,7 +17,7 @@ export default async function ContentPublishingIndexPage() {
   const snapshot = await getAdminSnapshot(viewer.username);
   const events = snapshot.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }));
 
-  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role, roleLabel: viewer.roleLabel }} events={events} active="content" pageTitle="内容发布" pageHint="赛事运营 · 请选择赛事" eventScoped>
+  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="content" pageTitle="内容发布" pageHint="赛事运营 · 请选择赛事" eventScoped>
     <main className="event-settings-index">
       <header className="event-settings-index-head">
         <div><small>静态内容发布</small><h1>选择赛事</h1><p>赛事创建后，才会进入本站的内容发布。这里维护赛事简介、竞赛规程、赛事文件和参赛友好提示；赛程签表、对阵、比分和排名交给“竞赛执行”。</p></div>
