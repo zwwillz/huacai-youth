@@ -6,7 +6,9 @@ import {
   eventGroups,
   eventMembers,
   eventOrganizations,
+  eventSponsors,
   events,
+  publications,
   users,
   venues,
 } from "./schema";
@@ -33,8 +35,19 @@ export type ManagedEventGroup = {
   ageRuleText: string;
 };
 
+export type ManagedEventSponsor = {
+  id: string;
+  name: string;
+  sponsorType: string;
+  logoKey: string;
+  websiteUrl: string;
+  sortOrder: number;
+  isPublished: boolean;
+};
+
 export type EventManagementData = {
   viewerRole: string;
+  publicationStatuses: Record<string, string>;
   event: {
     id: string;
     year: number;
@@ -47,6 +60,7 @@ export type EventManagementData = {
     endDate: string;
     registrationStartAt: string;
     registrationEndAt: string;
+    coverImageKey: string;
     summary: string;
     status: string;
     publishStatus: string;
@@ -69,6 +83,7 @@ export type EventManagementData = {
       minimumAgeNote: string;
       signupNote: string;
     };
+    sponsors: ManagedEventSponsor[];
     organizations: Record<OrganizationType, string>;
     groups: ManagedEventGroup[];
     memberIds: string[];
@@ -93,6 +108,7 @@ export type EventManagementInput = {
   endDate: string;
   registrationStartAt?: string;
   registrationEndAt?: string;
+  coverImageKey?: string;
   summary?: string;
   status: EventStatus;
   publishStatus: PublishStatus;
@@ -114,6 +130,15 @@ export type EventManagementInput = {
     minimumAgeNote?: string;
     signupNote?: string;
   };
+  sponsors?: Array<{
+    id?: string;
+    name: string;
+    sponsorType: string;
+    logoKey?: string;
+    websiteUrl?: string;
+    sortOrder?: number;
+    isPublished: boolean;
+  }>;
   organizations: Record<OrganizationType, string>;
   groups: Array<{
     id: string;
@@ -163,12 +188,14 @@ export async function getEventManagementData(username: string, eventId: string):
   const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
   if (!event) throw new Error("没有找到这场赛事。");
 
-  const [venue, details, groups, organizations, members, accounts] = await Promise.all([
+  const [venue, details, groups, organizations, members, sponsors, publicationRows, accounts] = await Promise.all([
     event.venueId ? db.select().from(venues).where(eq(venues.id, event.venueId)).limit(1).then((rows) => rows[0] ?? null) : Promise.resolve(null),
     db.select().from(eventDetails).where(eq(eventDetails.eventId, eventId)).limit(1).then((rows) => rows[0] ?? null),
     db.select().from(eventGroups).where(eq(eventGroups.eventId, eventId)).orderBy(asc(eventGroups.code)),
     db.select().from(eventOrganizations).where(eq(eventOrganizations.eventId, eventId)).orderBy(asc(eventOrganizations.sortOrder)),
     db.select().from(eventMembers).where(eq(eventMembers.eventId, eventId)),
+    db.select().from(eventSponsors).where(eq(eventSponsors.eventId, eventId)).orderBy(asc(eventSponsors.sortOrder)),
+    db.select({ moduleType: publications.moduleType, status: publications.status }).from(publications).where(eq(publications.eventId, eventId)),
     account.role === "system_admin"
       ? db.select({ id: users.id, username: users.username, displayName: users.displayName, role: users.role, status: users.status }).from(users).orderBy(asc(users.displayName))
       : Promise.resolve([]),
@@ -184,6 +211,7 @@ export async function getEventManagementData(username: string, eventId: string):
 
   return {
     viewerRole: account.role,
+    publicationStatuses: Object.fromEntries(publicationRows.map((row) => [row.moduleType, row.status])),
     event: {
       id: event.id,
       year: event.year,
@@ -196,6 +224,7 @@ export async function getEventManagementData(username: string, eventId: string):
       endDate: event.endDate,
       registrationStartAt: event.registrationStartAt ?? "",
       registrationEndAt: event.registrationEndAt ?? "",
+      coverImageKey: event.coverImageKey ?? "",
       summary: event.summary ?? "",
       status: event.status,
       publishStatus: event.publishStatus,
@@ -218,6 +247,15 @@ export async function getEventManagementData(username: string, eventId: string):
         minimumAgeNote: details?.minimumAgeNote ?? "",
         signupNote: details?.signupNote ?? "",
       },
+      sponsors: sponsors.map((sponsor) => ({
+        id: sponsor.id,
+        name: sponsor.name,
+        sponsorType: sponsor.sponsorType,
+        logoKey: sponsor.logoKey ?? "",
+        websiteUrl: sponsor.websiteUrl ?? "",
+        sortOrder: sponsor.sortOrder,
+        isPublished: sponsor.isPublished,
+      })),
       organizations: organizationMap,
       groups: groups.map((group) => ({
         id: group.id,
@@ -254,6 +292,10 @@ function validateInput(input: EventManagementInput) {
     if (Number(group.registrationFeeYuan) < 0) throw new Error("报名费不能小于0。");
     if (group.mainDrawSize != null && Number(group.mainDrawSize) < 1) throw new Error("正赛人数必须大于0。");
     if (group.registrationLimit != null && Number(group.registrationLimit) < 1) throw new Error("报名人数上限必须大于0。");
+  }
+  for (const sponsor of input.sponsors ?? []) {
+    if (sponsor.logoKey?.trim() && !sponsor.name?.trim()) throw new Error("填写赞助商Logo时，请同时填写赞助商名称。");
+    if (sponsor.isPublished && sponsor.name?.trim() && !sponsor.logoKey?.trim()) throw new Error(`“${sponsor.name.trim()}”已设为前端展示，请补充Logo图片地址。`);
   }
 }
 
@@ -304,6 +346,7 @@ export async function saveEventManagementData(username: string, input: EventMana
       endDate: input.endDate,
       registrationStartAt: clean(input.registrationStartAt),
       registrationEndAt: clean(input.registrationEndAt),
+      coverImageKey: clean(input.coverImageKey),
       summary: clean(input.summary),
       status: input.status,
       publishStatus: input.publishStatus,
@@ -376,6 +419,25 @@ export async function saveEventManagementData(username: string, input: EventMana
       })));
     }
 
+    await tx.delete(eventSponsors).where(eq(eventSponsors.eventId, input.eventId));
+    const sponsorRows = (input.sponsors ?? [])
+      .map((sponsor, index) => ({ ...sponsor, name: sponsor.name?.trim() ?? "", index }))
+      .filter((sponsor) => sponsor.name);
+    if (sponsorRows.length) {
+      await tx.insert(eventSponsors).values(sponsorRows.map((sponsor) => ({
+        id: id("sponsor"),
+        eventId: input.eventId,
+        name: sponsor.name,
+        sponsorType: sponsor.sponsorType?.trim() || "sponsor",
+        logoKey: clean(sponsor.logoKey),
+        websiteUrl: clean(sponsor.websiteUrl),
+        sortOrder: sponsor.index + 1,
+        isPublished: Boolean(sponsor.isPublished),
+        createdAt: updatedAt,
+        updatedAt,
+      })));
+    }
+
     if (account.role === "system_admin") {
       const requestedIds = [...new Set((input.memberIds ?? []).filter(Boolean))];
       await tx.delete(eventMembers).where(eq(eventMembers.eventId, input.eventId));
@@ -403,8 +465,8 @@ export async function saveEventManagementData(username: string, input: EventMana
       targetType: "event_management",
       targetId: input.eventId,
       action: "update",
-      beforeJson: JSON.stringify({ fullTitle: beforeEvent.fullTitle, status: beforeEvent.status, publishStatus: beforeEvent.publishStatus }),
-      afterJson: JSON.stringify({ fullTitle: input.fullTitle.trim(), status: input.status, publishStatus: input.publishStatus }),
+      beforeJson: JSON.stringify({ fullTitle: beforeEvent.fullTitle, status: beforeEvent.status, publishStatus: beforeEvent.publishStatus, coverImageKey: beforeEvent.coverImageKey }),
+      afterJson: JSON.stringify({ fullTitle: input.fullTitle.trim(), status: input.status, publishStatus: input.publishStatus, coverImageKey: clean(input.coverImageKey), sponsorCount: sponsorRows.length }),
       createdAt: updatedAt,
     });
   });
