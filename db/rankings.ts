@@ -27,6 +27,7 @@ export type PublicRanking = {
   id: string;
   eventId: string;
   group: Group;
+  playerId: string | null;
   displayOrder: number;
   placementLabel: string;
   playerName: string;
@@ -43,6 +44,7 @@ export async function getPublicRankings(eventId: string): Promise<PublicRanking[
       id: eventRankings.id,
       eventId: eventRankings.eventId,
       group: eventGroups.name,
+      playerId: eventRankings.playerId,
       displayOrder: eventRankings.displayOrder,
       placementLabel: eventRankings.placementLabel,
       playerName: eventRankings.playerName,
