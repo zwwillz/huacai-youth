@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
 import { getAdminNavigationEvents } from "@/db/admin-ui";
@@ -13,7 +14,7 @@ export default async function ScheduleWorkbenchPage({ searchParams }: { searchPa
   if (!viewer) redirect("/admin/login");
   const query = await searchParams;
   const sessionId = String(query.session || "");
-  if (!sessionId) redirect("/admin/competition");
+  if (!sessionId) redirect("/admin/competition/schedules");
   const events = await getAdminNavigationEvents(viewer.username);
 
   try {
@@ -26,7 +27,9 @@ export default async function ScheduleWorkbenchPage({ searchParams }: { searchPa
       pageHint="竞赛执行 · 时间 / 球台 / 裁判"
       currentEventId={data.bracket.eventId}
       eventScoped
+      competitionTool="schedule"
     >
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}><Link href={`/admin/competition/print?session=${encodeURIComponent(sessionId)}`} style={{ padding: "9px 12px", borderRadius: 9, background: "#f1ebf7", color: "#67478f", fontSize: 9, fontWeight: 900, textDecoration: "none" }}>打印签表 / 赛程</Link></div>
       <ScheduleWorkbenchClient initialData={data} />
     </AdminWorkspaceShell>;
   } catch (error) {
@@ -37,8 +40,9 @@ export default async function ScheduleWorkbenchPage({ searchParams }: { searchPa
       pageTitle="赛程与球台"
       pageHint="竞赛执行 · 时间 / 球台 / 裁判"
       eventScoped
+      competitionTool="schedule"
     >
-      <main className="backend-state backend-denied"><div className="backend-state-logo">程</div><small>赛程编排</small><h1>暂时不能进入赛程编排</h1><p>{error instanceof Error ? error.message : "赛程数据读取失败。"}</p><a href="/admin/competition">返回竞赛执行</a></main>
+      <main className="backend-state backend-denied"><div className="backend-state-logo">程</div><small>赛程编排</small><h1>暂时不能进入赛程编排</h1><p>{error instanceof Error ? error.message : "赛程数据读取失败。"}</p><a href="/admin/competition/schedules">返回赛程编排</a></main>
     </AdminWorkspaceShell>;
   }
 }
