@@ -1,7 +1,9 @@
 import EventApp from "./event-app";
 import LangfangRankingStatic from "./langfang-ranking-static";
 import LangfangDbEnhancer from "./langfang-db-enhancer";
+import PublicContentEnhancer from "./public-content-enhancer";
 import { getPublicSiteData } from "@/db/public";
+import { getPublicContentState } from "@/db/public-content";
 import { getPublicRankings } from "@/db/rankings";
 import { getCompetitionMatches } from "@/db/competition-matches";
 
@@ -29,6 +31,7 @@ function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>[
 
 export default async function Home() {
   const data = await getPublicSiteData();
+  const contentStates = await getPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title })));
   const langfangEventId = data.stations.find((station) => station.id === "langfang")?.eventId;
   const rankings = langfangEventId ? await getPublicRankings(langfangEventId) : [];
   const competitionMatches = langfangEventId ? await getCompetitionMatches(langfangEventId) : [];
@@ -37,6 +40,7 @@ export default async function Home() {
   return <>
     <style dangerouslySetInnerHTML={{ __html: visualCss }} />
     <EventApp data={data} />
+    <PublicContentEnhancer states={contentStates} />
     <LangfangRankingStatic rankings={rankings} />
     <LangfangDbEnhancer matches={competitionMatches} />
   </>;
