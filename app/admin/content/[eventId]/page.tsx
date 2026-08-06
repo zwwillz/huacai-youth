@@ -20,7 +20,7 @@ export default async function ContentManagementPage({ params }: { params: Promis
       getAdminSnapshot(viewer.username),
     ]);
     return <AdminWorkspaceShell
-      viewer={{ displayName: viewer.displayName, role: viewer.role, roleLabel: viewer.roleLabel }}
+      viewer={{ displayName: viewer.displayName, role: viewer.role }}
       events={snapshot.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }))}
       active="content"
       pageTitle="内容发布"
