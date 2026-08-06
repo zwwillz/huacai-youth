@@ -13,7 +13,7 @@ export type AdminWorkspaceEvent = {
   endDate: string;
 };
 
-type ActiveSection = "dashboard" | "events" | "content" | "registrations" | "players" | "competition" | "rankings" | "accounts";
+type ActiveSection = "dashboard" | "events" | "content" | "registrations" | "players" | "competition" | "rankings" | "accounts" | "logs";
 
 type Props = {
   viewer: { displayName: string; role: string; roleLabel?: string };
@@ -41,17 +41,20 @@ const navGroups: Array<{ label?: string; items: Array<{ id: ActiveSection; icon:
     { id: "rankings", icon: "榜", title: "排名积分", hint: "总积分与分站排名" },
   ] },
   { label: "系统", items: [
-    { id: "accounts", icon: "权", title: "账号与日志", hint: "用户、权限与操作记录" },
+    { id: "accounts", icon: "权", title: "账号与权限", hint: "账号、角色与赛事分配" },
+    { id: "logs", icon: "志", title: "操作日志", hint: "系统操作与审计记录" },
   ] },
 ];
 
 function sectionHref(id: ActiveSection, eventId?: string) {
   if (id === "dashboard") return "/admin";
-  if (id === "events") return "/admin?section=events";
+  if (id === "events") return "/admin/events";
   if (id === "content") return eventId ? `/admin/content/${eventId}` : "/admin/content";
   if (id === "competition") return eventId ? `/admin/competition?event=${encodeURIComponent(eventId)}` : "/admin/competition";
   if (id === "registrations" || id === "players") return `/admin?section=${id}${eventId ? `&event=${encodeURIComponent(eventId)}` : ""}`;
-  if (id === "rankings" || id === "accounts") return `/admin?section=${id}`;
+  if (id === "rankings") return "/admin?section=rankings";
+  if (id === "accounts") return "/admin/accounts";
+  if (id === "logs") return "/admin/logs";
   return "/admin";
 }
 
@@ -64,7 +67,7 @@ export default function AdminWorkspaceShell({ viewer, events, active, pageTitle,
     ...group,
     items: group.items.filter((item) => {
       if (viewer.role === "system_admin") return true;
-      if (viewer.role === "committee") return item.id !== "accounts";
+      if (viewer.role === "committee") return !["accounts", "logs"].includes(item.id);
       return ["dashboard", "players", "competition"].includes(item.id);
     }),
   })).filter((group) => group.items.length > 0);
@@ -76,10 +79,10 @@ export default function AdminWorkspaceShell({ viewer, events, active, pageTitle,
 
   return <main className="backend-shell admin-workspace-shell">
     <aside className={menuOpen ? "backend-sidebar admin-workspace-sidebar open" : "backend-sidebar admin-workspace-sidebar"}>
-      <Link href="/admin" className="backend-brand admin-workspace-brand"><span>华</span><div><strong>华彩赛事后台</strong><small>赛事运营与竞赛执行</small></div></Link>
+      <Link href="/admin" prefetch className="backend-brand admin-workspace-brand"><span>华</span><div><strong>华彩赛事后台</strong><small>赛事运营与竞赛执行</small></div></Link>
       <nav className="admin-workspace-nav">{visibleGroups.map((group, groupIndex) => <div className="admin-nav-group" key={group.label || groupIndex}>
         {group.label && <small className="admin-nav-group-label">{group.label}</small>}
-        {group.items.map((item) => <Link key={item.id} href={sectionHref(item.id, currentEventId)} className={active === item.id ? "active" : ""} onClick={() => setMenuOpen(false)}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div></Link>)}
+        {group.items.map((item) => <Link prefetch key={item.id} href={sectionHref(item.id, currentEventId)} className={active === item.id ? "active" : ""} onClick={() => setMenuOpen(false)}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div></Link>)}
       </div>)}</nav>
       <div className="backend-sidebar-foot"><Link href="/" target="_blank">查看公众前端</Link><a href="/api/auth/logout">退出后台</a></div>
     </aside>
