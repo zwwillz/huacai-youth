@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { getDb } from "./index";
 import { eventDocuments, eventGuides, publications } from "./schema";
 
