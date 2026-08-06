@@ -2,37 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import type { PublicRanking } from "@/db/rankings";
 
 type Group = "少年组" | "青年组";
-type RankingRow = { place:number; tier:string; name:string; amount:string };
-
-const prizeByGroup: Record<Group, Record<string, string>> = {
-  少年组: { 冠军:"¥50,000", 亚军:"¥30,000", 季军:"¥15,000", 殿军:"¥10,000", "8强":"¥3,500", "16强":"¥2,000", "32强":"¥1,000", "64强":"¥600" },
-  青年组: { 冠军:"¥60,000", 亚军:"¥30,000", 季军:"¥15,000", 殿军:"¥10,000", "8强":"¥3,500", "16强":"¥2,000", "32强":"¥1,000", "64强":"¥600" },
-};
-
-const names: Record<Group, string[]> = {
-  少年组: [
-    "韩雨酌","赵杰迪","胡珈鸣","陈楚乔",
-    "赵俊豪","赵慕晨","任梓源","王佳硕",
-    "邬珺一","高源岙","李明澳","沈睿熙","白展朋","田乾岳","徐睿泽","张莘莫",
-    "张文博","李俊赫","周梓浩","张浩宇","刘乙墨","赵世豪","李竣","闫平安","王梓豪元","谭雨豪","窦笑凡","李岩城","戴凯超","樊喜强","赵子泰","杨欣福",
-  ],
-  青年组: [
-    "闫冠杰","刘嘉鹏","冯世杰","祁宇帆",
-    "钟柯皓","赖浩宇","孙嘉鑫","杨紫程",
-    "杜涵宇","季圣杰","周坤","黎骏熙","鲁佳豪","梁善禹","贾皓天","蔡惠洋",
-    "邴广恺","张深均","付一迦","曹嘉诚","罗凡轶","王鹤翔","许本懿","耿玉豪","杨侑泽","颜俊耀","罗冠芝","郭耀文","周涵祺","秦聖皓","李滨","王梓屹",
-  ],
-};
-
-const tierForPlace = (place:number) => place===1?"冠军":place===2?"亚军":place===3?"季军":place===4?"殿军":place<=8?"8强":place<=16?"16强":place<=32?"32强":"64强";
-
-const rowsFor = (group:Group): RankingRow[] => names[group].map((name,index)=>{
-  const place=index+1;
-  const tier=tierForPlace(place);
-  return { place, tier, name, amount:prizeByGroup[group][tier] };
-});
 
 const medalBackground = (place:number) => {
   if(place===1)return "linear-gradient(145deg,#f5d36c,#c99316)";
@@ -42,11 +14,13 @@ const medalBackground = (place:number) => {
   return undefined;
 };
 
-export default function LangfangRankingStatic(){
+export default function LangfangRankingStatic({rankings}:{rankings:PublicRanking[]}){
   const [target,setTarget]=useState<HTMLElement|null>(null);
   const [group,setGroup]=useState<Group>("少年组");
 
   useEffect(()=>{
+    if(!rankings.length)return;
+
     let originalCard:HTMLElement|null=null;
     let frame=0;
 
@@ -83,29 +57,32 @@ export default function LangfangRankingStatic(){
       observer.disconnect();
       if(originalCard)originalCard.style.display="";
     };
-  },[]);
+  },[rankings.length]);
 
-  if(!target)return null;
-  const rows=rowsFor(group);
+  if(!rankings.length||!target)return null;
+  const rows=rankings.filter(row=>row.group===group).sort((a,b)=>a.displayOrder-b.displayOrder);
+  if(!rows.length)return null;
+  const title=rows.length>32?"64强最终排名":"32强最终排名";
+  const tierNote=rows.find(row=>row.displayOrder>32)?.note;
 
   return createPortal(
     <section className="card ranking static-ranking">
       <header>
-        <div><small>{group}</small><h2>32强最终排名</h2></div>
+        <div><small>{group}</small><h2>{title}</h2></div>
         <b>已录入 {rows.length} 人</b>
       </header>
       <div className="prizes" style={{marginTop:0}}>
         {rows.map(row=>{
-          const medal=medalBackground(row.place);
-          return <div key={`${group}-${row.place}-${row.name}`} style={{gridTemplateColumns:"36px 62px minmax(0,1fr) auto",gap:"10px"}}>
-            <span style={medal?{background:medal,color:"#fff",fontWeight:900}:{fontWeight:800}}>{row.place}</span>
-            <strong style={{color:row.place<=4?"#3f207f":"#716b7e"}}>{row.tier}</strong>
-            <strong style={{fontSize:"12px",color:"#171528"}}>{row.name}</strong>
-            <b>{row.amount}</b>
+          const medal=medalBackground(row.displayOrder);
+          return <div key={row.id} style={{gridTemplateColumns:"36px 62px minmax(0,1fr) auto",gap:"10px"}}>
+            <span style={medal?{background:medal,color:"#fff",fontWeight:900}:{fontWeight:800}}>{row.displayOrder}</span>
+            <strong style={{color:row.displayOrder<=4?"#3f207f":"#716b7e"}}>{row.placementLabel}</strong>
+            <strong style={{fontSize:"12px",color:"#171528"}}>{row.playerName}</strong>
+            <b>{row.prizeDisplay}</b>
           </div>;
         })}
       </div>
-      <p style={{margin:"14px 0 0",color:"#8f8799",fontSize:"9px"}}>当前先录入32强最终名次；64强名单可在后续数据确认后继续补充。</p>
+      {tierNote?<p style={{margin:"14px 0 0",color:"#8f8799",fontSize:"9px"}}>{tierNote}</p>:null}
     </section>,
     target,
   );
