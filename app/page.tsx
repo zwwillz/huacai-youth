@@ -25,8 +25,11 @@ function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>[
     if (station.id === "taiyuan" || station.id === "miyun") return "";
     return `
 .cover-${station.id}{background-image:radial-gradient(circle at 76% 14%,#ff62b675,transparent 29%),linear-gradient(145deg,#2b126e,#6d36c9)!important}
-.station-${station.id} .hero-poster{background-image:radial-gradient(circle at 50% 22%,#ff65b35c,transparent 27%),linear-gradient(145deg,#331376,#6842d1)!important;background-size:cover!important;background-position:center!important}
-.station-${station.id} .hero-poster:after{content:"";display:block!important;width:150px;height:150px;border:2px solid #ffffff21;border-radius:50%;box-shadow:0 0 0 28px #ffffff08,0 0 0 56px #ffffff05;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}`;
+.station-${station.id} .hero-poster{background-image:radial-gradient(circle at 50% 22%,#ff64a77d,transparent 27%),linear-gradient(145deg,#5d146d,#b22d87)!important;background-size:cover!important;background-position:center!important;position:relative!important}
+.station-${station.id} .hero-poster:after{content:"";display:block!important;width:150px;height:150px;border:2px solid #ffffff21;border-radius:50%;box-shadow:0 0 0 28px #ffffff08,0 0 0 56px #ffffff05}
+.station-${station.id} .hero-poster strong,.station-${station.id} .hero-poster span{display:block!important;position:absolute;z-index:2}
+.station-${station.id} .hero-poster strong{top:43%;font-size:14px;color:#d9cef0}
+.station-${station.id} .hero-poster span{top:49%;font-size:38px;font-weight:900}`;
   }).join("\n");
 }
 
