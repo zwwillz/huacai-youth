@@ -62,7 +62,7 @@ function secondTiming(group:Group,no:number){
 }
 
 function firstRound(no:number){return no<=4?"第一轮":no<=6?"败部第一轮":no<=8?"胜部晋级轮":"败部晋级轮";}
-function secondRound(no:number){return no<=16?"32进16":no<=24?"16进8":no<=28?"8进4":no<=30?"半决赛":no===31?"三四名决赛":"决赛";}
+function secondRound(no:number){return no<=16?"32进16":no<=24?"16进8":no<=28?"8进4":no<=30?"半决赛":no===31?"三、四名决赛":"决赛";}
 
 function allFinals(group:Group):DisplayMatch[]{
   const first=pools.flatMap(pool=>correctedFirst(group,pool).map(item=>{
@@ -128,13 +128,37 @@ function patchFirstStage(group:Group){
   });
 }
 
+function addThirdPlaceMatch(tree:HTMLElement,group:Group,byNo:Map<number,RawMatch>){
+  tree.querySelector<HTMLElement>("[data-lf-third-place]")?.remove();
+  const rawMatch=byNo.get(31); if(!rawMatch)return;
+  const stage=tree.querySelector<HTMLElement>(".stage-knockout-stage"); if(!stage)return;
+  const articles=Array.from(tree.querySelectorAll<HTMLElement>(".stage-tree-match:not([data-lf-third-card])"));
+  const finalArticle=articles.at(-1); const finalWrap=finalArticle?.closest<HTMLElement>(".stage-tree-match-wrap");
+  if(!finalArticle||!finalWrap)return;
+  const left=Number.parseFloat(finalWrap.style.left||"0");
+  const top=Number.parseFloat(finalWrap.style.top||"0")+105;
+  const width=Number.parseFloat(finalWrap.style.width||"116");
+  const [date,time]=secondTiming(group,31);
+
+  const wrap=document.createElement("div");
+  wrap.dataset.lfThirdPlace="true";
+  wrap.style.position="absolute"; wrap.style.left=`${left}px`; wrap.style.top=`${top}px`; wrap.style.width=`${width}px`; wrap.style.zIndex="4";
+  const label=document.createElement("div");
+  label.textContent="三、四名决赛";
+  label.style.marginBottom="6px"; label.style.fontSize="10px"; label.style.fontWeight="800"; label.style.textAlign="center"; label.style.color="#d8dff8";
+  const article=document.createElement("article");
+  article.className="stage-tree-match"; article.dataset.lfThirdCard="true"; article.style.width=`${width}px`;
+  article.innerHTML=`<div class="stage-competitor no-slot"><span></span><b></b></div><div class="stage-between"><time></time><span></span></div><div class="stage-competitor no-slot"><span></span><b></b></div><b class="stage-game-no"></b>`;
+  patchArticle(article,rawMatch,"31",date,time);
+  wrap.append(label,article); stage.appendChild(wrap);
+}
+
 function patchSecondStage(group:Group){
-  const tree=document.querySelector(".stage-knockout-tree");
+  const tree=document.querySelector<HTMLElement>(".stage-knockout-tree");
   if(!tree||tree.closest(".qualification-phase-board"))return;
   const matches=data.k[keyOf(group)]||[];
   const byNo=new Map(matches.map(item=>[Number(item[0]),item]));
-  const articles=Array.from(tree.querySelectorAll<HTMLElement>(".stage-tree-match"));
-  // Third-place match 31 is not a node in the preserved original championship tree.
+  const articles=Array.from(tree.querySelectorAll<HTMLElement>(".stage-tree-match:not([data-lf-third-card])"));
   const matchNos=[...Array.from({length:16},(_,i)=>i+1),...Array.from({length:8},(_,i)=>17+i),...Array.from({length:4},(_,i)=>25+i),29,30,32];
   articles.forEach((article,index)=>{
     const no=matchNos[index]; const rawMatch=byNo.get(no); if(!rawMatch)return;
@@ -142,6 +166,27 @@ function patchSecondStage(group:Group){
     patchArticle(article,rawMatch,String(no),date,time);
   });
   const final=byNo.get(32); if(final)setText(tree.querySelector(".terminal-player strong"),winner(final));
+  addThirdPlaceMatch(tree,group,byNo);
+}
+
+function positionWithin(el:HTMLElement,ancestor:HTMLElement){
+  let x=0,y=0,node:HTMLElement|null=el;
+  while(node&&node!==ancestor){x+=node.offsetLeft;y+=node.offsetTop;node=node.offsetParent as HTMLElement|null;}
+  return {x,y};
+}
+
+function applyBracketSearch(bracket:HTMLElement,query:string){
+  bracket.querySelectorAll<HTMLElement>(".stage-tree-match.match-hit").forEach(el=>el.classList.remove("match-hit"));
+  bracket.querySelectorAll<HTMLElement>(".stage-competitor.search-hit").forEach(el=>el.classList.remove("search-hit"));
+  const q=query.trim().toLowerCase(); if(!q)return;
+  const candidates=Array.from(bracket.querySelectorAll<HTMLElement>(".stage-tree-match"));
+  const target=candidates.find(article=>article.textContent?.toLowerCase().includes(q)); if(!target)return;
+  target.classList.add("match-hit");
+  target.querySelectorAll<HTMLElement>(".stage-competitor").forEach(line=>{if(line.textContent?.toLowerCase().includes(q))line.classList.add("search-hit");});
+  const canvas=bracket.querySelector<HTMLElement>(".unified-canvas"); if(!canvas)return;
+  const pos=positionWithin(target,canvas),zoom=1.08;
+  const tx=Math.max(18,140-pos.x*zoom),ty=Math.min(24,290-pos.y*zoom);
+  canvas.style.transform=`translate(${tx}px, ${ty}px) scale(${zoom})`;
 }
 
 export default function LangfangFinalsEnhancer(){
@@ -193,12 +238,16 @@ export default function LangfangFinalsEnhancer(){
         const title=bracket.querySelector<HTMLElement>(".bracket-title h1")?.textContent?.trim();
         if(title==="正赛第一阶段")patchFirstStage(nextGroup);
         if(title==="正赛第二阶段")patchSecondStage(nextGroup);
+        if(title==="正赛第一阶段"||title==="正赛第二阶段"){
+          const bracketQuery=bracket.querySelector<HTMLInputElement>(".draw-toolbar input")?.value||"";
+          applyBracketSearch(bracket,bracketQuery);
+        }
       }
     };
 
     sync();
-    const timer=window.setInterval(sync,160);
-    return ()=>{window.clearInterval(timer);if(input)input.removeEventListener("input",onInput);document.querySelector<HTMLElement>("[data-lf-finals]")?.remove();};
+    const timer=window.setInterval(sync,120);
+    return ()=>{window.clearInterval(timer);if(input)input.removeEventListener("input",onInput);document.querySelector<HTMLElement>("[data-lf-finals]")?.remove();document.querySelector<HTMLElement>("[data-lf-third-place]")?.remove();};
   },[visible.length]);
 
   if(!mount)return null;
