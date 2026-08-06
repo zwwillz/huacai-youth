@@ -72,11 +72,6 @@ export async function uploadEventAsset(
       (${id}, ${input.eventId}, ${input.assetType}, ${input.fileName.slice(0, 240)}, ${input.mimeType}, ${input.bytes.length}, ${input.width ?? null}, ${input.height ?? null}, ${input.bytes}, ${account.id}, ${createdAt})
   `;
 
-  const url = `/api/assets/${id}`;
-  if (input.assetType === "cover") {
-    await db.update(events).set({ coverImageKey: url, updatedBy: account.id, updatedAt: createdAt }).where(eq(events.id, input.eventId));
-  }
-
   return {
     id,
     eventId: input.eventId,
@@ -86,7 +81,7 @@ export async function uploadEventAsset(
     byteSize: input.bytes.length,
     width: input.width ?? null,
     height: input.height ?? null,
-    url,
+    url: `/api/assets/${id}`,
   };
 }
 
