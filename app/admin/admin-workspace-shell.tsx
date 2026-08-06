@@ -47,7 +47,7 @@ const navGroups: Array<{ label?: string; items: Array<{ id: ActiveSection; icon:
 
 function sectionHref(id: ActiveSection, eventId?: string) {
   if (id === "dashboard") return "/admin";
-  if (id === "events") return "/admin/events";
+  if (id === "events") return "/admin?section=events";
   if (id === "content") return eventId ? `/admin/content/${eventId}` : "/admin/content";
   if (id === "competition") return eventId ? `/admin/competition?event=${encodeURIComponent(eventId)}` : "/admin/competition";
   if (id === "registrations" || id === "players") return `/admin?section=${id}${eventId ? `&event=${encodeURIComponent(eventId)}` : ""}`;
