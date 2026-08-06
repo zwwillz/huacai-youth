@@ -21,6 +21,7 @@ export type PublicPlayerEvent = {
   bestResult: string;
   resultRank: number;
   matchCount: number;
+  scoredMatchCount: number;
   racks: number;
   wonRacks: number;
   points: number;
@@ -277,6 +278,7 @@ export async function getPublicPlayerDetail(playerId: string): Promise<PublicPla
     const matches = matchRows.filter((match) => match.event_id === row.event_id);
     let racks = 0;
     let wonRacks = 0;
+    let scoredMatchCount = 0;
     let qualifierRound = 0;
 
     for (const match of matches) {
@@ -286,6 +288,7 @@ export async function getPublicPlayerDetail(playerId: string): Promise<PublicPla
       const scoreA = scoreForStats(match.score_a);
       const scoreB = scoreForStats(match.score_b);
       if (scoreA == null || scoreB == null) continue;
+      scoredMatchCount += 1;
       racks += scoreA + scoreB;
       wonRacks += match.player_a_id === playerId ? scoreA : scoreB;
     }
@@ -305,6 +308,7 @@ export async function getPublicPlayerDetail(playerId: string): Promise<PublicPla
       bestResult,
       resultRank: placementOrder ?? (qualifierRound > 0 ? 200 - qualifierRound : 999),
       matchCount: matches.length,
+      scoredMatchCount,
       racks,
       wonRacks,
       points: participationPoints(feeCents) + prizePoints(prizeAmountCents),
