@@ -11,6 +11,6 @@ export default async function AdminPage() {
 
   return <>
     <AdminApp viewer={{ username: viewer.username, displayName: viewer.displayName }} />
-    {["system_admin", "committee"].includes(viewer.role) && <Link href="/admin/events" style={{ position: "fixed", right: 18, bottom: 18, zIndex: 90, padding: "11px 15px", borderRadius: 12, color: "#fff", background: "linear-gradient(135deg,#6732ce,#d9469b)", boxShadow: "0 14px 34px #35166a38", textDecoration: "none", fontSize: 11, fontWeight: 800 }}>完整赛事设置</Link>}
+    {["system_admin", "committee"].includes(viewer.role) && <Link href="/admin/events" style={{ position: "fixed", right: 18, bottom: 18, zIndex: 90, padding: "11px 15px", borderRadius: 12, color: "#fff", background: "linear-gradient(135deg,#6732ce,#d9469b)", boxShadow: "0 14px 34px #35166a38", textDecoration: "none", fontSize: 11, fontWeight: 800 }}>赛事完整设置 · Beta</Link>}
   </>;
 }
