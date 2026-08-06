@@ -25,7 +25,7 @@ export default async function EventSettingsIndexPage() {
 
   const snapshot = await getAdminSnapshot(viewer.username);
   const events = snapshot.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }));
-  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role, roleLabel: viewer.roleLabel }} events={events} active="events" pageTitle="赛事管理" pageHint="全局 · 创建与管理分站">
+  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="events" pageTitle="赛事管理" pageHint="全局 · 创建与管理分站">
     <main className="event-settings-index">
       <header className="event-settings-index-head">
         <div><small>赛事管理</small><h1>赛事设置</h1><p>这里是所有后续业务的起点：先创建赛事，再进入本站的内容发布、报名审核、球员管理与竞赛执行。创建赛事本身不受“当前赛事”切换影响。</p></div>
