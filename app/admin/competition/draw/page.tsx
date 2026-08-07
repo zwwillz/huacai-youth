@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
 import { getAdminNavigationEvents } from "@/db/admin-ui";
@@ -21,7 +22,7 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
   if (!eventId) redirect("/admin/events");
   const phaseCode = (["qualifier-one", "qualifier-two", "main-one", "main-two"].includes(String(query.phase)) ? query.phase : "qualifier-one") as DrawPhaseCode;
 
-  const shell = (child: React.ReactNode) => <AdminWorkspaceShell
+  const shell = (child: ReactNode) => <AdminWorkspaceShell
     viewer={{ displayName: viewer.displayName, role: viewer.role }}
     events={events}
     active="competition"
