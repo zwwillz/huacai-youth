@@ -98,8 +98,6 @@ type Viewer = { id: string; role: string; displayName: string };
 
 function now() { return new Date().toISOString(); }
 function newId(prefix: string) { return `${prefix}_${randomUUID().replaceAll("-", "")}`; }
-function phaseTitle(code: string) { return code === "qualifier-one" ? "资格赛第一场" : code === "qualifier-two" ? "资格赛第二场" : code === "main-one" ? "正赛第一阶段" : "正赛第二阶段"; }
-
 async function requireViewer(username: string, write = false): Promise<Viewer> {
   const sql = getSqlClient();
   const rows = await sql<Viewer[]>`
