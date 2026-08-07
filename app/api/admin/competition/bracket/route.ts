@@ -11,8 +11,7 @@ export async function GET(request: Request) {
   const viewer = await getAdminViewer();
   if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
   try {
-    const url = new URL(request.url);
-    const sessionId = url.searchParams.get("sessionId") || "";
+    const sessionId = new URL(request.url).searchParams.get("sessionId") || "";
     if (!sessionId) throw new Error("缺少抽签版本ID。");
     return Response.json({ data: await getBracketDetail(viewer.username, sessionId, true) });
   } catch (error) {
@@ -30,9 +29,13 @@ export async function POST(request: Request) {
     if (!sessionId) throw new Error("缺少抽签版本ID。");
     if (action !== "generate") throw new Error("不支持的签表操作。");
     const draw = await getDrawSessionDetail(viewer.username, sessionId);
-    const data = isMainPhase(draw.session.phaseCode)
-      ? (await generateMainStageBracket(viewer.username, sessionId), await getBracketDetail(viewer.username, sessionId, true))
-      : await generateBracketFromConfirmedDraw(viewer.username, sessionId);
+    let data;
+    if (isMainPhase(draw.session.phaseCode)) {
+      await generateMainStageBracket(viewer.username, sessionId);
+      data = await getBracketDetail(viewer.username, sessionId, true);
+    } else {
+      data = await generateBracketFromConfirmedDraw(viewer.username, sessionId);
+    }
     await markCompetitionModuleDirty(draw.session.eventId, "schedule");
     return Response.json({ data });
   } catch (error) {
