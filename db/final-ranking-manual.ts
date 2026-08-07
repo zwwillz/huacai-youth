@@ -59,3 +59,11 @@ export async function saveFinalRankingManualOrder(username: string, batchId: str
   await markCompetitionModuleDirty(batch.eventId, "rankings");
   return { ok: true, rows: ranking };
 }
+
+export async function clearFinalRankingPublicationDirty(batchId: string) {
+  const sql = getSqlClient();
+  const rows = await sql<Array<{ eventId: string }>>`select event_id as "eventId" from public.competition_final_ranking_batches where id=${batchId} limit 1`;
+  const eventId = rows[0]?.eventId;
+  if (!eventId) return;
+  await sql`update public.publications set has_unpublished_changes=false,draft_updated_at=null where event_id=${eventId} and module_type='rankings' and status='published'`;
+}
