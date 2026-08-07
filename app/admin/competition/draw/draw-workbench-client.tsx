@@ -36,7 +36,7 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
   const byeCount = Math.max(0, bracketSize - entrantCount);
   const directEntryCount = entrantCount > bracketSize ? entrantCount - playoffPlayerCount : entrantCount;
   const totalQualifierCount = directQualifierCount + Math.max(0, rateQualifierCount);
-  const canConfigure = initialData.selectedPhase === "qualifier-one";
+  const canConfigure = initialData.selectedPhase === "qualifier-one" || initialData.selectedPhase === "qualifier-two";
   const canCreate = canConfigure && initialData.plan.sourceReady && entrantCount >= 2 && divisionCount > 0 && !initialData.latestSession?.id;
 
   const visibleSlots = useMemo(() => session?.slots.filter((slot) => slot.divisionNo === division) ?? [], [session, division]);
@@ -75,7 +75,7 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
   }
 
   async function createDraw() {
-    if (!window.confirm(`确认使用当前已审核的 ${entrantCount} 名球员生成抽签草稿？\n\n本阶段只抽签一次，签表将从当前人数一路运行到每区冠军；最后由16名分区冠军直接晋级，并从16名分区决胜轮负者中按局胜率增补 ${rateQualifierCount} 人。`)) return;
+    if (!window.confirm(`确认使用当前阶段的 ${entrantCount} 名球员生成抽签草稿？\n\n本阶段只抽签一次，签表将从当前人数一路运行到每区冠军；最后由${directQualifierCount}名分区冠军直接晋级，并从分区决胜轮负者中按局胜率增补 ${rateQualifierCount} 人。`)) return;
     const data = await post({
       action: "create",
       eventId: initialData.event.id,
@@ -114,7 +114,7 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
   }
 
   async function confirmDraw() {
-    if (!session || !window.confirm("确认把当前抽签版本设为正式签表？确认后需要先作废才能重新抽签。确认后系统会自动生成16个分区的完整比赛关系。")) return;
+    if (!session || !window.confirm("确认把当前抽签版本设为正式签表？确认后需要先作废才能重新抽签。确认后系统会自动生成完整分区比赛关系。")) return;
     const data = await post({ action: "confirm", sessionId: session.session.id });
     if (data) {
       const confirmed = data as DrawSessionDetail;
@@ -161,14 +161,14 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
             <label><span>标准签表容量</span><select value={bracketSize} disabled={!canConfigure || Boolean(initialData.latestSession)} onChange={(event) => setBracketSize(Number(event.target.value))}><option value={256}>256</option><option value={512}>512</option><option value={1024}>1024</option></select><small>实际人数高于容量时自动生成附加赛；低于容量时自动生成轮空。</small></label>
             <label><span>每个分区人数</span><select value={divisionSize} disabled={!canConfigure || Boolean(initialData.latestSession)} onChange={(event) => setDivisionSize(Number(event.target.value))}><option value={16}>16人 / 区</option><option value={32}>32人 / 区</option><option value={64}>64人 / 区</option></select><small>华彩资格赛默认32人一个分区，512签表即16个分区。</small></label>
             <label><span>局胜率增补人数</span><input type="number" min={0} max={64} value={rateQualifierCount} disabled={!canConfigure || Boolean(initialData.latestSession)} onChange={(event) => setRateQualifierCount(Number(event.target.value))}/><small>默认从各区决胜轮负者中按局胜率排序，取前8名增补晋级。</small></label>
-            <label><span>种子选手</span><input value={initialData.selectedPhase.startsWith("qualifier") ? "资格赛不启用" : "正赛可配置"} disabled/><small>正赛第一阶段将支持种子直接进入；种子缺席时按局胜率候补，下一步接入晋级名单时生效。</small></label>
+            <label><span>种子选手</span><input value={initialData.selectedPhase.startsWith("qualifier") ? "资格赛不启用" : "正赛可配置"} disabled/><small>正赛第一阶段将支持种子直接进入；种子缺席时按局胜率候补，后续接入正赛名单时生效。</small></label>
           </div>
         </section>
 
         <section className="draw-panel draw-plan-panel">
           <header><div><small>02 · AUTO CALCULATION</small><h3>系统自动计算</h3></div><span>无需人工计算轮空 / 附加赛</span></header>
           <div className="draw-metrics">
-            <article><span>实际人数</span><strong>{entrantCount}</strong><small>当前已审核参赛名单</small></article>
+            <article><span>实际人数</span><strong>{entrantCount}</strong><small>当前阶段参赛名单</small></article>
             <article><span>附加赛</span><strong>{playoffMatchCount}</strong><small>{playoffMatchCount ? `${playoffPlayerCount}人参加 · ${directEntryCount}人直入标准签表` : "无需附加赛"}</small></article>
             <article><span>轮空</span><strong>{byeCount}</strong><small>{byeCount ? `自动分散到${divisionCount}个分区` : "无轮空"}</small></article>
             <article><span>分区</span><strong>{divisionCount}</strong><small>{divisionSize}人 / 区</small></article>
@@ -199,9 +199,9 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
 
       <aside className="draw-side-column">
         <section><small>本轮规则确认</small><h3>一次抽签到底</h3><p>资格赛第一场 / 第二场都不是每轮重抽。名单锁定后只抽一次，之后在同一张分区签表中连续比赛到每区冠军。</p></section>
-        <section><small>32强负者增补</small><h3>局胜率前8</h3><p>16个分区各产生1名决胜轮负者，共16人进入候补池。后续比分模块会自动计算局胜率并排序，默认取前8名，由组委会确认。</p></section>
+        <section><small>32强负者增补</small><h3>局胜率前8</h3><p>16个分区各产生1名决胜轮负者，共16人进入候补池。系统会自动计算局胜率并排序，默认取前8名，由组委会最终确认。</p></section>
         <section><small>种子与候补</small><h3>从第一版预留</h3><p>正赛第一阶段支持设置是否启用种子以及种子名额。若种子不到场，缺额优先从资格赛候补池按局胜率顺序增补。</p></section>
-        <section><small>赛程层</small><h3>时间稍后配置</h3><p>签表关系不绑定时间。下一步单独设置 09:00、10:45、13:30 等比赛时段，再结合球台和裁判自动编排，临时换台不会改变签表。</p></section>
+        <section><small>赛程层</small><h3>时间稍后配置</h3><p>签表关系不绑定时间。单独设置 09:00、10:45、13:30 等比赛时段，再结合球台和裁判自动编排，临时换台不会改变签表。</p></section>
       </aside>
     </section>
   </main>;
