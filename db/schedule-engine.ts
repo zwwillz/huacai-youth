@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 
 export type CompetitionTable = {
   id: string;
@@ -118,6 +119,7 @@ async function loadBracket(sessionId: string): Promise<BracketRow> {
 export async function getScheduleWorkspaceData(username: string, sessionId: string): Promise<ScheduleWorkspaceData> {
   const viewer = await requireViewer(username);
   const bracket = await loadBracket(sessionId);
+  await requireEventAccess(username, bracket.eventId);
   const sql = getSqlClient();
   const [tables, timeSlots, referees, schedules] = await Promise.all([
     sql<CompetitionTable[]>`
@@ -165,6 +167,7 @@ export async function saveCompetitionTables(username: string, sessionId: string,
 }) {
   const viewer = await requireViewer(username, true);
   const bracket = await loadBracket(sessionId);
+  await requireEventAccess(username, bracket.eventId, { write: true });
   const totalCount = Math.max(1, Math.min(128, Math.floor(Number(input.totalCount) || 0)));
   const tvPositions = [...new Set((input.tvPositions ?? []).map(Number).filter((value) => Number.isInteger(value) && value >= 1 && value <= totalCount))];
   const manualLabels = input.manualLabels ?? [];
@@ -205,6 +208,7 @@ export async function saveCompetitionTables(username: string, sessionId: string,
 export async function saveCompetitionTimeSlots(username: string, sessionId: string, slots: Array<{ matchDate: string; startTime: string }>) {
   const viewer = await requireViewer(username, true);
   const bracket = await loadBracket(sessionId);
+  await requireEventAccess(username, bracket.eventId, { write: true });
   const cleaned = slots
     .map((slot) => ({ matchDate: String(slot.matchDate || "").trim(), startTime: String(slot.startTime || "").trim().slice(0, 5) }))
     .filter((slot) => /^\d{4}-\d{2}-\d{2}$/.test(slot.matchDate) && /^\d{2}:\d{2}$/.test(slot.startTime));
