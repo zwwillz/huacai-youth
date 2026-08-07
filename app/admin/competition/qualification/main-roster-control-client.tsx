@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { MainRosterControlData, MainRosterControlGroup, SeedAttendanceStatus } from "@/db/main-competition-flow";
+import { useAdminActionDialog } from "../../admin-action-dialog";
 
 type Props = { initialData: MainRosterControlData };
 
@@ -20,6 +21,7 @@ export default function MainRosterControlClient({ initialData }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const { ask, dialog } = useAdminActionDialog();
   const readOnly = initialData.viewerRole === "referee";
 
   async function post(key: string, body: Record<string, unknown>) {
@@ -43,8 +45,9 @@ export default function MainRosterControlClient({ initialData }: Props) {
   async function changeStatus(group: MainRosterControlGroup, seedEntryId: string, status: SeedAttendanceStatus) {
     let note = "";
     if (["not_attending", "ineligible", "removed"].includes(status)) {
-      note = window.prompt("请填写原因，便于后续审计和递补：", status === "not_attending" ? "本站不参赛" : status === "ineligible" ? "年龄/资格不符合" : "组委会取消资格") || "";
-      if (!note) return;
+      const reason = await ask({ title: "更新种子参赛状态", description: "该操作可能产生正赛种子空缺，并触发递补流程。原因会写入操作日志。", confirmLabel: "确认更新状态", input: { label: "原因", initialValue: status === "not_attending" ? "本站不参赛" : status === "ineligible" ? "年龄/资格不符合" : "组委会取消资格", required: true } });
+      if (typeof reason !== "string") return;
+      note = reason;
     }
     const ok = await post(`status-${seedEntryId}`, { action: "seed-status", eventId: initialData.event.id, groupId: group.groupId, seedEntryId, attendanceStatus: status, note });
     if (ok) setMessage("种子状态已更新。若产生空缺，请从局胜率递补池中选择球员补足。");
@@ -57,7 +60,8 @@ export default function MainRosterControlClient({ initialData }: Props) {
   }
 
   async function lockRoster(group: MainRosterControlGroup) {
-    if (!window.confirm(`确认锁定${group.groupName}正赛64人名单？\n\n锁定后才允许正赛第一阶段抽签；如果之后要修改名单，需要先解锁。抽签生成后，则要先作废抽签才能解锁。`)) return;
+    const confirmed = await ask({ title: `锁定${group.groupName}正赛64人名单`, description: "锁定后才允许正赛第一阶段抽签。如需修改名单，必须先解锁；抽签生成后，还要先作废抽签。", confirmLabel: "确认锁定64人名单" });
+    if (!confirmed) return;
     const ok = await post(`lock-${group.groupId}`, { action: "lock-roster", eventId: initialData.event.id, groupId: group.groupId });
     if (ok) setMessage(`${group.groupName}正赛64人名单已锁定，可以进入正赛第一阶段抽签。`);
   }
@@ -124,7 +128,7 @@ export default function MainRosterControlClient({ initialData }: Props) {
           <div className="roster-lock-actions">
             {locked && <Link href={`/admin/competition/draw?event=${encodeURIComponent(initialData.event.id)}&group=${encodeURIComponent(group.groupId)}&phase=main-one`}>进入正赛第一阶段 →</Link>}
             {!locked && group.canLock && !readOnly && <button onClick={() => lockRoster(group)} disabled={Boolean(busy)}>锁定64人名单</button>}
-            {locked && !group.activeMainOneDraw && !readOnly && <button className="danger" onClick={async () => { const reason = window.prompt("请输入解锁原因：", "名单调整"); if (reason) await post(`unlock-${group.groupId}`, { action: "unlock-roster", lockId: group.currentLock?.id, reason }); }}>解锁名单</button>}
+            {locked && !group.activeMainOneDraw && !readOnly && <button className="danger" onClick={async () => { const reason = await ask({ title: `解锁${group.groupName}64人名单`, description: "解锁后可以调整种子和递补；原因会写入操作日志。", confirmLabel: "确认解锁", tone: "danger", input: { label: "解锁原因", initialValue: "名单调整", required: true } }); if (typeof reason === "string") await post(`unlock-${group.groupId}`, { action: "unlock-roster", lockId: group.currentLock?.id, reason }); }}>解锁名单</button>}
           </div>
         </section>
 
@@ -133,10 +137,10 @@ export default function MainRosterControlClient({ initialData }: Props) {
           {!group.advancement && <div className="main32-wait"><strong>等待正赛第一阶段完成</strong><p>随着后台确认比分，胜者/负者会自动沿双败线路推进。全部16场胜部晋级轮和16场败部晋级轮确认后，这里自动出现32强待确认名单。</p></div>}
           {group.advancement && <>
             <div className="main32-lists"><div><strong>胜部晋级 · 16人</strong><p>{winnerSide.map((item) => item.playerName).join("、")}</p></div><div><strong>败部晋级 · 16人</strong><p>{loserSide.map((item) => item.playerName).join("、")}</p></div></div>
-            <footer><span>{group.advancement.status === "confirmed" ? "32强名单已确认，可进入正赛第二阶段抽签。" : "32强结果已由赛果自动汇总，等待组委会最终确认。"}</span>{group.advancement.status === "confirmed" ? <Link href={`/admin/competition/draw?event=${encodeURIComponent(initialData.event.id)}&group=${encodeURIComponent(group.groupId)}&phase=main-two`}>进入正赛第二阶段抽签 →</Link> : !readOnly && <button disabled={Boolean(busy)} onClick={async () => { if (window.confirm(`确认${group.groupName}32强名单并开放正赛第二阶段抽签？`)) await post(`main32-${group.groupId}`, { action: "confirm-main32", batchId: group.advancement?.id }); }}>确认32强名单</button>}</footer>
+            <footer><span>{group.advancement.status === "confirmed" ? "32强名单已确认，可进入正赛第二阶段抽签。" : "32强结果已由赛果自动汇总，等待组委会最终确认。"}</span>{group.advancement.status === "confirmed" ? <Link href={`/admin/competition/draw?event=${encodeURIComponent(initialData.event.id)}&group=${encodeURIComponent(group.groupId)}&phase=main-two`}>进入正赛第二阶段抽签 →</Link> : !readOnly && <button disabled={Boolean(busy)} onClick={async () => { const confirmed = await ask({ title: `确认${group.groupName}32强名单`, description: "确认后将正式生成正赛第二阶段名单，并开放32强重新抽签。", confirmLabel: "确认并开放抽签" }); if (confirmed) await post(`main32-${group.groupId}`, { action: "confirm-main32", batchId: group.advancement?.id }); }}>确认32强名单</button>}</footer>
           </>}
         </section>
       </article>;
     })}</div>
-  </section>;
+  {dialog}</section>;
 }
