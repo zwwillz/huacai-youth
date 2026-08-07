@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 import { competitionPhaseLabel } from "./competition-labels";
 
 export type QualificationCandidate = {
@@ -243,6 +244,7 @@ async function buildStage(row: StageRow): Promise<QualificationStage> {
 
 export async function getQualificationWorkspaceData(username: string, eventId: string): Promise<QualificationWorkspaceData> {
   const viewer = await requireViewer(username);
+  await requireEventAccess(username, eventId);
   const sql = getSqlClient();
   const eventRows = await sql<Array<{ id: string; shortTitle: string }>>`select id,short_title as "shortTitle" from public.events where id=${eventId} limit 1`;
   if (!eventRows[0]) throw new Error("没有找到这场赛事。");
@@ -266,6 +268,7 @@ export async function confirmQualificationStage(username: string, drawSessionId:
   `;
   const row = stageRows[0];
   if (!row || !["qualifier-one","qualifier-two"].includes(row.phaseCode)) throw new Error("没有找到可确认的资格赛签表。");
+  await requireEventAccess(username, row.eventId, { write: true });
   const existing = await sql<Array<{ id: string }>>`select id from public.competition_qualification_batches where draw_session_id=${drawSessionId} limit 1`;
   if (existing[0]) throw new Error("本阶段晋级名单已经确认，不能重复确认。");
   const stage = await buildStage(row);
