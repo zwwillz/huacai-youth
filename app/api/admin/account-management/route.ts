@@ -1,7 +1,17 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
-import { updateAdminAccount, type AccountAction } from "@/db/account-admin";
+import { getAccountsForAdmin, updateAdminAccount, type AccountAction } from "@/db/account-admin";
 
 export const dynamic = "force-dynamic";
+
+export async function GET() {
+  const viewer = await getAdminViewer();
+  if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
+  try {
+    return Response.json({ data: await getAccountsForAdmin(viewer.username) });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "账号列表读取失败。" }, { status: 400 });
+  }
+}
 
 export async function POST(request: Request) {
   const viewer = await getAdminViewer();
