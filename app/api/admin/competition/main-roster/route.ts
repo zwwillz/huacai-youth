@@ -11,7 +11,7 @@ import {
   voidMainRosterLock,
   type SeedAttendanceStatus,
 } from "@/db/main-competition-flow";
-import { assertMainRosterMutable, assertSeedEntryMutable } from "@/db/main-roster-lock-check";
+import { assertMainRosterMutable, assertSeedEntryMutable, assertSeedReplacementAllowed } from "@/db/main-roster-lock-check";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     }
     if (action === "assign-replacement") {
       const seedEntryId = String(body.seedEntryId || "");
-      await assertSeedEntryMutable(seedEntryId);
+      await assertSeedReplacementAllowed(seedEntryId);
       return Response.json({ data: await assignSeedReplacement(viewer.username, seedEntryId, String(body.playerId || "")) });
     }
     if (action === "clear-replacement") {
