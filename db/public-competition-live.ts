@@ -89,31 +89,19 @@ export type PublicCompetitionEvent = {
 };
 
 type SessionRow = PublicPhaseSummary;
-
-type MatchRow = Omit<PublicLiveMatch, "group" | "phaseId"> & {
-  groupName: string;
-  phaseCode: string;
-};
-
-type QualificationRow = Omit<PublicQualificationEntry, "group" | "phaseId"> & {
-  groupName: string;
-  phaseCode: string;
-};
-
+type MatchRow = Omit<PublicLiveMatch, "group" | "phaseId"> & { groupName: string; phaseCode: string };
+type QualificationRow = Omit<PublicQualificationEntry, "group" | "phaseId"> & { groupName: string; phaseCode: string };
 type MainRosterRow = Omit<PublicMainRosterEntry, "group"> & { groupName: string };
 
 const phaseIds = new Set<PhaseId>(["qualifier-one", "qualifier-two", "main-one", "main-two"]);
-function asPhaseId(value: string): PhaseId | null {
-  return phaseIds.has(value as PhaseId) ? value as PhaseId : null;
-}
-function asGroup(value: string): Group | null {
-  return value === "少年组" || value === "青年组" ? value : null;
-}
+function asPhaseId(value: string): PhaseId | null { return phaseIds.has(value as PhaseId) ? value as PhaseId : null; }
+function asGroup(value: string): Group | null { return value === "少年组" || value === "青年组" ? value : null; }
 
 export async function getPublicCompetitionEvents(eventIds: string[]): Promise<PublicCompetitionEvent[]> {
   if (!eventIds.length) return [];
   const sql = getSqlClient();
 
+  // 公众端只读取“已确认”的抽签版本。草稿、作废版本永不进入前端。
   const sessionRows = await sql<Array<SessionRow & { groupName: string; phaseCode: string }>>`
     select ds.event_id as "eventId", ds.id as "drawSessionId", ds.group_id as "groupId", eg.name as "groupName",
       ds.phase_code as "phaseCode", ds.version_no as "versionNo", ds.entrant_count as "entrantCount",
@@ -136,14 +124,20 @@ export async function getPublicCompetitionEvents(eventIds: string[]): Promise<Pu
   }
   const latestSessionIds = new Set([...latestByKey.values()].map((row) => row.drawSessionId));
 
+  // 裁判“提交”与组委会“确认”严格分开：未确认赛果不向公众暴露比分、胜者或内部待确认状态。
   const matchRows = await sql<MatchRow[]>`
     select bm.id, bm.event_id as "eventId", bm.draw_session_id as "drawSessionId", bm.group_id as "groupId", eg.name as "groupName",
       bm.phase_code as "phaseCode", bm.division_no as "divisionNo", bm.round_no as "roundNo", bm.round_name as "roundName",
       bm.match_code as "matchCode", bm.source_a_type as "sourceAType", bm.source_a_ref as "sourceARef",
       bm.source_b_type as "sourceBType", bm.source_b_ref as "sourceBRef", bm.player_a_id as "playerAId", bm.player_a_name as "playerA",
-      bm.player_b_id as "playerBId", bm.player_b_name as "playerB", bm.score_a as "scoreA", bm.score_b as "scoreB",
-      bm.result_type as "resultType", bm.result_status as "resultStatus", bm.status,
-      bm.winner_player_id as "winnerPlayerId", bm.winner_player_name as "winnerPlayerName",
+      bm.player_b_id as "playerBId", bm.player_b_name as "playerB",
+      case when bm.result_status='confirmed' or bm.status='auto_advanced' then bm.score_a else null end as "scoreA",
+      case when bm.result_status='confirmed' or bm.status='auto_advanced' then bm.score_b else null end as "scoreB",
+      case when bm.result_status='confirmed' or bm.status='auto_advanced' then bm.result_type else null end as "resultType",
+      case when bm.result_status='confirmed' then 'confirmed' else 'pending' end as "resultStatus",
+      case when bm.result_status='confirmed' then 'completed' else bm.status end as status,
+      case when bm.result_status='confirmed' or bm.status='auto_advanced' then bm.winner_player_id else null end as "winnerPlayerId",
+      case when bm.result_status='confirmed' or bm.status='auto_advanced' then bm.winner_player_name else null end as "winnerPlayerName",
       ts.match_date as date, ts.start_time as time, cet.display_name as "table", coalesce(cet.is_tv,false) as "isTv",
       bm.sort_order as "sortOrder"
     from public.competition_bracket_matches bm
@@ -167,12 +161,17 @@ export async function getPublicCompetitionEvents(eventIds: string[]): Promise<Pu
     order by qb.event_id,qb.group_id,qb.phase_code,case when qe.entry_type='direct' then 0 else 1 end,coalesce(qe.rank_no,999),qe.division_no
   `;
 
+  // 正赛名单只在64人名单已正式锁定后提供给用户端；未锁定的临时合并结果不公开。
   const mainRosterRows = await sql<MainRosterRow[]>`
     select pe.event_id as "eventId", pe.group_id as "groupId", eg.name as "groupName", pe.player_id as "playerId", pe.player_name as "playerName",
       pe.source_type as "sourceType", pe.sort_order as "sortOrder"
     from public.competition_phase_entries pe
     join public.event_groups eg on eg.id=pe.group_id
     where pe.event_id = any(${eventIds}::text[]) and pe.phase_code='main-one' and pe.status='active'
+      and exists (
+        select 1 from public.competition_main_roster_locks ml
+        where ml.event_id=pe.event_id and ml.group_id=pe.group_id and ml.status='locked'
+      )
     order by pe.event_id,pe.group_id,pe.sort_order,pe.player_name
   `;
 
