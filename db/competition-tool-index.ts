@@ -1,4 +1,5 @@
 import { getSqlClient } from "./index";
+import { competitionPhaseLabel } from "./competition-labels";
 
 export type CompetitionBracketIndexItem = {
   drawSessionId: string;
@@ -30,7 +31,7 @@ async function requireViewer(username: string) {
 export async function getCompetitionBracketIndex(username: string, eventId: string) {
   await requireViewer(username);
   const sql = getSqlClient();
-  return sql<CompetitionBracketIndexItem[]>`
+  const rows = await sql<CompetitionBracketIndexItem[]>`
     select ds.id as "drawSessionId",b.id as "bracketId",b.event_id as "eventId",b.group_id as "groupId",eg.name as "groupName",
       b.phase_code as "phaseCode",coalesce(ep.title,b.phase_code) as "phaseTitle",ds.version_no as "drawVersion",
       b.status as "bracketStatus",b.playable_match_count as "playableMatchCount",b.generated_at as "generatedAt",
@@ -45,4 +46,5 @@ export async function getCompetitionBracketIndex(username: string, eventId: stri
     group by ds.id,b.id,eg.name,eg.code,ep.title,s.id
     order by eg.code,b.phase_code,ds.version_no desc
   `;
+  return rows.map((item) => ({ ...item, phaseTitle: competitionPhaseLabel(item.phaseCode, item.phaseTitle) }));
 }
