@@ -11,7 +11,12 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const eventId = url.searchParams.get("eventId") || "";
     if (!eventId) throw new Error("缺少赛事ID。");
-    return Response.json({ data: await getScoringWorkspaceData(viewer.username, eventId) });
+    return Response.json({ data: await getScoringWorkspaceData(viewer.username, eventId, {
+      groupId: url.searchParams.get("group") || undefined,
+      phaseCode: url.searchParams.get("phase") || undefined,
+      date: url.searchParams.get("date") || undefined,
+      showConfirmed: url.searchParams.get("view") === "all",
+    }) });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "比分数据读取失败。" }, { status: 400 });
   }
