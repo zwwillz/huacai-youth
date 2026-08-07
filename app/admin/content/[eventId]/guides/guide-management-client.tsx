@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { GuideBlock, GuideEditorItem, GuideManagementData } from "@/db/guides";
+import { useAdminActionDialog } from "../../../admin-action-dialog";
 
 function newBlock(type: GuideBlock["type"]): GuideBlock {
   const id = `block_${crypto.randomUUID()}`;
@@ -31,6 +32,7 @@ export default function GuideManagementClient({ initialData }: { initialData: Gu
   const [uploading, setUploading] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const { ask, dialog } = useAdminActionDialog();
 
   const patchGuide = (index: number, patch: Partial<GuideEditorItem>) => {
     setGuides((rows) => rows.map((row, i) => i === index ? { ...row, ...patch } : row));
@@ -128,7 +130,7 @@ export default function GuideManagementClient({ initialData }: { initialData: Gu
             <div className="guide-order"><button onClick={() => moveGuide(guideIndex, -1)} disabled={guideIndex === 0}>↑</button><button onClick={() => moveGuide(guideIndex, 1)} disabled={guideIndex === guides.length - 1}>↓</button></div>
             <div><small>提示 {String(guideIndex + 1).padStart(2, "0")}</small><input value={guide.title} onChange={(e) => patchGuide(guideIndex, { title: e.target.value })} /></div>
             <label><span>状态</span><select value={guide.publishStatus} onChange={(e) => patchGuide(guideIndex, { publishStatus: e.target.value as "draft" | "published" })}><option value="draft">草稿</option><option value="published">发布</option></select></label>
-            <button className="guide-delete" onClick={() => { if (confirm(`确认删除“${guide.title}”吗？`)) setGuides((rows) => rows.filter((_, i) => i !== guideIndex)); }}>删除</button>
+            <button className="guide-delete" onClick={async () => { const confirmed = await ask({ title: `删除“${guide.title}”`, description: "删除后需点击“保存全部提示”才会写入后台。", confirmLabel: "从编辑列表删除", tone: "danger" }); if (confirmed) setGuides((rows) => rows.filter((_, i) => i !== guideIndex)); }}>删除</button>
           </header>
 
           <section className="guide-block-list">{guide.blocks.map((block, blockIndex) => <div className={`guide-block block-${block.type}`} key={block.id}>
@@ -145,5 +147,6 @@ export default function GuideManagementClient({ initialData }: { initialData: Gu
         <footer className="guide-savebar"><div><strong>轻量富内容编辑</strong><span>第一版先支持正文、图片、双栏，避免引入过重的网页编辑器。</span></div><button onClick={save} disabled={working}>{working ? "正在保存…" : "保存全部提示"}</button></footer>
       </section>
     </section>
+    {dialog}
   </main>;
 }
