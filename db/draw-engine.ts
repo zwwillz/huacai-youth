@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 
 export const DRAW_PHASES = ["qualifier-one", "qualifier-two", "main-one", "main-two"] as const;
 export type DrawPhaseCode = (typeof DRAW_PHASES)[number];
@@ -309,6 +310,7 @@ export async function getDrawWorkspaceData(username: string, eventId: string, gr
 
 export async function createQualificationDraw(username: string, input: { eventId: string; groupId: string; phaseCode: DrawPhaseCode; bracketSize: number; divisionSize: number; rateQualifierCount: number; seedsEnabled?: boolean; seedTargetCount?: number; seedFillRule?: string }) {
   const viewer = await requireViewer(username);
+  await requireEventAccess(username, input.eventId, { write: true });
   if (input.phaseCode !== "qualifier-one") throw new Error("第一版先开放“资格赛第一场”的正式抽签。资格赛第二场将在第一场晋级确认模块接入后开放，避免重复抽入已晋级球员。");
   const participants = await loadApprovedParticipants(input.eventId, input.groupId);
   const plan = calculateQualificationPlan({ entrantCount: participants.length, bracketSize: input.bracketSize, divisionSize: input.divisionSize, rateQualifierCount: input.rateQualifierCount, phaseCode: input.phaseCode });
@@ -461,6 +463,7 @@ export async function createQualificationDraw(username: string, input: { eventId
 
 export async function getDrawSessionDetail(username: string, sessionId: string): Promise<DrawSessionDetail> {
   const viewer = await requireViewer(username);
+  await requireEventAccess(username, eventId);
   const sql = getSqlClient();
   const sessionRows = await sql<Array<any>>`
     select s.id, s.event_id as "eventId", e.short_title as "eventTitle", s.group_id as "groupId", g.name as "groupName",
@@ -478,6 +481,7 @@ export async function getDrawSessionDetail(username: string, sessionId: string):
   `;
   const raw = sessionRows[0];
   if (!raw) throw new Error("没有找到这次抽签。");
+  await requireEventAccess(username, raw.eventId);
   const phaseCode = raw.phaseCode as DrawPhaseCode;
   const [participants, prelimMatches, slots] = await Promise.all([
     sql<Array<any>>`
@@ -502,6 +506,7 @@ export async function confirmDrawSession(username: string, sessionId: string) {
   const rows = await sql<Array<{ eventId: string; status: string }>>`select event_id as "eventId", status from public.draw_sessions where id=${sessionId} limit 1`;
   const session = rows[0];
   if (!session) throw new Error("没有找到这次抽签。");
+  await requireEventAccess(username, session.eventId, { write: true });
   if (session.status !== "draft") throw new Error("只有抽签草稿可以确认。");
   const confirmedAt = now();
   await sql.begin(async (tx) => {
@@ -519,6 +524,7 @@ export async function voidDrawSession(username: string, sessionId: string, reaso
   const rows = await sql<Array<{ eventId: string; status: string }>>`select event_id as "eventId", status from public.draw_sessions where id=${sessionId} limit 1`;
   const session = rows[0];
   if (!session) throw new Error("没有找到这次抽签。");
+  await requireEventAccess(username, session.eventId, { write: true });
   if (session.status === "void") throw new Error("这次抽签已经作废。");
   const voidedAt = now();
   await sql.begin(async (tx) => {
