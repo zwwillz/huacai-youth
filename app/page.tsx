@@ -2,11 +2,13 @@ import EventApp from "./event-app";
 import LangfangRankingStatic from "./langfang-ranking-static";
 import LangfangDbEnhancer from "./langfang-db-enhancer";
 import PublicContentEnhancer from "./public-content-enhancer";
+import PublicCompetitionLiveEnhancer from "./public-competition-live-enhancer";
 import PlayerDbView from "./player-db-view";
 import { getPublicSiteData } from "@/db/public";
 import { getPublicContentState } from "@/db/public-content";
 import { getPublicRankings } from "@/db/rankings";
 import { getCompetitionMatches } from "@/db/competition-matches";
+import { getPublicCompetitionEvents } from "@/db/public-competition-live";
 import { getPublicPlayerSummaries } from "@/db/player-data";
 
 export const runtime = "nodejs";
@@ -38,10 +40,12 @@ function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>[
 export default async function Home() {
   const data = await getPublicSiteData();
   const langfangEventId = data.stations.find((station) => station.id === "langfang")?.eventId;
-  const [contentStates, rankings, competitionMatches, players] = await Promise.all([
+  const jinanEventId = data.stations.find((station) => station.city.includes("济南"))?.eventId;
+  const [contentStates, rankings, competitionMatches, liveCompetitions, players] = await Promise.all([
     getPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title }))),
     langfangEventId ? getPublicRankings(langfangEventId) : Promise.resolve([]),
     langfangEventId ? getCompetitionMatches(langfangEventId) : Promise.resolve([]),
+    jinanEventId ? getPublicCompetitionEvents([jinanEventId]) : Promise.resolve([]),
     getPublicPlayerSummaries(),
   ]);
   const visualCss = eventVisualCss(data.stations);
@@ -50,6 +54,7 @@ export default async function Home() {
     <style dangerouslySetInnerHTML={{ __html: visualCss }} />
     <EventApp data={data} />
     <PublicContentEnhancer states={contentStates} />
+    <PublicCompetitionLiveEnhancer stations={data.stations} competitions={liveCompetitions} />
     <LangfangRankingStatic rankings={rankings} />
     <LangfangDbEnhancer matches={competitionMatches} />
     <PlayerDbView players={players} />
