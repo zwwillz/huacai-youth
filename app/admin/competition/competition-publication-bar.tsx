@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { CompetitionPublicationModule } from "@/db/competition-context";
+import { useAdminActionDialog } from "../admin-action-dialog";
 
 type Props = {
   eventId: string;
@@ -18,6 +19,7 @@ export default function CompetitionPublicationBar({ eventId, moduleType, title, 
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const { ask, dialog } = useAdminActionDialog();
   const canWrite = viewerRole === "system_admin" || viewerRole === "committee";
   const published = status === "published";
   const needsPublish = !published || hasUnpublishedChanges;
@@ -29,7 +31,8 @@ export default function CompetitionPublicationBar({ eventId, moduleType, title, 
     const text = nextStatus === "published"
       ? `确认把“${title}”${published ? "更新" : "发布"}到用户端？\n\n系统会生成一个新的正式快照。发布完成前，用户端一直保持上一版正式内容，不会看到后台正在编辑的数据。`
       : `确认暂时从用户端撤回“${title}”吗？后台数据和上一版发布快照都不会删除，之后可以再次发布。`;
-    if (!window.confirm(text)) return;
+    const confirmed = await ask({ title: nextStatus === "published" ? `${published ? "发布更新" : "发布"}“${title}”` : `撤回“${title}”`, description: text, confirmLabel: nextStatus === "published" ? "确认发布" : "确认撤回", tone: nextStatus === "published" ? "default" : "danger" });
+    if (!confirmed) return;
     setBusy(true); setMessage("");
     try {
       const response = await fetch("/api/admin/competition/publication", {
@@ -45,7 +48,7 @@ export default function CompetitionPublicationBar({ eventId, moduleType, title, 
     finally { setBusy(false); }
   }
 
-  return <section className="competition-publication-bar">
+  return <><section className="competition-publication-bar">
     <div className="competition-publication-copy">
       <span className={`competition-publication-status ${published && !hasUnpublishedChanges ? "published" : "draft"}`}>{stateLabel}</span>
       <div><strong>{title}</strong><p>{message || hint}</p></div>
@@ -54,5 +57,5 @@ export default function CompetitionPublicationBar({ eventId, moduleType, title, 
       {needsPublish && <button type="button" disabled={busy} onClick={() => change("published")}>{busy ? "发布中…" : published ? "发布更新" : "发布到用户端"}</button>}
       {published && <button className="secondary" type="button" disabled={busy} onClick={() => change("draft")}>{busy ? "处理中…" : "撤回前台"}</button>}
     </div>}
-  </section>;
+  </section>{dialog}</>;
 }
