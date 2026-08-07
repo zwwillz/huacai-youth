@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 import { getDrawSessionDetail, type DrawPhaseCode, type DrawSessionDetail } from "./draw-engine";
 
 export type MainPhaseCode = "main-one" | "main-two";
@@ -79,6 +80,7 @@ function shuffled<T>(items: T[], random: () => number) {
 
 export async function getMainStageWorkspaceData(username: string, eventId: string, groupId: string | undefined, phase: MainPhaseCode): Promise<MainStageWorkspace> {
   const viewer = await requireViewer(username);
+  await requireEventAccess(username, eventId);
   const sql = getSqlClient();
   const events = await sql<Array<{ id: string; shortTitle: string }>>`select id,short_title as "shortTitle" from public.events where id=${eventId} limit 1`;
   if (!events[0]) throw new Error("没有找到这场赛事。");
@@ -104,6 +106,7 @@ export async function getMainStageWorkspaceData(username: string, eventId: strin
 
 export async function createMainStageDraw(username: string, input: { eventId: string; groupId: string; phaseCode: MainPhaseCode }): Promise<DrawSessionDetail> {
   const viewer = await requireViewer(username, true);
+  await requireEventAccess(username, input.eventId, { write: true });
   const entries = await loadEntries(input.eventId, input.groupId, input.phaseCode);
   const expected = input.phaseCode === "main-one" ? 64 : 32;
   if (entries.length !== expected) throw new Error(`${phaseTitle(input.phaseCode)}需要${expected}名球员，当前只有${entries.length}人。`);
@@ -200,6 +203,7 @@ function addLink(links: LinkRow[], bracketId: string, source: MatchRow, result: 
 export async function generateMainStageBracket(username: string, sessionId: string): Promise<string> {
   const viewer = await requireViewer(username, true);
   const session = await loadSession(sessionId);
+  await requireEventAccess(username, session.eventId, { write: true });
   if (session.status !== "confirmed") throw new Error("请先确认正赛抽签，再生成比赛关系。");
   const sql = getSqlClient();
   const existing = await sql<Array<{ id: string }>>`select id from public.competition_brackets where draw_session_id=${sessionId} limit 1`;
