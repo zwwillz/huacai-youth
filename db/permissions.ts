@@ -1,4 +1,5 @@
 import { getSqlClient } from "./index";
+import { cache } from "react";
 
 export type BackendRole = "system_admin" | "committee" | "referee";
 export type EventAccessViewer = {
@@ -8,6 +9,20 @@ export type EventAccessViewer = {
   displayName: string;
   eventMemberRole: string | null;
 };
+
+const loadEventAccessViewer = cache(async (username: string, eventId: string) => {
+  const sql = getSqlClient();
+  const rows = await sql<Array<EventAccessViewer & { hasEventAccess: boolean }>>`
+    select u.id,u.username,u.role,u.display_name as "displayName",
+      em.role as "eventMemberRole",(em.id is not null) as "hasEventAccess"
+    from public.users u
+    left join public.event_members em
+      on em.user_id=u.id and em.event_id=${eventId} and em.status='active'
+    where u.username=${username} and u.status='active'
+    limit 1
+  `;
+  return rows[0] ?? null;
+});
 
 export async function requireEventAccess(
   username: string,
@@ -20,17 +35,7 @@ export async function requireEventAccess(
   } = {},
 ): Promise<EventAccessViewer> {
   if (!eventId) throw new Error("缺少赛事ID。");
-  const sql = getSqlClient();
-  const rows = await sql<Array<EventAccessViewer & { hasEventAccess: boolean }>>`
-    select u.id,u.username,u.role,u.display_name as "displayName",
-      em.role as "eventMemberRole",(em.id is not null) as "hasEventAccess"
-    from public.users u
-    left join public.event_members em
-      on em.user_id=u.id and em.event_id=${eventId} and em.status='active'
-    where u.username=${username} and u.status='active'
-    limit 1
-  `;
-  const viewer = rows[0];
+  const viewer = await loadEventAccessViewer(username, eventId);
   const allowedRoles = options.allowedRoles ?? ["system_admin", "committee", "referee"];
   if (!viewer || !allowedRoles.includes(viewer.role)) {
     throw new Error(options.deniedMessage || "当前账号没有执行此操作的权限。");
