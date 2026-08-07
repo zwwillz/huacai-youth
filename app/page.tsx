@@ -3,6 +3,7 @@ import LangfangRankingStatic from "./langfang-ranking-static";
 import LangfangDbEnhancer from "./langfang-db-enhancer";
 import PublicContentEnhancer from "./public-content-enhancer";
 import PublicCompetitionLiveV2 from "./public-competition-live-v2";
+import PublicCompetitionAutoRefresh from "./public-competition-auto-refresh";
 import PublicTabsUnifier from "./public-tabs-unifier";
 import PlayerDbView from "./player-db-view";
 import MePreview from "./me-preview";
@@ -93,6 +94,7 @@ export default async function Home() {
     <EventApp data={data} />
     <PublicContentEnhancer states={contentStates} />
     <PublicCompetitionLiveV2 stations={data.stations} events={normalizedLiveCompetitions} contentStates={contentStates} rankings={dynamicRankings} />
+    <PublicCompetitionAutoRefresh />
     <PublicTabsUnifier />
     <LangfangRankingStatic rankings={rankings} />
     <LangfangDbEnhancer matches={competitionMatches} />
