@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 import { markCompetitionModuleDirty } from "./competition-context";
 import type { FinalRankingRow } from "./final-ranking-engine";
 
@@ -27,6 +28,7 @@ export async function saveFinalRankingManualOrder(username: string, batchId: str
   `;
   const batch = batches[0];
   if (!batch) throw new Error("没有找到最终排名草稿。");
+  await requireEventAccess(username, batch.eventId, { write: true, allowedRoles: ["system_admin", "committee"] });
   if (batch.status !== "draft") throw new Error("只有尚未确认的排名草稿可以人工调整。已确认或已发布排名请走正式更正流程。");
   if (orderedPlayerIds.length !== 64 || new Set(orderedPlayerIds).size !== 64) throw new Error("人工调整必须保留完整64名球员，且不能重复。");
   const rows = await sql<Array<{ playerId: string; playerName: string }>>`
