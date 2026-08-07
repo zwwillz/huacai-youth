@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 
 type Viewer = { id: string; role: string };
 type DrawSessionRow = {
@@ -263,6 +264,7 @@ function makeDivisionMatch(input: {
 export async function generateBracketFromConfirmedDraw(username: string, sessionId: string): Promise<BracketDetail> {
   const viewer = await requireViewer(username, true);
   const session = await loadDrawSession(sessionId);
+  await requireEventAccess(username, session.eventId, { write: true });
   if (session.status !== "confirmed") throw new Error("请先确认正式抽签，再生成完整签表和比赛关系。");
   const existing = await getBracketDetail(username, sessionId, true);
   if (existing) return existing;
@@ -414,6 +416,7 @@ export async function getBracketDetail(username: string, sessionId: string, allo
     if (allowMissing) return null;
     throw new Error("这次抽签还没有生成完整分区签表。");
   }
+  await requireEventAccess(username, bracket.eventId);
   const [matchRows, linkRows] = await Promise.all([
     sql<BracketMatch[]>`
       select id,match_type as "matchType",division_no as "divisionNo",round_no as "roundNo",round_name as "roundName",match_no as "matchNo",match_code as "matchCode",
