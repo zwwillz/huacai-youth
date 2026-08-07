@@ -1,5 +1,6 @@
 import { hash } from "bcryptjs";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { getDb, getSqlClient } from "./index";
 import {
   adminSessions,
@@ -52,7 +53,7 @@ async function requireSystemAdmin(username: string) {
   return account;
 }
 
-export async function getAdminNavigationEvents(username: string): Promise<AdminNavEvent[]> {
+async function loadAdminNavigationEvents(username: string): Promise<AdminNavEvent[]> {
   const account = await requireActiveAccount(username);
   const db = getDb();
   const memberEventIds = account.role === "system_admin" ? null : await db
@@ -77,6 +78,11 @@ export async function getAdminNavigationEvents(username: string): Promise<AdminN
     : await base.orderBy(desc(events.year), desc(events.stationNo));
   return rows.map((row) => ({ ...row, venueName: row.venueName ?? "" }));
 }
+
+export const getAdminNavigationEvents = unstable_cache(loadAdminNavigationEvents, ["admin-navigation-events-v3"], {
+  revalidate: 30,
+  tags: ["admin-navigation-events"],
+});
 
 export async function getAdminHomeData(username: string) {
   const db = getDb();
