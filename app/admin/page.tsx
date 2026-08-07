@@ -48,26 +48,43 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     currentEventId={eventScoped ? currentEventId : undefined}
     eventScoped={eventScoped}
   >
-    {section === "dashboard" && <Dashboard data={data} />}
+    {section === "dashboard" && <Dashboard data={data} viewerRole={viewer.role} />}
     {section === "registrations" && <ScopedPlaceholder title="报名审核" eventTitle={currentEvent?.shortTitle} description="报名审核后续会在这里处理报名资料、组别、审核状态和缴费/确认状态。当前先统一到新的后台结构。" />}
     {section === "players" && <ScopedPlaceholder title="球员管理" eventTitle={currentEvent?.shortTitle} description="这里将分为“本站参赛球员”和“球员总库”。当前先统一页面入口，下一阶段再接球员档案、监护人和重复球员合并等功能。" />}
     {section === "rankings" && <RankingsOverview events={data.events} />}
   </AdminWorkspaceShell>;
 }
 
-function Dashboard({ data }: { data: Awaited<ReturnType<typeof getAdminHomeData>> }) {
+function Dashboard({ data, viewerRole }: { data: Awaited<ReturnType<typeof getAdminHomeData>>; viewerRole: string }) {
   const recentEvents = data.events.slice(0, 4);
+  const currentEventId = recentEvents[0]?.id;
+  const primary = viewerRole === "system_admin"
+    ? { href: "/admin/events/new", label: "＋ 创建新赛事" }
+    : viewerRole === "referee"
+      ? { href: currentEventId ? `/admin/competition/scoring?event=${encodeURIComponent(currentEventId)}` : "/admin/competition", label: "进入比分录入" }
+      : { href: currentEventId ? `/admin/competition?event=${encodeURIComponent(currentEventId)}` : "/admin/competition", label: "进入当前赛事" };
+  const eventHref = (eventId: string) => viewerRole === "referee"
+    ? `/admin/competition/scoring?event=${encodeURIComponent(eventId)}`
+    : `/admin/competition?event=${encodeURIComponent(eventId)}`;
+
   return <main className="admin-home">
-    <section className="admin-home-hero"><div><small>HUACAI EVENT ADMIN</small><h2>华彩赛事管理后台</h2><p>先创建赛事，再进入本站的内容发布、报名审核、球员管理和竞赛执行。全局模块与单场赛事工作区使用同一套后台结构。</p></div><Link href="/admin/events/new">＋ 创建新赛事</Link></section>
+    <section className="admin-home-hero"><div><small>HUACAI EVENT ADMIN</small><h2>华彩赛事管理后台</h2><p>{viewerRole === "referee" ? "这里只显示分配给你的赛事。进入比分录入后，默认只看当前需要处理的比赛。" : "先选择一场赛事，再按内容发布、抽签、赛程、比分、晋级和排名的顺序处理。"}</p></div><Link href={primary.href}>{primary.label}</Link></section>
     <section className="admin-home-metrics">
-      <article><span>赛事总数</span><strong>{data.metrics.eventCount}</strong><small>已建立的赛事分站</small></article>
+      <article><span>可管理赛事</span><strong>{data.metrics.eventCount}</strong><small>{viewerRole === "system_admin" ? "系统内全部赛事" : "已分配给当前账号"}</small></article>
       <article><span>进行中赛事</span><strong>{data.metrics.activeEventCount}</strong><small>报名中或比赛中</small></article>
-      <article><span>待审核报名</span><strong>{data.metrics.pendingRegistrationCount}</strong><small>需要组委会处理</small></article>
+      <article><span>待审核报名</span><strong>{data.metrics.pendingRegistrationCount}</strong><small>后续报名模块接入后处理</small></article>
       <article><span>待发布内容</span><strong>{data.metrics.draftPublicationCount}</strong><small>仍处于草稿状态</small></article>
     </section>
     <section className="admin-home-grid">
-      <article className="admin-home-panel"><header><div><small>RECENT EVENTS</small><h3>最近赛事</h3></div><Link href="/admin/events">查看全部赛事 →</Link></header>{recentEvents.map((event) => <div className="admin-home-event" key={event.id}><span>{event.stationNo}</span><div><strong>{event.shortTitle}</strong><small>{event.city} · {event.venueName || "场馆待设置"} · {event.startDate} — {event.endDate}</small></div><Link href={`/admin/content/${event.id}`}>进入赛事工作区</Link></div>)}</article>
-      <article className="admin-home-panel"><header><div><small>QUICK ACCESS</small><h3>常用入口</h3></div></header><div className="admin-home-links"><Link href="/admin/events"><span>赛事管理</span><b>创建 / 设置 →</b></Link><Link href="/admin/content"><span>内容发布</span><b>选择赛事 →</b></Link><Link href="/admin/competition"><span>竞赛执行</span><b>裁判工作区 →</b></Link><Link href="/admin?section=rankings"><span>排名积分</span><b>全局查看 →</b></Link></div></article>
+      <article className="admin-home-panel"><header><div><small>MY EVENTS</small><h3>{viewerRole === "system_admin" ? "最近赛事" : "已分配赛事"}</h3></div>{viewerRole === "system_admin" && <Link href="/admin/events">查看全部赛事 →</Link>}</header>
+        {recentEvents.length ? recentEvents.map((event) => <div className="admin-home-event" key={event.id}><span>{event.stationNo}</span><div><strong>{event.shortTitle}</strong><small>{event.city} · {event.venueName || "场馆待设置"} · {event.startDate} — {event.endDate}</small></div><Link href={eventHref(event.id)}>{viewerRole === "referee" ? "录入比分" : "继续处理"}</Link></div>) : <div className="admin-simple-empty">{viewerRole === "system_admin" ? "尚未创建赛事。" : "当前账号尚未分配赛事，请联系系统管理员。"}</div>}
+      </article>
+      <article className="admin-home-panel"><header><div><small>NEXT ACTION</small><h3>常用入口</h3></div></header><div className="admin-home-links">
+        {viewerRole === "system_admin" && <Link href="/admin/events"><span>赛事管理</span><b>创建 / 设置 →</b></Link>}
+        {viewerRole !== "referee" && <Link href={currentEventId ? `/admin/content/${currentEventId}` : "/admin/content"}><span>内容发布</span><b>概览 / 规程 →</b></Link>}
+        <Link href={currentEventId ? `/admin/competition?event=${encodeURIComponent(currentEventId)}` : "/admin/competition"}><span>竞赛执行</span><b>查看当前待办 →</b></Link>
+        <Link href={currentEventId ? `/admin/competition/scoring?event=${encodeURIComponent(currentEventId)}` : "/admin/competition/scoring"}><span>比分录入</span><b>进入工作台 →</b></Link>
+      </div></article>
     </section>
   </main>;
 }

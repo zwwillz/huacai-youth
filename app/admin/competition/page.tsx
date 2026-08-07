@@ -34,10 +34,21 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
   const approvedCount = selectedGroup?.approvedCount ?? 0;
   const playoffCount = Math.max(0, approvedCount - 512);
   const byeCount = Math.max(0, 512 - approvedCount);
+  const nextPhase = phases.find((phase) => selectedGroup?.draws[phase.code]?.status !== "confirmed");
+  const nextDraw = nextPhase ? selectedGroup?.draws[nextPhase.code] : null;
+  const nextAction = !selectedGroup
+    ? { title: "先选择比赛组别", detail: "少年组和青年组分别维护，选择后再处理当前阶段。", label: "选择组别", href: "/admin/competition" }
+    : approvedCount === 0
+      ? { title: `${selectedGroup.name}尚无已审核名单`, detail: "抽签必须使用已审核参赛名单；请先确认本站报名数据。", label: "查看赛事设置", href: `/admin/events/${encodeURIComponent(data.selectedEventId)}` }
+      : nextPhase
+        ? { title: `${nextPhase.title} · ${nextDraw?.status === "draft" ? "确认抽签草稿" : "生成抽签"}`, detail: `当前名单 ${approvedCount} 人。完成这一阶段后再进入赛程编排，避免跨阶段操作。`, label: nextDraw?.status === "draft" ? "继续确认抽签" : "进入抽签", href: `/admin/competition/draw?event=${encodeURIComponent(data.selectedEventId)}&group=${encodeURIComponent(selectedGroup.id)}&phase=${nextPhase.code}` }
+        : { title: "当前组别签表均已确认", detail: "下一步进入赛程编排，设置比赛时间、球台、TV台和裁判。", label: "进入赛程编排", href: `/admin/competition/schedules?event=${encodeURIComponent(data.selectedEventId)}&group=${encodeURIComponent(selectedGroup.id)}` };
 
   return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={data.events} active="competition" pageTitle="竞赛执行" pageHint="先选组别，再处理当前任务" currentEventId={data.selectedEventId} eventScoped competitionTool="overview">
     <main className="competition-workspace-page"><section className="competition-workspace-shell">
       {selectedGroup && <CompetitionContextBar eventId={data.selectedEventId} eventTitle={currentEvent?.shortTitle || "竞赛执行"} groups={data.groups} selectedGroupId={selectedGroup.id} basePath="/admin/competition" eyebrow="竞赛执行" title={`${selectedGroup.name} · 竞赛总览`} description="统一使用同一个组别上下文。进入抽签、赛程、比分、晋级和最终排名后，仍然按照“组别 → 阶段 → 当前动作”的顺序操作，避免把两个组和四个阶段混在一起。" />}
+
+      <section className="competition-next-task"><div><small>当前建议下一步</small><h2>{nextAction.title}</h2><p>{nextAction.detail}</p></div><Link href={nextAction.href}>{nextAction.label} →</Link></section>
 
       {selectedGroup && <section className="competition-qualifier-summary">
         <article><small>当前报名审核</small><strong>{approvedCount}</strong><span>人</span></article>
