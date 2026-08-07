@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
-import { prepareFinalRankingDraft, prepareMain32Advancement } from "./main-competition-flow";
+import { prepareMain32Advancement } from "./main-competition-flow";
+import { prepareFinalRankingDraft } from "./final-ranking-engine";
 
 export type ScoringMatch = {
   assignmentId: string;
