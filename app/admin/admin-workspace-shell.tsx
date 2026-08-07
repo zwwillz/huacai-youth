@@ -14,7 +14,7 @@ export type AdminWorkspaceEvent = {
 };
 
 type ActiveSection = "dashboard" | "events" | "content" | "registrations" | "players" | "competition" | "rankings" | "accounts" | "logs";
-export type CompetitionTool = "overview" | "schedule" | "scoring" | "qualification";
+export type CompetitionTool = "overview" | "schedule" | "scoring" | "qualification" | "ranking";
 
 type Props = {
   viewer: { displayName: string; role: string; roleLabel?: string };
@@ -52,7 +52,8 @@ const competitionTools: Array<{ id: CompetitionTool; title: string; icon: string
   { id: "overview", title: "抽签与签表", icon: "签" },
   { id: "schedule", title: "赛程编排", icon: "程" },
   { id: "scoring", title: "比分录入", icon: "分" },
-  { id: "qualification", title: "晋级确认", icon: "晋" },
+  { id: "qualification", title: "晋级与正赛名单", icon: "晋" },
+  { id: "ranking", title: "最终排名", icon: "榜" },
 ];
 
 function competitionToolHref(tool: CompetitionTool, eventId?: string) {
@@ -60,6 +61,7 @@ function competitionToolHref(tool: CompetitionTool, eventId?: string) {
   if (tool === "schedule") return `/admin/competition/schedules${suffix}`;
   if (tool === "scoring") return `/admin/competition/scoring${suffix}`;
   if (tool === "qualification") return `/admin/competition/qualification${suffix}`;
+  if (tool === "ranking") return `/admin/competition/final-ranking${suffix}`;
   return `/admin/competition${suffix}`;
 }
 
