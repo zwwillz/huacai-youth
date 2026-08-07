@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
-import { maybeBuildMainTwoRoster } from "./main-stage-engine";
+import { prepareFinalRankingDraft, prepareMain32Advancement } from "./main-competition-flow";
 
 export type ScoringMatch = {
   assignmentId: string;
@@ -210,6 +210,7 @@ export async function confirmMatchResult(username: string, assignmentId: string)
     await tx`insert into public.audit_logs (id,actor_user_id,event_id,module_type,target_type,target_id,action,after_json,created_at)
       values (${newId("log")},${viewer.id},${match.eventId},'competition','match_result',${match.bracketMatchId},'confirm_match_result',${JSON.stringify({ winner: match.winnerPlayerName, loser: loser.name, propagatedTo: links.length })},${changedAt})`;
   });
-  if (match.phaseCode === "main-one") await maybeBuildMainTwoRoster(match.eventId, match.groupId);
+  if (match.phaseCode === "main-one") await prepareMain32Advancement(match.eventId, match.groupId);
+  if (match.phaseCode === "main-two") await prepareFinalRankingDraft(match.eventId, match.groupId);
   return { ok: true, eventId: match.eventId };
 }
