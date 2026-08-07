@@ -43,7 +43,7 @@ export default async function ScoringPage({ searchParams }: { searchParams: Prom
     const selectedPhaseTitle = ALL_PHASES.find((phase) => phase.code === data.filters.phaseCode)?.title || "当前阶段";
     return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="比分录入" pageHint="竞赛执行 · 当前待办优先" currentEventId={eventId} eventScoped competitionTool="scoring">
       <CompetitionContextBar eventId={eventId} eventTitle={data.event.shortTitle} groups={data.groups} selectedGroupId={data.filters.groupId} basePath="/admin/competition/scoring" phases={phases} selectedPhase={data.filters.phaseCode} eyebrow="比分录入" title={`${data.groups.find((group) => group.id === data.filters.groupId)?.name || "当前组别"} · ${selectedPhaseTitle}`} description="默认只显示当前组别、当前阶段和当前日期尚未完成的比赛；已经确认的场次自动收起，需要复核时可单独查看。尚未排赛程的阶段仍可提前进入查看等待状态。" />
-      <CompetitionPublicationBar eventId={eventId} moduleType="matches" title="对阵与比分" status={context.publications.matches.status} viewerRole={viewer.role} hint="比分确认只保存在后台；点击发布后，用户端才显示本次已确认的对阵与比分。后续继续确认比分会重新进入待发布状态。" />
+      <CompetitionPublicationBar eventId={eventId} moduleType="matches" title="对阵与比分" status={context.publications.matches.status} hasUnpublishedChanges={context.publications.matches.hasUnpublishedChanges} viewerRole={viewer.role} hint="比分确认后先进入后台未发布更新。用户端仍保持上一版已发布比分；点击“发布更新”后才整体切换。" />
       <ScoringWorkbenchClient initialData={data} />
     </AdminWorkspaceShell>;
   } catch (error) {
