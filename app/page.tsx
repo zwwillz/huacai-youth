@@ -62,7 +62,7 @@ export default async function Home() {
     <style>{`.content.public-competition-mode>.stack.public-live-stage-detail{display:flex!important}@media(max-width:900px){.tabs.short-tabs:has([data-public-comp-tab]){grid-template-columns:repeat(5,minmax(0,1fr))!important}}`}</style>
     <EventApp data={data} />
     <PublicContentEnhancer states={contentStates} />
-    <PublicCompetitionLiveEnhancer stations={data.stations} competitions={liveCompetitions} />
+    <PublicCompetitionLiveEnhancer stations={data.stations} events={liveCompetitions} />
     <LangfangRankingStatic rankings={rankings} />
     <LangfangDbEnhancer matches={competitionMatches} />
     <PlayerDbView players={players} />
