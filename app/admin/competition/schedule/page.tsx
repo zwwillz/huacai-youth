@@ -3,11 +3,21 @@ import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
 import { getAdminNavigationEvents } from "@/db/admin-ui";
 import { getScheduleWorkspaceData } from "@/db/schedule-engine";
+import { getCompetitionContextData } from "@/db/competition-context";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
+import CompetitionContextBar from "../competition-context-bar";
+import CompetitionPublicationBar from "../competition-publication-bar";
 import ScheduleWorkbenchClient from "./schedule-workbench-client";
+import "../competition-context-bar.css";
 import "./schedule-workbench.css";
 
 export const dynamic = "force-dynamic";
+const PHASES = [
+  { code: "qualifier-one", title: "资格赛第一场" },
+  { code: "qualifier-two", title: "资格赛第二场" },
+  { code: "main-one", title: "正赛第一阶段" },
+  { code: "main-two", title: "正赛第二阶段" },
+];
 
 export default async function ScheduleWorkbenchPage({ searchParams }: { searchParams: Promise<{ session?: string }> }) {
   const viewer = await getAdminViewer();
@@ -19,29 +29,15 @@ export default async function ScheduleWorkbenchPage({ searchParams }: { searchPa
 
   try {
     const data = await getScheduleWorkspaceData(viewer.username, sessionId);
-    return <AdminWorkspaceShell
-      viewer={{ displayName: viewer.displayName, role: viewer.role }}
-      events={events}
-      active="competition"
-      pageTitle="赛程与球台"
-      pageHint="竞赛执行 · 时间 / 球台 / 裁判"
-      currentEventId={data.bracket.eventId}
-      eventScoped
-      competitionTool="schedule"
-    >
+    const context = await getCompetitionContextData(viewer.username, data.bracket.eventId);
+    return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="赛程编排" pageHint="竞赛执行 · 当前阶段排程" currentEventId={data.bracket.eventId} eventScoped competitionTool="schedule">
+      <CompetitionContextBar eventId={data.bracket.eventId} eventTitle={data.bracket.eventTitle} groups={context.groups} selectedGroupId={data.bracket.groupId} basePath="/admin/competition/schedules" phases={PHASES} selectedPhase={data.bracket.phaseCode} eyebrow="赛程编排" title={`${data.bracket.groupName} · ${data.bracket.phaseTitle}`} description="当前页面只编辑这一组别、这一阶段的时间、球台与裁判。保存后先在后台检查，确认无误再发布到用户端。" />
+      <CompetitionPublicationBar eventId={data.bracket.eventId} moduleType="schedule" title="签表与赛程" status={context.publications.schedule.status} viewerRole={viewer.role} hint="任何时间、球台或签表调整都会自动回到“待发布”。发布后用户端才读取当前正式赛程。" />
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 10 }}><Link href={`/admin/competition/print?session=${encodeURIComponent(sessionId)}`} style={{ padding: "9px 12px", borderRadius: 9, background: "#f1ebf7", color: "#67478f", fontSize: 9, fontWeight: 900, textDecoration: "none" }}>打印签表 / 赛程</Link></div>
       <ScheduleWorkbenchClient initialData={data} />
     </AdminWorkspaceShell>;
   } catch (error) {
-    return <AdminWorkspaceShell
-      viewer={{ displayName: viewer.displayName, role: viewer.role }}
-      events={events}
-      active="competition"
-      pageTitle="赛程与球台"
-      pageHint="竞赛执行 · 时间 / 球台 / 裁判"
-      eventScoped
-      competitionTool="schedule"
-    >
+    return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="赛程编排" pageHint="竞赛执行 · 当前阶段排程" eventScoped competitionTool="schedule">
       <main className="backend-state backend-denied"><div className="backend-state-logo">程</div><small>赛程编排</small><h1>暂时不能进入赛程编排</h1><p>{error instanceof Error ? error.message : "赛程数据读取失败。"}</p><a href="/admin/competition/schedules">返回赛程编排</a></main>
     </AdminWorkspaceShell>;
   }
