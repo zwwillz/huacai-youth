@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAdminActionDialog } from "../admin-action-dialog";
+import { eventStatusLabel } from "../admin-status";
 
 type EventRow = {
   id: string;
@@ -16,15 +17,6 @@ type EventRow = {
   status: string;
   publishStatus: string;
   publicationCount: number;
-};
-
-const statusLabels: Record<string, string> = {
-  draft: "草稿",
-  registration_open: "报名中",
-  registration_closed: "报名截止",
-  in_progress: "比赛中",
-  finished: "已结束",
-  archived: "已归档",
 };
 
 export default function EventListClient({ events, canDelete }: { events: EventRow[]; canDelete: boolean }) {
@@ -54,7 +46,7 @@ export default function EventListClient({ events, canDelete }: { events: EventRo
   return <>
     {message && <div className="event-settings-message">{message}</div>}
     <section className="event-settings-index-grid">{events.map((event) => <article key={event.id}>
-      <header><span>第 {event.stationNo} 站</span><b>{statusLabels[event.status] ?? event.status}</b></header>
+      <header><span>第 {event.stationNo} 站</span><b>{eventStatusLabel(event.status)}</b></header>
       <h2>{event.shortTitle}</h2>
       <p>{event.city} · {event.venueName || "场馆待设置"}</p>
       <dl><div><dt>比赛时间</dt><dd>{event.startDate} — {event.endDate}</dd></div><div><dt>前端状态</dt><dd>{event.publishStatus === "published" ? "已发布" : "草稿"}</dd></div><div><dt>发布模块</dt><dd>{event.publicationCount} / 6</dd></div></dl>
