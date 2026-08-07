@@ -11,7 +11,8 @@ import { getPublicSiteData } from "@/db/public";
 import { getPublicContentState } from "@/db/public-content";
 import { getPublicRankings } from "@/db/rankings";
 import { getCompetitionMatches } from "@/db/competition-matches";
-import { getPublicCompetitionEvents, type PublicCompetitionEvent } from "@/db/public-competition-live";
+import type { PublicCompetitionEvent } from "@/db/public-competition-live";
+import { getPublishedCompetitionEvents } from "@/db/public-competition-published";
 import { getPublicPlayerDetail, getPublicPlayerSummaries } from "@/db/player-data";
 
 export const runtime = "nodejs";
@@ -43,14 +44,14 @@ function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>[
 export default async function Home() {
   const data = await getPublicSiteData();
   const langfangEventId = data.stations.find((station) => station.id === "langfang")?.eventId;
-  // 廊坊继续作为已经确认的前端UI基准；其它分站只要后台发布对应模块，即使当前还没有签表数据，也保留统一入口与友好等待状态。
+  // 廊坊继续作为已经确认的前端UI基准；其它分站读取“最后一次正式发布快照”，后台未发布修改不会直接覆盖用户端。
   const dynamicCompetitionEventIds = data.stations.filter((station) => station.id !== "langfang").map((station) => station.eventId);
   const [contentStates, rankings, dynamicRankings, competitionMatches, liveCompetitions, players] = await Promise.all([
     getPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title }))),
     langfangEventId ? getPublicRankings(langfangEventId) : Promise.resolve([]),
     Promise.all(dynamicCompetitionEventIds.map((eventId) => getPublicRankings(eventId))).then((groups) => groups.flat()),
     langfangEventId ? getCompetitionMatches(langfangEventId) : Promise.resolve([]),
-    dynamicCompetitionEventIds.length ? getPublicCompetitionEvents(dynamicCompetitionEventIds) : Promise.resolve([]),
+    dynamicCompetitionEventIds.length ? getPublishedCompetitionEvents(dynamicCompetitionEventIds) : Promise.resolve([]),
     getPublicPlayerSummaries(),
   ]);
   const liveCompetitionByEvent = new Map(liveCompetitions.map((event) => [event.eventId, event]));
@@ -64,32 +65,16 @@ export default async function Home() {
 
   const demoSummary = players.find((player) => competitionMatches.some((match) => match.playerAId === player.id || match.playerBId === player.id)) ?? players[0] ?? null;
   const demoPlayer = demoSummary ? await getPublicPlayerDetail(demoSummary.id) : null;
-  const demoMatches = demoSummary
-    ? competitionMatches.filter((match) => match.playerAId === demoSummary.id || match.playerBId === demoSummary.id)
-    : [];
+  const demoMatches = demoSummary ? competitionMatches.filter((match) => match.playerAId === demoSummary.id || match.playerBId === demoSummary.id) : [];
   const visualCss = eventVisualCss(data.stations);
 
   return <>
     <style dangerouslySetInnerHTML={{ __html: visualCss }} />
     <style>{`
       /* 数据库竞赛分站的顶部菜单严格使用廊坊站原生 tabs 视觉，不使用单独的五列网格样式。 */
-      .tabs.public-five-tabs,.tabs.public-unified-tabs{
-        display:flex!important;
-        grid-template-columns:none!important;
-        width:max-content!important;
-        max-width:100%!important;
-        gap:5px!important;
-        padding:5px!important;
-      }
-      .tabs.public-five-tabs button,.tabs.public-unified-tabs button{
-        min-width:0!important;
-        padding:8px 14px!important;
-        font-size:11px!important;
-      }
-      @media(max-width:900px){
-        .tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;width:max-content!important}
-        .tabs.public-five-tabs button,.tabs.public-unified-tabs button{padding:8px 14px!important;font-size:11px!important}
-      }
+      .tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;grid-template-columns:none!important;width:max-content!important;max-width:100%!important;gap:5px!important;padding:5px!important}
+      .tabs.public-five-tabs button,.tabs.public-unified-tabs button{min-width:0!important;padding:8px 14px!important;font-size:11px!important}
+      @media(max-width:900px){.tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;width:max-content!important}.tabs.public-five-tabs button,.tabs.public-unified-tabs button{padding:8px 14px!important;font-size:11px!important}}
     `}</style>
     <EventApp data={data} />
     <PublicContentEnhancer states={contentStates} />
