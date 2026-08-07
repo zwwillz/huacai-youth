@@ -16,6 +16,26 @@ delete from public.competition_seed_entries
 where event_id='event_391ce7a20bd7420fba77caeea42c0885'
   and player_id like 'sim_jinan_seed_%';
 
+-- These control tables intentionally have no foreign keys, so draw-session cascades do not remove them.
+delete from public.competition_main_roster_locks
+where event_id='event_391ce7a20bd7420fba77caeea42c0885';
+
+delete from public.competition_main_advancement_batches
+where event_id='event_391ce7a20bd7420fba77caeea42c0885';
+
+delete from public.competition_final_ranking_batches
+where event_id='event_391ce7a20bd7420fba77caeea42c0885';
+
+-- Qualification entries also reference final bracket matches, so remove them before draw cascades.
+delete from public.competition_qualification_entries
+where batch_id in (
+  select id from public.competition_qualification_batches
+  where event_id='event_391ce7a20bd7420fba77caeea42c0885'
+);
+
+delete from public.competition_qualification_batches
+where event_id='event_391ce7a20bd7420fba77caeea42c0885';
+
 -- Cascades to brackets, bracket matches, match links, schedules and qualification batches/entries.
 delete from public.draw_sessions
 where event_id='event_391ce7a20bd7420fba77caeea42c0885'
@@ -58,7 +78,10 @@ where event_id='event_391ce7a20bd7420fba77caeea42c0885';
 
 update public.publications
 set status=case when module_type='regulation' then 'published' else 'draft' end,
-    published_at=case when module_type='regulation' then '2026-08-06T16:36:17.637Z' else null end
+    published_at=case when module_type='regulation' then '2026-08-06T16:36:17.637Z' else null end,
+    snapshot_json=case when module_type='regulation' then snapshot_json else null end,
+    has_unpublished_changes=false,
+    draft_updated_at=null
 where event_id='event_391ce7a20bd7420fba77caeea42c0885';
 
 commit;
