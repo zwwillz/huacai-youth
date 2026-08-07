@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const phases = [
   { code: "qualifier-one", no: "01", title: "资格赛第一场", note: "一次抽签 · 完整分区签表", source: "已审核参赛名单", active: true },
-  { code: "qualifier-two", no: "02", title: "资格赛第二场", note: "重新抽签 · 未晋级球员", source: "第一场未晋级名单", active: false },
+  { code: "qualifier-two", no: "02", title: "资格赛第二场", note: "独立抽签 · 第一场未晋级球员", source: "第一场晋级确认后自动生成", active: true },
   { code: "main-one", no: "03", title: "正赛第一阶段", note: "资格赛晋级 + 可选种子", source: "48名资格赛晋级 + 种子", active: false },
   { code: "main-two", no: "04", title: "正赛第二阶段", note: "重新抽签 · 最终阶段", source: "正赛第一阶段晋级名单", active: false },
 ] as const;
@@ -50,7 +50,7 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
         </section>}
 
         <section className="competition-stage-board">
-          <header><div><small>EVENT STAGES</small><h2>竞赛阶段</h2><p>资格赛第一场 / 第二场各自只抽签一次，从实际人数进入标准签表后，在同一张分区签表中连续比赛到每区冠军。</p></div></header>
+          <header><div><small>EVENT STAGES</small><h2>竞赛阶段</h2><p>资格赛第一场 / 第二场各自只抽签一次。第一场晋级确认后，系统自动把未晋级球员生成第二场参赛名单，再进行第二次独立抽签。</p></div></header>
           <div className="competition-stage-grid">{phases.map((phase) => {
             const draw = selectedGroup?.draws[phase.code];
             return <article key={phase.code} className={phase.active ? "ready" : "planned"}>
@@ -69,10 +69,10 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
           <i>→</i>
           <article className="available"><span>03</span><h2>比分录入</h2><p>裁判独立入口现场录分；组委会确认后，胜者自动写入下一场。</p><b><Link href={`/admin/competition/scoring?event=${encodeURIComponent(data.selectedEventId)}`}>进入比分录入</Link></b></article>
           <i>→</i>
-          <article><span>04</span><h2>晋级确认</h2><p>分区冠军、决胜负者局胜率候补、种子缺席递补统一确认。</p><b><Link href={`/admin/competition/qualification?event=${encodeURIComponent(data.selectedEventId)}`}>查看晋级工作区</Link></b></article>
+          <article className="available"><span>04</span><h2>晋级确认</h2><p>自动识别分区冠军，计算分区决胜负者局胜率，默认前8增补并允许组委会确认调整。</p><b><Link href={`/admin/competition/qualification?event=${encodeURIComponent(data.selectedEventId)}`}>进入晋级确认</Link></b></article>
         </section>
 
-        <section className="competition-principles"><article><strong>资格赛规则已经固化到引擎设计</strong><p>512签表默认划分16个32人分区，每区产生1名直接晋级球员；16名分区决胜轮负者进入候补池，按局胜率取前8名，因此单场资格赛共24人晋级。</p></article><article><strong>赛程不改变抽签关系</strong><p>自动排程或人工调整只改变比赛日期、时间、球台与裁判。完整签表始终保持原抽签关系，并可叠加最终时间与台号打印。</p></article><article><strong>结果可审计</strong><p>裁判提交比分、组委会确认赛果、人工调整赛程以及抽签重抽都会写入操作日志。</p></article></section>
+        <section className="competition-principles"><article><strong>资格赛规则已经固化到引擎设计</strong><p>512签表默认划分16个32人分区，每区产生1名直接晋级球员；16名分区决胜轮负者进入候补池，按局胜率取前8名，因此单场资格赛共24人晋级。</p></article><article><strong>第一场确认后自动产生第二场名单</strong><p>系统从第一场抽签名单中自动扣除24名已晋级球员，其余球员成为资格赛第二场参赛名单，并开放第二场独立抽签。</p></article><article><strong>结果可审计</strong><p>裁判提交比分、组委会确认赛果、人工调整赛程、晋级确认以及抽签重抽都会写入操作日志。</p></article></section>
       </section>
     </main>
   </AdminWorkspaceShell>;
