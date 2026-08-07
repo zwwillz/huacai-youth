@@ -19,8 +19,6 @@ export type CompetitionBracketIndexItem = {
   scheduledCount: number;
 };
 
-type Viewer = { id: string; role: string };
-
 async function requireViewer(username: string, eventId: string) {
   return requireEventAccess(username, eventId, {
     allowedRoles: ["system_admin", "committee", "referee"],
