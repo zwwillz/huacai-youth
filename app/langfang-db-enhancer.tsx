@@ -7,6 +7,11 @@ type Group = "少年组" | "青年组";
 
 const POOLS = ["A","B","C","D","E","F","G","H"] as const;
 
+function isLangfangContext(){
+  const title=document.querySelector<HTMLElement>(".top h3")?.textContent?.trim()??"";
+  return title.includes("廊坊");
+}
+
 function readGroup(root: ParentNode): Group {
   return root.querySelector<HTMLElement>(".group-switch button.active span")?.textContent?.trim() === "青年组" ? "青年组" : "少年组";
 }
@@ -249,6 +254,9 @@ export default function LangfangDbEnhancer({matches}:{matches:CompetitionMatch[]
   useEffect(() => {
     const lastQuery = {value:""};
     const sync = () => {
+      // 廊坊静态前端仍由这一层用数据库补数据；其它分站已经走统一动态竞赛层，
+      // 这里绝不能再去改写其它分站的签表、对阵或比分。
+      if(!isLangfangContext())return;
       patchMatchList(matches);
       patchBracket(matches, lastQuery);
     };
