@@ -1,5 +1,6 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { getEventManagementData, saveEventManagementData, type EventManagementInput } from "@/db/event-management";
+import { syncEventOverviewPublication } from "@/db/event-publication-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,9 @@ export async function POST(request: Request) {
   if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
   try {
     const input = await request.json() as EventManagementInput;
-    return Response.json({ data: await saveEventManagementData(viewer.username, input) });
+    const data = await saveEventManagementData(viewer.username, input);
+    await syncEventOverviewPublication(input.eventId, input.publishStatus === "published");
+    return Response.json({ data });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "赛事资料保存失败。" }, { status: 400 });
   }
