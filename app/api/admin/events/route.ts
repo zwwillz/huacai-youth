@@ -2,6 +2,7 @@ import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { EventInput, saveEvent } from "@/db/admin";
 import { ensureNewEventDefaults } from "@/db/event-bootstrap";
 import { syncEventOverviewPublication } from "@/db/event-publication-sync";
+import { revalidateTag } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
     } else {
       await syncEventOverviewPublication(input.id, input.publishStatus === "published");
     }
+    revalidateTag("admin-navigation-events", { expire: 0 });
     return Response.json({ data });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "赛事保存失败。" }, { status: 400 });
