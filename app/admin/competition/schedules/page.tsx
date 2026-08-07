@@ -42,8 +42,8 @@ export default async function CompetitionSchedulesPage({ searchParams }: { searc
 
   return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="赛程编排" pageHint="竞赛执行 · 按组别与阶段编排" currentEventId={eventId} eventScoped competitionTool="schedule">
     <main className="schedule-index-page">
-      <CompetitionContextBar eventId={eventId} eventTitle={context.event.shortTitle} groups={context.groups} selectedGroupId={selectedGroupId} basePath="/admin/competition/schedules" phases={phaseOptions} selectedPhase={selectedPhase} eyebrow="赛程编排" title={`${context.groups.find((group) => group.id === selectedGroupId)?.name || "当前组别"} · ${PHASES.find(([code]) => code === selectedPhase)?.[1] || "当前阶段"}`} description="每次只处理一个组别、一个阶段。先配置时间与球台并保存，确认无误后再统一发布到用户端。" />
-      <CompetitionPublicationBar eventId={eventId} moduleType="schedule" title="签表与赛程" status={context.publications.schedule.status} viewerRole={viewer.role} hint="抽签、时间、球台等后台调整不会直接公开；点击发布后，用户端赛程入口才展示当前正式数据。" />
+      <CompetitionContextBar eventId={eventId} eventTitle={context.event.shortTitle} groups={context.groups} selectedGroupId={selectedGroupId} basePath="/admin/competition/schedules" phases={phaseOptions} selectedPhase={selectedPhase} eyebrow="赛程编排" title={`${context.groups.find((group) => group.id === selectedGroupId)?.name || "当前组别"} · ${PHASES.find(([code]) => code === selectedPhase)?.[1] || "当前阶段"}`} description="每次只处理一个组别、一个阶段。先配置时间与球台并保存，用户端继续保持上一版正式赛程；确认无误后再发布更新。" />
+      <CompetitionPublicationBar eventId={eventId} moduleType="schedule" title="签表与赛程" status={context.publications.schedule.status} hasUnpublishedChanges={context.publications.schedule.hasUnpublishedChanges} viewerRole={viewer.role} hint="抽签、时间、球台等后台调整不会直接覆盖用户端；点击发布更新后，用户端才整体切换到本次正式版本。" />
 
       {current ? <section className="schedule-current-stage">
         <article>
