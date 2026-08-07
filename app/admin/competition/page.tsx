@@ -33,10 +33,10 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
   const playoffCount = Math.max(0, approvedCount - 512);
   const byeCount = Math.max(0, 512 - approvedCount);
 
-  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={data.events} active="competition" pageTitle="竞赛执行" pageHint="裁判工作区 · 动态竞赛数据" currentEventId={data.selectedEventId} eventScoped>
+  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={data.events} active="competition" pageTitle="抽签与签表" pageHint="竞赛执行 · 阶段控制" currentEventId={data.selectedEventId} eventScoped competitionTool="overview">
     <main className="competition-workspace-page">
       <section className="competition-workspace-shell">
-        <header className="competition-workspace-head"><div><small>COMPETITION OPERATIONS</small><h1>{currentEvent?.shortTitle || "竞赛执行工作区"}</h1><p>从名单锁定、抽签、分区签表开始，之后依次接入赛程与球台、比分与赛果、晋级与排名。裁判组负责执行，组委会负责关键确认。</p></div><b>竞赛引擎 · 第一阶段</b></header>
+        <header className="competition-workspace-head"><div><small>COMPETITION OPERATIONS</small><h1>{currentEvent?.shortTitle || "竞赛执行工作区"}</h1><p>竞赛执行已经拆分为抽签与签表、赛程编排、比分录入、晋级确认四个独立工作区。这里负责阶段控制与抽签入口。</p></div><b>竞赛引擎</b></header>
 
         {data.groups.length > 0 && <nav className="competition-group-tabs">{data.groups.map((group) => <Link key={group.id} className={selectedGroup?.id === group.id ? "active" : ""} href={`/admin/competition?event=${encodeURIComponent(data.selectedEventId)}&group=${encodeURIComponent(group.id)}`}><strong>{group.name}</strong><span>{group.approvedCount} 人已审核</span></Link>)}</nav>}
 
@@ -63,16 +63,16 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
         </section>
 
         <section className="competition-flow">
-          <article className="available"><span>01</span><h2>抽签与签表</h2><p>已开始开发：实际人数、附加赛、轮空、32人分区、抽签版本、现场抽签大屏。</p><b>当前可测试资格赛第一场</b></article>
+          <article className="available"><span>01</span><h2>抽签与签表</h2><p>实际人数、附加赛、轮空、分区、抽签版本、现场大屏与完整比赛树。</p><b>已开放</b></article>
           <i>→</i>
-          <article><span>02</span><h2>赛程与球台</h2><p>由确认后的签表产生比赛关系，再自动编排日期、时间、球台与TV台。</p><b>下一阶段</b></article>
+          <article className="available"><span>02</span><h2>赛程编排</h2><p>可配置时间段、球台与TV台，自动编排并支持人工调整和裁判分配。</p><b><Link href={`/admin/competition/schedules?event=${encodeURIComponent(data.selectedEventId)}`}>进入赛程编排</Link></b></article>
           <i>→</i>
-          <article><span>03</span><h2>比分与赛果</h2><p>裁判现场录分、特殊赛果、更正与确认，结果驱动自动晋级。</p><b>后续接入</b></article>
+          <article className="available"><span>03</span><h2>比分录入</h2><p>裁判独立入口现场录分；组委会确认后，胜者自动写入下一场。</p><b><Link href={`/admin/competition/scoring?event=${encodeURIComponent(data.selectedEventId)}`}>进入比分录入</Link></b></article>
           <i>→</i>
-          <article><span>04</span><h2>晋级与排名</h2><p>每区冠军直接晋级；各区决胜轮负者按局胜率排序增补，种子缺席也从候补池递补。</p><b>后续接入</b></article>
+          <article><span>04</span><h2>晋级确认</h2><p>分区冠军、决胜负者局胜率候补、种子缺席递补统一确认。</p><b><Link href={`/admin/competition/qualification?event=${encodeURIComponent(data.selectedEventId)}`}>查看晋级工作区</Link></b></article>
         </section>
 
-        <section className="competition-principles"><article><strong>资格赛规则已经固化到引擎设计</strong><p>512签表默认划分16个32人分区，每区产生1名直接晋级球员；16名分区决胜轮负者进入候补池，按局胜率取前8名，因此单场资格赛共24人晋级。</p></article><article><strong>种子从数据层预留</strong><p>正赛第一阶段可以配置是否启用种子及种子数量。种子不参赛导致正赛缺额时，系统将按资格赛候补池局胜率顺序增补，但需要组委会确认。</p></article><article><strong>抽签结果可审计</strong><p>真正随机结果在服务器一次性生成并保存版本；现场大屏只负责动画揭晓。重抽必须作废旧版本并填写原因，历史操作写入日志。</p></article></section>
+        <section className="competition-principles"><article><strong>资格赛规则已经固化到引擎设计</strong><p>512签表默认划分16个32人分区，每区产生1名直接晋级球员；16名分区决胜轮负者进入候补池，按局胜率取前8名，因此单场资格赛共24人晋级。</p></article><article><strong>赛程不改变抽签关系</strong><p>自动排程或人工调整只改变比赛日期、时间、球台与裁判。完整签表始终保持原抽签关系，并可叠加最终时间与台号打印。</p></article><article><strong>结果可审计</strong><p>裁判提交比分、组委会确认赛果、人工调整赛程以及抽签重抽都会写入操作日志。</p></article></section>
       </section>
     </main>
   </AdminWorkspaceShell>;
