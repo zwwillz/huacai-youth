@@ -80,7 +80,7 @@ export default function FinalRankingClient({ initialData }: { initialData: Final
       </> : <section className="final-ranking-empty"><strong>最终排名还没有产生</strong><p>当前用户端不会显示临时排名，只显示本站奖金列表。正赛赛果全部确认后，后台会自动生成64人最终排名草稿。</p></section>}
 
       <footer><div><strong>{group.batch ? `排名状态：${group.batch.status === "published" ? "已发布" : group.batch.status === "confirmed" ? "已确认" : "草稿"}` : "等待排名草稿"}</strong><p>系统自动排名可人工修正；保存只是后台草稿，确认是锁定，发布才进入用户端。</p></div>{group.batch && !readOnly && <div className="final-ranking-actions">
-        {group.batch.status === "draft" && !editing && <button className="secondary" disabled={Boolean(busy)} onClick={() => { setManualRows(group.rows); setEditing(true); }}>人工调整</button>}
+        {canEdit && !editing && <button className="secondary" disabled={Boolean(busy)} onClick={() => { setManualRows(group.rows); setEditing(true); }}>人工调整</button>}
         {group.batch.status === "draft" && editing && <><button className="secondary" disabled={Boolean(busy)} onClick={() => { setManualRows(group.rows); setEditing(false); }}>取消调整</button><button disabled={Boolean(busy)} onClick={saveManual}>{busy === `manual-${group.batch.id}` ? "保存中..." : "保存人工调整"}</button></>}
         {group.batch.status === "draft" && !editing && <button disabled={Boolean(busy)} onClick={() => post("confirm", group.batch!.id, group.groupName)}>{busy === `confirm-${group.batch.id}` ? "确认中..." : "确认最终排名"}</button>}
         {group.batch.status === "confirmed" && <button className="publish" disabled={Boolean(busy)} onClick={() => post("publish", group.batch!.id, group.groupName)}>{busy === `publish-${group.batch.id}` ? "发布中..." : "发布到用户端"}</button>}
