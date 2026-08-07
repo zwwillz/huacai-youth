@@ -23,7 +23,9 @@ export async function assertMainRosterMutable(eventId: string, groupId: string) 
     select count(*)::int as count from public.draw_sessions
     where event_id=${eventId} and group_id=${groupId} and phase_code='main-one' and status in ('draft','confirmed')
   `;
-  if ((draws[0]?.count ?? 0) > 0) throw new Error("正赛第一阶段已经生成抽签，种子和64人名单已进入竞赛流程。如需调整，请先作废该阶段抽签。\n");
+  if ((draws[0]?.count ?? 0) > 0) throw new Error("正赛第一阶段已经生成抽签，种子和64人名单已进入竞赛流程。如需调整，请先作废该阶段抽签。");
+  const lock = await getMainRosterLockStatus(eventId, groupId);
+  if (lock?.status === "locked") throw new Error("64人正赛名单已经锁定。若要调整种子或递补，请先点击“解锁名单”并填写调整原因。");
 }
 
 export async function assertSeedEntryMutable(seedEntryId: string) {
