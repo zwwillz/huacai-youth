@@ -147,6 +147,7 @@ export async function getPublicSiteData(): Promise<EventData> {
 
   if (!eventRows.length) return { stations: [], matches: [], players: [] };
   const eventIds = eventRows.map((row) => row.id);
+  const legacyEventId = eventRows.find((row) => visualId(row.id) === "langfang")?.id ?? eventIds[0];
 
   const [orgRows, sponsorRows, documentRows, phaseRows, groupRows, matchRows, registrationRows] = await Promise.all([
     db.select().from(eventOrganizations).where(inArray(eventOrganizations.eventId, eventIds)).orderBy(asc(eventOrganizations.sortOrder)),
@@ -170,11 +171,11 @@ export async function getPublicSiteData(): Promise<EventData> {
       table: matches.tableName,
       isTv: matches.isTv,
       status: matches.status,
-    }).from(matches).where(inArray(matches.eventId, eventIds)).orderBy(asc(matches.matchDate), asc(matches.matchTime), asc(matches.orderNo)),
+    }).from(matches).where(eq(matches.eventId, legacyEventId)).orderBy(asc(matches.matchDate), asc(matches.matchTime), asc(matches.orderNo)),
     db.select({ eventId: registrations.eventId, groupId: registrations.groupId, playerId: registrations.playerId, playerName: players.fullName })
       .from(registrations)
       .innerJoin(players, eq(registrations.playerId, players.id))
-      .where(inArray(registrations.eventId, eventIds)),
+      .where(eq(registrations.eventId, legacyEventId)),
   ]);
 
   const groupById = new Map(groupRows.map((row) => [row.id, row.name as Group]));

@@ -39,13 +39,12 @@ export default function PublicTabsUnifier() {
       window.requestAnimationFrame(sync);
     };
 
-    const observer = new MutationObserver(sync);
-    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("huacai:navigation", sync);
     document.addEventListener("click", onClick, false);
     sync();
 
     return () => {
-      observer.disconnect();
+      window.removeEventListener("huacai:navigation", sync);
       document.removeEventListener("click", onClick, false);
     };
   }, []);

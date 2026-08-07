@@ -1,9 +1,9 @@
+import { unstable_cache } from "next/cache";
 import EventApp from "./event-app";
 import LangfangRankingStatic from "./langfang-ranking-static";
 import LangfangDbEnhancer from "./langfang-db-enhancer";
 import PublicContentEnhancer from "./public-content-enhancer";
 import PublicCompetitionLiveV2 from "./public-competition-live-v2";
-import PublicCompetitionAutoRefresh from "./public-competition-auto-refresh";
 import PublicTabsUnifier from "./public-tabs-unifier";
 import PlayerDbView from "./player-db-view";
 import MePreview from "./me-preview";
@@ -11,13 +11,14 @@ import { getPublicSiteData } from "@/db/public";
 import { getPublicContentState } from "@/db/public-content";
 import { getPublicRankings } from "@/db/rankings";
 import { getCompetitionMatches } from "@/db/competition-matches";
-import type { PublicCompetitionEvent } from "@/db/public-competition-live";
-import { getPublishedCompetitionEvents } from "@/db/public-competition-published";
-import { getPublicPlayerDetail, getPublicPlayerSummaries } from "@/db/player-data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
+
+const getCachedPublicSiteData = unstable_cache(getPublicSiteData, ["public-site-data-v2"], { revalidate: 60, tags: ["public-site"] });
+const getCachedPublicContentState = unstable_cache(getPublicContentState, ["public-content-state-v2"], { revalidate: 60, tags: ["public-content"] });
+const getCachedPublicRankings = unstable_cache(getPublicRankings, ["public-rankings-v2"], { revalidate: 60, tags: ["public-rankings"] });
+const getCachedCompetitionMatches = unstable_cache(getCompetitionMatches, ["legacy-competition-matches-v2"], { revalidate: 60, tags: ["legacy-matches"] });
 
 function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>["stations"]) {
   return stations.map((station) => {
@@ -42,48 +43,29 @@ function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>[
 }
 
 export default async function Home() {
-  const data = await getPublicSiteData();
+  const data = await getCachedPublicSiteData();
   const langfangEventId = data.stations.find((station) => station.id === "langfang")?.eventId;
-  // 廊坊继续作为已经确认的前端UI基准；其它分站读取“最后一次正式发布快照”，后台未发布修改不会直接覆盖用户端。
-  const dynamicCompetitionEventIds = data.stations.filter((station) => station.id !== "langfang").map((station) => station.eventId);
-  const [contentStates, rankings, dynamicRankings, competitionMatches, liveCompetitions, players] = await Promise.all([
-    getPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title }))),
-    langfangEventId ? getPublicRankings(langfangEventId) : Promise.resolve([]),
-    Promise.all(dynamicCompetitionEventIds.map((eventId) => getPublicRankings(eventId))).then((groups) => groups.flat()),
-    langfangEventId ? getCompetitionMatches(langfangEventId) : Promise.resolve([]),
-    dynamicCompetitionEventIds.length ? getPublishedCompetitionEvents(dynamicCompetitionEventIds) : Promise.resolve([]),
-    getPublicPlayerSummaries(),
+  const [contentStates, rankings, competitionMatches] = await Promise.all([
+    getCachedPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title }))),
+    langfangEventId ? getCachedPublicRankings(langfangEventId) : Promise.resolve([]),
+    langfangEventId ? getCachedCompetitionMatches(langfangEventId) : Promise.resolve([]),
   ]);
-  const liveCompetitionByEvent = new Map(liveCompetitions.map((event) => [event.eventId, event]));
-  const normalizedLiveCompetitions: PublicCompetitionEvent[] = dynamicCompetitionEventIds.map((eventId) => liveCompetitionByEvent.get(eventId) ?? ({
-    eventId,
-    phaseSummaries: [],
-    matches: [],
-    qualificationEntries: [],
-    mainRoster: [],
-  }));
-
-  const demoSummary = players.find((player) => competitionMatches.some((match) => match.playerAId === player.id || match.playerBId === player.id)) ?? players[0] ?? null;
-  const demoPlayer = demoSummary ? await getPublicPlayerDetail(demoSummary.id) : null;
-  const demoMatches = demoSummary ? competitionMatches.filter((match) => match.playerAId === demoSummary.id || match.playerBId === demoSummary.id) : [];
   const visualCss = eventVisualCss(data.stations);
 
   return <>
     <style dangerouslySetInnerHTML={{ __html: visualCss }} />
     <style>{`
-      /* 数据库竞赛分站的顶部菜单严格使用廊坊站原生 tabs 视觉，不使用单独的五列网格样式。 */
       .tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;grid-template-columns:none!important;width:max-content!important;max-width:100%!important;gap:5px!important;padding:5px!important}
       .tabs.public-five-tabs button,.tabs.public-unified-tabs button{min-width:0!important;padding:8px 14px!important;font-size:11px!important}
       @media(max-width:900px){.tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;width:max-content!important}.tabs.public-five-tabs button,.tabs.public-unified-tabs button{padding:8px 14px!important;font-size:11px!important}}
     `}</style>
     <EventApp data={data} />
     <PublicContentEnhancer states={contentStates} />
-    <PublicCompetitionLiveV2 stations={data.stations} events={normalizedLiveCompetitions} contentStates={contentStates} rankings={dynamicRankings} />
-    <PublicCompetitionAutoRefresh />
+    <PublicCompetitionLiveV2 stations={data.stations} contentStates={contentStates} />
     <PublicTabsUnifier />
     <LangfangRankingStatic rankings={rankings} />
     <LangfangDbEnhancer matches={competitionMatches} />
-    <PlayerDbView players={players} />
-    <MePreview player={demoPlayer} matches={demoMatches} />
+    <PlayerDbView />
+    <MePreview />
   </>;
 }

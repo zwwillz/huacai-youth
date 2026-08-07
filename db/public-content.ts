@@ -21,17 +21,16 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
   const db = getDb();
   const sql = getSqlClient();
   const eventIds = stations.map((station) => station.eventId);
-  const [publicationRows, documentRows, guideGroups] = await Promise.all([
+  const [publicationRows, documentRows, guideRows] = await Promise.all([
     db.select().from(publications).where(inArray(publications.eventId, eventIds)),
     db.select().from(eventDocuments).where(inArray(eventDocuments.eventId, eventIds)),
-    Promise.all(eventIds.map((eventId) => sql<GuideSummaryRow[]>`
+    sql<GuideSummaryRow[]>`
       select id, event_id, guide_type, title, sort_order
       from public.event_guides
-      where event_id = ${eventId} and publish_status = 'published'
-      order by sort_order asc, created_at asc
-    `)),
+      where event_id = any(${eventIds}::text[]) and publish_status = 'published'
+      order by event_id, sort_order asc, created_at asc
+    `,
   ]);
-  const guideRows = guideGroups.flat();
 
   return stations.map((station) => {
     const modules = publicationRows.filter((row) => row.eventId === station.eventId && row.status === "published").map((row) => row.moduleType);

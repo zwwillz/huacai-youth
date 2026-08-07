@@ -192,16 +192,34 @@ function PlayerBrowser({players}:{players:PublicPlayerSummary[]}) {
   </div>;
 }
 
-export default function PlayerDbView({players}:{players:PublicPlayerSummary[]}) {
+export default function PlayerDbView() {
   const [target,setTarget]=useState<HTMLElement|null>(null);
+  const [players,setPlayers]=useState<PublicPlayerSummary[]>([]);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState("");
+  const loaded=useRef(false);
 
   useEffect(()=>{
     let original:HTMLElement|null=null;
     let host:HTMLElement|null=null;
 
+    const load=async()=>{
+      if(loaded.current||loading)return;
+      setLoading(true);setError("");
+      try{
+        const response=await fetch("/api/public/players",{cache:"no-store"});
+        const payload=await response.json() as {data?:PublicPlayerSummary[];error?:string};
+        if(!response.ok||!payload.data)throw new Error(payload.error||"球员数据读取失败。");
+        setPlayers(payload.data);loaded.current=true;
+      }catch(reason){setError(reason instanceof Error?reason.message:"球员数据读取失败。")}
+      finally{setLoading(false)}
+    };
+
     const sync=()=>{
-      const hero=document.querySelector<HTMLElement>(".player-hero");
-      const stack=hero?.closest<HTMLElement>(".stack") ?? null;
+      const root=document.querySelector<HTMLElement>("main[data-huacai-view]");
+      const active=root?.dataset.huacaiView==="players";
+      const hero=active?document.querySelector<HTMLElement>(".player-hero"):null;
+      const stack=hero?.closest<HTMLElement>(".stack")??null;
       if(!stack){
         if(original)original.style.display="";
         original=null;
@@ -209,32 +227,20 @@ export default function PlayerDbView({players}:{players:PublicPlayerSummary[]}) 
         setTarget(current=>current===null?current:null);
         return;
       }
-
-      if(original!==stack){
-        if(original)original.style.display="";
-        original=stack;
-      }
+      if(original!==stack){if(original)original.style.display="";original=stack}
       stack.style.display="none";
-
-      if(!host||!host.isConnected){
-        host=document.createElement("div");
-        host.dataset.playerDbHost="true";
-        stack.insertAdjacentElement("afterend",host);
-      }
-      const mount=host;
-      if(mount)setTarget(current=>current===mount?current:mount);
+      if(!host||!host.isConnected){host=document.createElement("div");host.dataset.playerDbHost="true";stack.insertAdjacentElement("afterend",host)}
+      setTarget(current=>current===host?current:host);
+      void load();
     };
 
+    window.addEventListener("huacai:navigation",sync);
     sync();
-    const observer=new MutationObserver(sync);
-    observer.observe(document.body,{subtree:true,childList:true});
-    return ()=>{
-      observer.disconnect();
-      if(original)original.style.display="";
-      if(host)host.remove();
-    };
-  },[]);
+    return()=>{window.removeEventListener("huacai:navigation",sync);if(original)original.style.display="";if(host)host.remove()};
+  },[loading]);
 
   if(!target)return null;
+  if(loading&&!players.length)return createPortal(<div className={styles.empty}>正在读取球员数据…</div>,target);
+  if(error&&!players.length)return createPortal(<div className={styles.empty}>{error}</div>,target);
   return createPortal(<PlayerBrowser players={players}/>,target);
 }

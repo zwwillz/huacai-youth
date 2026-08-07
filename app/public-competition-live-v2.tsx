@@ -1,7 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { CSSProperties, PointerEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, PointerEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Group, Phase, PhaseId, Station } from "./public-types";
 import type { PublicCompetitionEvent, PublicLiveMatch, PublicPhaseSummary } from "@/db/public-competition-live";
 import type { PublicContentState } from "@/db/public-content";
@@ -167,25 +167,143 @@ function PublicRankings({ station, rankings }: { station: StationMeta; rankings:
 
 function CompetitionOverlay({ tab, station, data, rankings }: { tab: LiveTab; station: StationMeta; data: PublicCompetitionEvent; rankings: PublicRanking[] }) { if (tab === "schedule") return <PublicSchedule station={station} data={data} />; if (tab === "matches") return <PublicMatches station={station} data={data} />; return <PublicRankings station={station} rankings={rankings} />; }
 
-export default function PublicCompetitionLiveV2({ stations, events, contentStates, rankings }: { stations: StationMeta[]; events: PublicCompetitionEvent[]; contentStates: PublicContentState[]; rankings: PublicRanking[] }) {
-  const [activeTab, setActiveTab] = useState<LiveTab | null>(null); const [currentStationId, setCurrentStationId] = useState(""); const currentStationRef = useRef(""); const [target, setTarget] = useState<HTMLElement | null>(null); const stationById = useMemo(() => new Map(stations.map((station) => [station.id, station])), [stations]); const competitionByEvent = useMemo(() => new Map(events.map((event) => [event.eventId, event])), [events]); const contentByStation = useMemo(() => new Map(contentStates.map((state) => [state.stationId, state])), [contentStates]); const station = stationById.get(currentStationId); const competition = station ? competitionByEvent.get(station.eventId) : undefined;
+export default function PublicCompetitionLiveV2({ stations, contentStates }: { stations: StationMeta[]; contentStates: PublicContentState[] }) {
+  const [activeTab, setActiveTab] = useState<LiveTab | null>(null);
+  const [currentStationId, setCurrentStationId] = useState("");
+  const currentStationRef = useRef("");
+  const [target, setTarget] = useState<HTMLElement | null>(null);
+  const [competitionByEvent, setCompetitionByEvent] = useState<Map<string, PublicCompetitionEvent>>(() => new Map());
+  const [rankingsByEvent, setRankingsByEvent] = useState<Map<string, PublicRanking[]>>(() => new Map());
+  const [loadingEventId, setLoadingEventId] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const versions = useRef(new Map<string, string>());
+  const stationById = useMemo(() => new Map(stations.map((station) => [station.id, station])), [stations]);
+  const contentByStation = useMemo(() => new Map(contentStates.map((state) => [state.stationId, state])), [contentStates]);
+  const station = stationById.get(currentStationId);
+  const competition = station ? competitionByEvent.get(station.eventId) : undefined;
+
+  const loadEvent = useCallback(async (eventId: string, force = false) => {
+    if (!force && competitionByEvent.has(eventId)) return;
+    setLoadingEventId(eventId);
+    setLoadError("");
+    try {
+      const response = await fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition`, { cache: "no-store" });
+      const payload = await response.json() as { data?: { version: string; event: PublicCompetitionEvent; rankings: PublicRanking[] }; error?: string };
+      if (!response.ok || !payload.data) throw new Error(payload.error || "赛事数据读取失败。");
+      versions.current.set(eventId, payload.data.version);
+      setCompetitionByEvent((current) => new Map(current).set(eventId, payload.data!.event));
+      setRankingsByEvent((current) => new Map(current).set(eventId, payload.data!.rankings));
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "赛事数据读取失败。");
+    } finally {
+      setLoadingEventId((current) => current === eventId ? "" : current);
+    }
+  }, [competitionByEvent]);
+
   useEffect(() => {
-    if (!document.getElementById("public-live-competition-v2-css")) { const style = document.createElement("style"); style.id = "public-live-competition-v2-css"; style.textContent = liveCss; document.head.append(style); }
+    if (!document.getElementById("public-live-competition-v2-css")) {
+      const style = document.createElement("style");
+      style.id = "public-live-competition-v2-css";
+      style.textContent = liveCss;
+      document.head.append(style);
+    }
     const clearDynamic = () => document.querySelectorAll<HTMLElement>("[data-public-comp-tab],[data-public-comp-action]").forEach((element) => element.remove());
     const detect = () => {
-      const hero = document.querySelector<HTMLElement>(".station-hero"); if (hero) { const cls = [...hero.classList].find((name) => name.startsWith("station-") && name !== "station-hero"); if (cls) currentStationRef.current = cls.slice("station-".length); } else if (document.querySelector(".event-center,.player-hero,.profile")) currentStationRef.current = "";
-      const next = currentStationRef.current; if (next !== currentStationId) { setCurrentStationId(next); setActiveTab(null); }
-      const meta = stationById.get(next); const live = meta ? competitionByEvent.get(meta.eventId) : undefined; const contentState = contentByStation.get(next); const tabs = document.querySelector<HTMLElement>(".tabs"); const content = document.querySelector<HTMLElement>(".content"); setTarget((current) => current === content ? current : content); if (!live || !tabs || !contentState) { clearDynamic(); tabs?.classList.remove("public-five-tabs"); return; }
+      const root = document.querySelector<HTMLElement>("main[data-huacai-view]");
+      const next = root?.dataset.huacaiView === "event" ? root.dataset.huacaiStation || "" : "";
+      currentStationRef.current = next;
+      if (next !== currentStationId) { setCurrentStationId(next); setActiveTab(null); setLoadError(""); }
+      const meta = stationById.get(next);
+      const contentState = contentByStation.get(next);
+      const tabs = document.querySelector<HTMLElement>(".content > .tabs");
+      const content = document.querySelector<HTMLElement>(".content");
+      setTarget((current) => current === content ? current : content);
+      if (!meta || !tabs || !contentState) { clearDynamic(); tabs?.classList.remove("public-five-tabs"); return; }
       const desired: Array<[LiveTab, string, string]> = [["schedule", "赛程", "schedule"], ["matches", "对阵", "matches"], ["rankings", "排名", "rankings"]];
-      for (const element of [...tabs.querySelectorAll<HTMLElement>("[data-public-comp-tab]")]) { const id = element.dataset.publicCompTab as LiveTab; const module = desired.find(([tab]) => tab === id)?.[2]; if (!module || !contentState.publishedModules.includes(module)) element.remove(); }
-      for (const [id, label, module] of desired) { if (!contentState.publishedModules.includes(module) || tabs.querySelector(`[data-public-comp-tab="${id}"]`)) continue; const button = document.createElement("button"); button.type = "button"; button.dataset.publicCompTab = id; button.textContent = label; tabs.appendChild(button); }
-      const competitionTabCount = desired.filter(([, , module]) => contentState.publishedModules.includes(module)).length; tabs.classList.toggle("public-five-tabs", competitionTabCount === 3);
-      const schedulePublished = contentState.publishedModules.includes("schedule"); document.querySelectorAll<HTMLElement>('[data-public-comp-action="schedule"]').forEach((element) => { if (!schedulePublished) element.remove(); });
-      if (schedulePublished) { const heroButtons = document.querySelector<HTMLElement>(".station-hero .hero-buttons"); if (heroButtons && !heroButtons.querySelector('[data-public-comp-action="schedule"]')) { const button = document.createElement("button"); button.type = "button"; button.dataset.publicCompAction = "schedule"; button.textContent = "查看赛程"; heroButtons.prepend(button); } const intro = document.querySelector<HTMLElement>(".introduction .inline-actions"); if (intro && !intro.querySelector('[data-public-comp-action="schedule"]')) { const button = document.createElement("button"); button.type = "button"; button.dataset.publicCompAction = "schedule"; button.textContent = "查看分阶段赛程"; intro.appendChild(button); } }
+      for (const element of [...tabs.querySelectorAll<HTMLElement>("[data-public-comp-tab]")]) {
+        const id = element.dataset.publicCompTab as LiveTab;
+        const module = desired.find(([tab]) => tab === id)?.[2];
+        if (!module || !contentState.publishedModules.includes(module)) element.remove();
+      }
+      for (const [id, label, module] of desired) {
+        if (!contentState.publishedModules.includes(module) || tabs.querySelector(`[data-public-comp-tab="${id}"]`)) continue;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.publicCompTab = id;
+        button.textContent = label;
+        tabs.appendChild(button);
+      }
+      const competitionTabCount = desired.filter(([, , module]) => contentState.publishedModules.includes(module)).length;
+      tabs.classList.toggle("public-five-tabs", competitionTabCount === 3);
+      const schedulePublished = contentState.publishedModules.includes("schedule");
+      document.querySelectorAll<HTMLElement>('[data-public-comp-action="schedule"]').forEach((element) => { if (!schedulePublished) element.remove(); });
+      if (schedulePublished) {
+        const heroButtons = document.querySelector<HTMLElement>(".station-hero .hero-buttons");
+        if (heroButtons && !heroButtons.querySelector('[data-public-comp-action="schedule"]')) {
+          const button = document.createElement("button"); button.type = "button"; button.dataset.publicCompAction = "schedule"; button.textContent = "查看赛程"; heroButtons.prepend(button);
+        }
+        const intro = document.querySelector<HTMLElement>(".introduction .inline-actions");
+        if (intro && !intro.querySelector('[data-public-comp-action="schedule"]')) {
+          const button = document.createElement("button"); button.type = "button"; button.dataset.publicCompAction = "schedule"; button.textContent = "查看分阶段赛程"; intro.appendChild(button);
+        }
+      }
     };
-    const click = (event: MouseEvent) => { const element = event.target as Element | null; const liveButton = element?.closest<HTMLElement>("[data-public-comp-tab],[data-public-comp-action]"); if (liveButton) { const id = (liveButton.dataset.publicCompTab || liveButton.dataset.publicCompAction) as LiveTab; if (id) { event.preventDefault(); event.stopPropagation(); setActiveTab(id); window.scrollTo({ top: 0, behavior: "smooth" }); } return; } const normalTab = element?.closest<HTMLElement>(".tabs button"); if (normalTab && !normalTab.dataset.publicCompTab) setActiveTab(null); };
-    document.addEventListener("click", click, true); const observer = new MutationObserver(detect); observer.observe(document.body, { childList: true, subtree: true }); detect(); const timer = window.setInterval(detect, 300); return () => { document.removeEventListener("click", click, true); observer.disconnect(); window.clearInterval(timer); };
-  }, [competitionByEvent, contentByStation, currentStationId, stationById]);
-  useEffect(() => { const content = document.querySelector<HTMLElement>(".content"); if (!content) return; content.classList.toggle("public-competition-mode", Boolean(activeTab && competition)); const tabs = content.querySelector<HTMLElement>(".tabs"); if (activeTab && tabs) tabs.querySelectorAll("button").forEach((button) => button.classList.toggle("active", (button as HTMLElement).dataset.publicCompTab === activeTab)); }, [activeTab, competition]);
-  if (!target || !station || !competition || !activeTab) return null; return createPortal(<CompetitionOverlay tab={activeTab} station={station} data={competition} rankings={rankings.filter((row) => row.eventId === station.eventId)} />, target);
+    const click = (event: MouseEvent) => {
+      const element = event.target as Element | null;
+      const liveButton = element?.closest<HTMLElement>("[data-public-comp-tab],[data-public-comp-action]");
+      if (liveButton) {
+        const id = (liveButton.dataset.publicCompTab || liveButton.dataset.publicCompAction) as LiveTab;
+        const meta = stationById.get(currentStationRef.current);
+        if (id) {
+          event.preventDefault(); event.stopPropagation(); setActiveTab(id);
+          if (meta) void loadEvent(meta.eventId);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+        return;
+      }
+      const normalTab = element?.closest<HTMLElement>(".tabs button");
+      if (normalTab && !normalTab.dataset.publicCompTab) setActiveTab(null);
+    };
+    window.addEventListener("huacai:navigation", detect);
+    document.addEventListener("click", click, true);
+    detect();
+    return () => {
+      window.removeEventListener("huacai:navigation", detect);
+      document.removeEventListener("click", click, true);
+    };
+  }, [contentByStation, currentStationId, loadEvent, stationById]);
+
+  useEffect(() => {
+    const content = document.querySelector<HTMLElement>(".content");
+    if (!content) return;
+    content.classList.toggle("public-competition-mode", Boolean(activeTab && station));
+    const tabs = content.querySelector<HTMLElement>(".tabs");
+    if (activeTab && tabs) tabs.querySelectorAll("button").forEach((button) => button.classList.toggle("active", (button as HTMLElement).dataset.publicCompTab === activeTab));
+  }, [activeTab, station]);
+
+  useEffect(() => {
+    const eventId = activeTab && station ? station.eventId : "";
+    if (!eventId) return;
+    const checkVersion = async () => {
+      if (document.hidden) return;
+      try {
+        const response = await fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition?versionOnly=1`, { cache: "no-store" });
+        const payload = await response.json() as { data?: { version: string } };
+        const next = payload.data?.version;
+        const previous = versions.current.get(eventId);
+        if (next && previous && next !== previous) await loadEvent(eventId, true);
+        else if (next && !previous) versions.current.set(eventId, next);
+      } catch {
+        // A transient version check failure must not replace the last published public snapshot.
+      }
+    };
+    const timer = window.setInterval(checkVersion, 20_000);
+    const onVisibility = () => { if (!document.hidden) void checkVersion(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisibility); };
+  }, [activeTab, loadEvent, station]);
+
+  if (!target || !station || !activeTab) return null;
+  if (!competition) return createPortal(<section className="public-competition-overlay public-main-pending"><span>{loadError ? "读取失败" : "正在读取"}</span><h2>{loadError || "正在加载本站已发布数据…"}</h2><p>{loadError ? "请稍后重试，上一版公众数据不会被后台草稿覆盖。" : "只在打开赛程、对阵或排名时读取本站数据，首页不再预载全部签表。"}</p>{loadError && <button onClick={() => void loadEvent(station.eventId, true)}>重新加载</button>}</section>, target);
+  return createPortal(<CompetitionOverlay tab={activeTab} station={station} data={competition} rankings={rankingsByEvent.get(station.eventId) ?? []} />, target);
 }

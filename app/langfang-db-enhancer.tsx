@@ -8,8 +8,7 @@ type Group = "少年组" | "青年组";
 const POOLS = ["A","B","C","D","E","F","G","H"] as const;
 
 function isLangfangContext(){
-  const title=document.querySelector<HTMLElement>(".top h3")?.textContent?.trim()??"";
-  return title.includes("廊坊");
+  return document.querySelector<HTMLElement>("main[data-huacai-station]")?.dataset.huacaiStation === "langfang";
 }
 
 function readGroup(root: ParentNode): Group {
@@ -260,9 +259,17 @@ export default function LangfangDbEnhancer({matches}:{matches:CompetitionMatch[]
       patchMatchList(matches);
       patchBracket(matches, lastQuery);
     };
-    sync();
-    const timer = window.setInterval(sync, 160);
-    return () => window.clearInterval(timer);
+    let frame = requestAnimationFrame(sync);
+    const scheduleSync = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(sync); };
+    window.addEventListener("huacai:navigation", scheduleSync);
+    document.addEventListener("click", scheduleSync, false);
+    document.addEventListener("input", scheduleSync, false);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("huacai:navigation", scheduleSync);
+      document.removeEventListener("click", scheduleSync, false);
+      document.removeEventListener("input", scheduleSync, false);
+    };
   }, [matches]);
   return null;
 }

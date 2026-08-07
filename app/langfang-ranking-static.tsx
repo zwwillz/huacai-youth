@@ -15,8 +15,7 @@ const medalBackground = (place:number) => {
 };
 
 function isLangfangContext(){
-  const title=document.querySelector<HTMLElement>(".top h3")?.textContent?.trim()??"";
-  return title.includes("廊坊");
+  return document.querySelector<HTMLElement>("main[data-huacai-station]")?.dataset.huacaiStation === "langfang";
 }
 
 export default function LangfangRankingStatic({rankings}:{rankings:PublicRanking[]}){
@@ -64,13 +63,15 @@ export default function LangfangRankingStatic({rankings}:{rankings:PublicRanking
       if(parent)setTarget(current=>current===parent?current:parent);
     };
 
-    frame=requestAnimationFrame(sync);
-    const observer=new MutationObserver(sync);
-    observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+    const scheduleSync=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(sync)};
+    scheduleSync();
+    window.addEventListener("huacai:navigation",scheduleSync);
+    document.addEventListener("click",scheduleSync,false);
 
     return ()=>{
       cancelAnimationFrame(frame);
-      observer.disconnect();
+      window.removeEventListener("huacai:navigation",scheduleSync);
+      document.removeEventListener("click",scheduleSync,false);
       if(originalCard)originalCard.style.display="";
     };
   },[rankings.length]);

@@ -164,15 +164,30 @@ function PlayerPersonalCenter({ player, matches }: Props) {
   </div>;
 }
 
-export default function MePreview(props: Props) {
+export default function MePreview() {
   const [target, setTarget] = useState<HTMLElement | null>(null);
+  const [data, setData] = useState<Props>({ player: null, matches: [] });
+  const [loading, setLoading] = useState(false);
+  const loaded = useMemo(() => ({ current: false }), []);
 
   useEffect(() => {
     let original: HTMLElement | null = null;
     let host: HTMLElement | null = null;
 
+    const load = async () => {
+      if (loaded.current || loading) return;
+      setLoading(true);
+      try {
+        const response = await fetch("/api/public/players/preview", { cache: "no-store" });
+        const payload = await response.json() as { data?: Props };
+        if (response.ok && payload.data) { setData(payload.data); loaded.current = true; }
+      } finally { setLoading(false); }
+    };
+
     const sync = () => {
-      const profile = document.querySelector<HTMLElement>(".profile");
+      const root = document.querySelector<HTMLElement>("main[data-huacai-view]");
+      const active = root?.dataset.huacaiView === "me";
+      const profile = active ? document.querySelector<HTMLElement>(".profile") : null;
       const stack = profile?.closest<HTMLElement>(".stack") ?? null;
       if (!stack) {
         if (original) original.style.display = "";
@@ -181,32 +196,19 @@ export default function MePreview(props: Props) {
         setTarget((current) => current === null ? current : null);
         return;
       }
-
-      if (original !== stack) {
-        if (original) original.style.display = "";
-        original = stack;
-      }
+      if (original !== stack) { if (original) original.style.display = ""; original = stack; }
       stack.style.display = "none";
-
-      if (!host || !host.isConnected) {
-        host = document.createElement("div");
-        host.dataset.mePreviewHost = "true";
-        stack.insertAdjacentElement("afterend", host);
-      }
-      const mount = host;
-      if (mount) setTarget((current) => current === mount ? current : mount);
+      if (!host || !host.isConnected) { host = document.createElement("div"); host.dataset.mePreviewHost = "true"; stack.insertAdjacentElement("afterend", host); }
+      setTarget((current) => current === host ? current : host);
+      void load();
     };
 
+    window.addEventListener("huacai:navigation", sync);
     sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(document.body, { subtree: true, childList: true });
-    return () => {
-      observer.disconnect();
-      if (original) original.style.display = "";
-      if (host) host.remove();
-    };
-  }, []);
+    return () => { window.removeEventListener("huacai:navigation", sync); if (original) original.style.display = ""; if (host) host.remove(); };
+  }, [loaded, loading]);
 
   if (!target) return null;
-  return createPortal(<PlayerPersonalCenter {...props} />, target);
+  if (loading && !data.player) return createPortal(<div className={styles.root}><section className={styles.empty}>正在读取球员模式预览…</section></div>, target);
+  return createPortal(<PlayerPersonalCenter {...data} />, target);
 }

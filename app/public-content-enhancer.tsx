@@ -106,10 +106,9 @@ export default function PublicContentEnhancer({ states }: { states: PublicConten
       }
     };
 
-    const observer = new MutationObserver(sync);
-    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("huacai:navigation", sync);
     sync();
-    return () => observer.disconnect();
+    return () => window.removeEventListener("huacai:navigation", sync);
   }, [states]);
 
   return null;

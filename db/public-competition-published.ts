@@ -91,3 +91,15 @@ export async function getPublishedCompetitionEvents(eventIds: string[]): Promise
     return overlay(base, result);
   });
 }
+
+
+export async function getCompetitionPublicationVersion(eventId: string) {
+  const sql = getSqlClient();
+  const rows = await sql<Array<{ moduleType: string; versionNo: number; status: string; updatedAt: string }>>`
+    select module_type as "moduleType", version_no as "versionNo", status, updated_at as "updatedAt"
+    from public.publications
+    where event_id=${eventId} and module_type in ('schedule','matches','rankings')
+    order by module_type
+  `;
+  return rows.map((row) => `${row.moduleType}:${row.status}:${row.versionNo}:${row.updatedAt}`).join("|");
+}
