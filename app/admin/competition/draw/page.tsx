@@ -21,37 +21,27 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
   if (!eventId) redirect("/admin/events");
   const phaseCode = (["qualifier-one", "qualifier-two", "main-one", "main-two"].includes(String(query.phase)) ? query.phase : "qualifier-one") as DrawPhaseCode;
 
+  const shell = (child: React.ReactNode) => <AdminWorkspaceShell
+    viewer={{ displayName: viewer.displayName, role: viewer.role }}
+    events={events}
+    active="competition"
+    pageTitle="抽签与签表"
+    pageHint="竞赛执行 · 抽签引擎"
+    currentEventId={eventId}
+    eventScoped
+    competitionTool="overview"
+  >{child}</AdminWorkspaceShell>;
+
   try {
-    const data = isMainPhase(phaseCode)
-      ? await getMainStageWorkspaceData(viewer.username, eventId, query.group, phaseCode)
-      : await getCompetitionDrawWorkspaceData(viewer.username, eventId, query.group, phaseCode);
+    if (isMainPhase(phaseCode)) {
+      const data = await getMainStageWorkspaceData(viewer.username, eventId, query.group, phaseCode);
+      if (data.latestSession?.status === "void") data.latestSession = null;
+      return shell(<MainStageWorkbenchClient initialData={data} />);
+    }
+    const data = await getCompetitionDrawWorkspaceData(viewer.username, eventId, query.group, phaseCode);
     if (data.latestSession?.status === "void") data.latestSession = null;
-    return <AdminWorkspaceShell
-      viewer={{ displayName: viewer.displayName, role: viewer.role }}
-      events={events}
-      active="competition"
-      pageTitle="抽签与签表"
-      pageHint="竞赛执行 · 抽签引擎"
-      currentEventId={eventId}
-      eventScoped
-      competitionTool="overview"
-    >
-      {isMainPhase(phaseCode)
-        ? <MainStageWorkbenchClient initialData={data} />
-        : <DrawWorkbenchClient initialData={data} />}
-    </AdminWorkspaceShell>;
+    return shell(<DrawWorkbenchClient initialData={data} />);
   } catch (error) {
-    return <AdminWorkspaceShell
-      viewer={{ displayName: viewer.displayName, role: viewer.role }}
-      events={events}
-      active="competition"
-      pageTitle="抽签与签表"
-      pageHint="竞赛执行 · 抽签引擎"
-      currentEventId={eventId}
-      eventScoped
-      competitionTool="overview"
-    >
-      <main className="backend-state backend-denied"><div className="backend-state-logo">签</div><small>抽签引擎</small><h1>当前还不能开始抽签</h1><p>{error instanceof Error ? error.message : "抽签数据读取失败。"}</p><a href={`/admin/competition?event=${encodeURIComponent(eventId)}`}>返回竞赛执行</a></main>
-    </AdminWorkspaceShell>;
+    return shell(<main className="backend-state backend-denied"><div className="backend-state-logo">签</div><small>抽签引擎</small><h1>当前还不能开始抽签</h1><p>{error instanceof Error ? error.message : "抽签数据读取失败。"}</p><a href={`/admin/competition?event=${encodeURIComponent(eventId)}`}>返回竞赛执行</a></main>);
   }
 }
