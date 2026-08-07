@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useAdminActionDialog } from "../admin-action-dialog";
 
 type EventRow = {
   id: string;
@@ -30,9 +31,10 @@ export default function EventListClient({ events, canDelete }: { events: EventRo
   const router = useRouter();
   const [workingId, setWorkingId] = useState("");
   const [message, setMessage] = useState("");
+  const { ask, dialog } = useAdminActionDialog();
 
   const remove = async (event: EventRow) => {
-    const ok = window.confirm(`确认删除“${event.shortTitle}”吗？\n\n只有没有报名和比赛数据的误建赛事可以直接删除。这个操作不可撤销。`);
+    const ok = await ask({ title: `删除“${event.shortTitle}”`, description: "只有没有报名和比赛数据的误建赛事可以直接删除。这个操作不可撤销。", confirmLabel: "确认删除赛事", tone: "danger" });
     if (!ok) return;
     setWorkingId(event.id);
     setMessage("");
@@ -59,5 +61,6 @@ export default function EventListClient({ events, canDelete }: { events: EventRo
       <div className="event-settings-card-actions"><Link href={`/admin/events/${event.id}`}>赛事设置 →</Link><Link href={`/admin/content/${event.id}`}>内容发布 →</Link><Link href={`/admin/competition?event=${encodeURIComponent(event.id)}`}>竞赛执行 →</Link></div>
       {canDelete && <div className="event-settings-danger"><button type="button" disabled={workingId === event.id} onClick={() => remove(event)}>{workingId === event.id ? "正在删除…" : "删除误建赛事"}</button><span>已有报名或比赛数据的赛事会被系统阻止删除。</span></div>}
     </article>)}</section>
+    {dialog}
   </>;
 }
