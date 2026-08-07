@@ -30,10 +30,19 @@ export async function assertMainRosterMutable(eventId: string, groupId: string) 
 
 export async function assertSeedEntryMutable(seedEntryId: string) {
   const sql = getSqlClient();
-  const rows = await sql<Array<{ eventId: string; groupId: string }>>`
-    select event_id as "eventId",group_id as "groupId" from public.competition_seed_entries where id=${seedEntryId} limit 1
+  const rows = await sql<Array<{ eventId: string; groupId: string; attendanceStatus: string }>>`
+    select event_id as "eventId",group_id as "groupId",attendance_status as "attendanceStatus"
+    from public.competition_seed_entries where id=${seedEntryId} limit 1
   `;
   if (!rows[0]) throw new Error("没有找到种子席位。");
   await assertMainRosterMutable(rows[0].eventId, rows[0].groupId);
   return rows[0];
+}
+
+export async function assertSeedReplacementAllowed(seedEntryId: string) {
+  const seed = await assertSeedEntryMutable(seedEntryId);
+  if (!["not_attending", "ineligible", "removed"].includes(seed.attendanceStatus)) {
+    throw new Error("请先把原种子标记为“不参赛”“资格不符”或“取消资格”，形成明确空缺后再选择局胜率递补球员。");
+  }
+  return seed;
 }
