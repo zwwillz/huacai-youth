@@ -1,5 +1,6 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { confirmQualificationStage, getQualificationWorkspaceData } from "@/db/qualification-engine";
+import { rebuildMainRosterIfReady } from "@/db/main-roster-engine";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,7 +28,11 @@ export async function POST(request: Request) {
     const drawSessionId = String(body.drawSessionId || "");
     if (!drawSessionId) throw new Error("缺少抽签版本ID。");
     const selectedRatePlayerIds = Array.isArray(body.selectedRatePlayerIds) ? body.selectedRatePlayerIds.map(String) : [];
-    return Response.json({ data: await confirmQualificationStage(viewer.username, drawSessionId, selectedRatePlayerIds) });
+    const data = await confirmQualificationStage(viewer.username, drawSessionId, selectedRatePlayerIds);
+    const mainRoster = data.phaseCode === "qualifier-two"
+      ? await rebuildMainRosterIfReady(data.eventId, data.groupId)
+      : null;
+    return Response.json({ data: { ...data, mainRoster } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "晋级确认失败。" }, { status: 400 });
   }
