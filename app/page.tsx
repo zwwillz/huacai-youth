@@ -41,13 +41,14 @@ function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>[
 export default async function Home() {
   const data = await getPublicSiteData();
   const langfangEventId = data.stations.find((station) => station.id === "langfang")?.eventId;
-  const jinanEventId = data.stations.find((station) => station.city.includes("济南"))?.eventId;
-  const [contentStates, rankings, jinanRankings, competitionMatches, liveCompetitions, players] = await Promise.all([
+  // 廊坊继续作为已经确认的前端UI基准；其它分站只要数据库有竞赛数据并由后台发布，统一走同一套动态竞赛UI。
+  const dynamicCompetitionEventIds = data.stations.filter((station) => station.id !== "langfang").map((station) => station.eventId);
+  const [contentStates, rankings, dynamicRankings, competitionMatches, liveCompetitions, players] = await Promise.all([
     getPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title }))),
     langfangEventId ? getPublicRankings(langfangEventId) : Promise.resolve([]),
-    jinanEventId ? getPublicRankings(jinanEventId) : Promise.resolve([]),
+    Promise.all(dynamicCompetitionEventIds.map((eventId) => getPublicRankings(eventId))).then((groups) => groups.flat()),
     langfangEventId ? getCompetitionMatches(langfangEventId) : Promise.resolve([]),
-    jinanEventId ? getPublicCompetitionEvents([jinanEventId]) : Promise.resolve([]),
+    dynamicCompetitionEventIds.length ? getPublicCompetitionEvents(dynamicCompetitionEventIds) : Promise.resolve([]),
     getPublicPlayerSummaries(),
   ]);
 
@@ -62,7 +63,7 @@ export default async function Home() {
     <style dangerouslySetInnerHTML={{ __html: visualCss }} />
     <EventApp data={data} />
     <PublicContentEnhancer states={contentStates} />
-    <PublicCompetitionLiveV2 stations={data.stations} events={liveCompetitions} contentStates={contentStates} rankings={jinanRankings} />
+    <PublicCompetitionLiveV2 stations={data.stations} events={liveCompetitions} contentStates={contentStates} rankings={dynamicRankings} />
     <LangfangRankingStatic rankings={rankings} />
     <LangfangDbEnhancer matches={competitionMatches} />
     <PlayerDbView players={players} />
