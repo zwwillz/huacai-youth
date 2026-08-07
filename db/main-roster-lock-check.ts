@@ -16,3 +16,22 @@ export async function assertMainRosterLocked(eventId: string, groupId: string) {
   if (!lock || lock.status !== "locked") throw new Error("请先在“晋级与正赛名单”中确认种子、完成递补并锁定64人正赛名单，再进行正赛第一阶段抽签。");
   return lock;
 }
+
+export async function assertMainRosterMutable(eventId: string, groupId: string) {
+  const sql = getSqlClient();
+  const draws = await sql<Array<{ count: number }>>`
+    select count(*)::int as count from public.draw_sessions
+    where event_id=${eventId} and group_id=${groupId} and phase_code='main-one' and status in ('draft','confirmed')
+  `;
+  if ((draws[0]?.count ?? 0) > 0) throw new Error("正赛第一阶段已经生成抽签，种子和64人名单已进入竞赛流程。如需调整，请先作废该阶段抽签。\n");
+}
+
+export async function assertSeedEntryMutable(seedEntryId: string) {
+  const sql = getSqlClient();
+  const rows = await sql<Array<{ eventId: string; groupId: string }>>`
+    select event_id as "eventId",group_id as "groupId" from public.competition_seed_entries where id=${seedEntryId} limit 1
+  `;
+  if (!rows[0]) throw new Error("没有找到种子席位。");
+  await assertMainRosterMutable(rows[0].eventId, rows[0].groupId);
+  return rows[0];
+}
