@@ -7,13 +7,6 @@ import type { MainRosterControlData, MainRosterControlGroup, SeedAttendanceStatu
 
 type Props = { initialData: MainRosterControlData };
 
-const attendanceLabels: Record<string, string> = {
-  pending: "待确认",
-  confirmed: "确认参赛",
-  not_attending: "不参赛",
-  ineligible: "资格不符",
-  removed: "取消资格",
-};
 const eligibilityLabels: Record<string, string> = {
   eligible: "年龄符合",
   ineligible: "年龄不符",
@@ -54,17 +47,17 @@ export default function MainRosterControlClient({ initialData }: Props) {
       if (!note) return;
     }
     const ok = await post(`status-${seedEntryId}`, { action: "seed-status", eventId: initialData.event.id, groupId: group.groupId, seedEntryId, attendanceStatus: status, note });
-    if (ok) setMessage("种子状态已更新。若产生空缺，请从局胜率递补池中选择球员补足。\n");
+    if (ok) setMessage("种子状态已更新。若产生空缺，请从局胜率递补池中选择球员补足。");
   }
 
   async function changeReplacement(group: MainRosterControlGroup, seedEntryId: string, playerId: string) {
     const action = playerId ? "assign-replacement" : "clear-replacement";
     const ok = await post(`replacement-${seedEntryId}`, { action, eventId: initialData.event.id, groupId: group.groupId, seedEntryId, playerId });
-    if (ok) setMessage(playerId ? "递补球员已填入该种子席位。" : "已清除递补球员。\n");
+    if (ok) setMessage(playerId ? "递补球员已填入该种子席位。" : "已清除递补球员。");
   }
 
   async function lockRoster(group: MainRosterControlGroup) {
-    if (!window.confirm(`确认锁定${group.groupName}正赛64人名单？\n\n锁定后才允许正赛第一阶段抽签；如果之后要修改名单，需要先作废抽签并解锁。`)) return;
+    if (!window.confirm(`确认锁定${group.groupName}正赛64人名单？\n\n锁定后才允许正赛第一阶段抽签；如果之后要修改名单，需要先解锁。抽签生成后，则要先作废抽签才能解锁。`)) return;
     const ok = await post(`lock-${group.groupId}`, { action: "lock-roster", eventId: initialData.event.id, groupId: group.groupId });
     if (ok) setMessage(`${group.groupName}正赛64人名单已锁定，可以进入正赛第一阶段抽签。`);
   }
@@ -79,12 +72,12 @@ export default function MainRosterControlClient({ initialData }: Props) {
 
     <div className="main-roster-groups">{initialData.groups.map((group) => {
       const locked = group.currentLock?.status === "locked";
-      const editable = !readOnly && !group.activeMainOneDraw;
+      const editable = !readOnly && !group.activeMainOneDraw && !locked;
       const winnerSide = group.advancement?.roster.filter((item) => item.sourceType === "winner_side_qualified") ?? [];
       const loserSide = group.advancement?.roster.filter((item) => item.sourceType === "loser_side_qualified") ?? [];
       return <article className="main-roster-group" key={group.groupId}>
         <header className="main-roster-group-head">
-          <div><span>{group.groupCode}</span><h3>{group.groupName}</h3><p>{locked ? `64人名单已锁定 · V${group.currentLock?.versionNo}` : group.activeMainOneDraw ? "正赛第一阶段已进入抽签/比赛流程" : "完成种子确认与递补后锁定64人名单"}</p></div>
+          <div><span>{group.groupCode}</span><h3>{group.groupName}</h3><p>{group.activeMainOneDraw ? "正赛第一阶段已进入抽签/比赛流程" : locked ? `64人名单已锁定 · V${group.currentLock?.versionNo}` : "完成种子确认与递补后锁定64人名单"}</p></div>
           <b className={locked ? "locked" : group.canLock ? "ready" : "waiting"}>{locked ? "已锁定" : group.canLock ? "可以锁定" : "准备中"}</b>
         </header>
 
@@ -123,7 +116,7 @@ export default function MainRosterControlClient({ initialData }: Props) {
               </div>
             </div>)}
           </div>
-          <p className="seed-rule-note">默认规则：缺席/年龄不符的种子席位由资格赛候补池按局胜率 → 净胜局 → 总胜局排序递补；递补球员继承该种子席位。所有人工调整都写入操作日志。</p>
+          <p className="seed-rule-note">默认规则：缺席/年龄不符的种子席位由资格赛候补池按局胜率 → 净胜局 → 总胜局排序递补；递补球员继承该种子席位。名单锁定后必须先解锁才能调整；抽签生成后必须先作废抽签。所有人工调整均写入操作日志。</p>
         </section>}
 
         <section className="roster-lock-panel">
