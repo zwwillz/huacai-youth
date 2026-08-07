@@ -3,9 +3,12 @@ import { getAdminViewer } from "../../admin-viewer";
 import { getAdminNavigationEvents } from "@/db/admin-ui";
 import { type DrawPhaseCode } from "@/db/draw-engine";
 import { getCompetitionDrawWorkspaceData } from "@/db/competition-draw-workspace";
+import { getMainStageWorkspaceData, isMainPhase } from "@/db/main-stage-engine";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import DrawWorkbenchClient from "./draw-workbench-client";
+import MainStageWorkbenchClient from "./main-stage-workbench-client";
 import "./draw-workbench.css";
+import "./main-stage-workbench.css";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +22,9 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
   const phaseCode = (["qualifier-one", "qualifier-two", "main-one", "main-two"].includes(String(query.phase)) ? query.phase : "qualifier-one") as DrawPhaseCode;
 
   try {
-    const data = await getCompetitionDrawWorkspaceData(viewer.username, eventId, query.group, phaseCode);
+    const data = isMainPhase(phaseCode)
+      ? await getMainStageWorkspaceData(viewer.username, eventId, query.group, phaseCode)
+      : await getCompetitionDrawWorkspaceData(viewer.username, eventId, query.group, phaseCode);
     if (data.latestSession?.status === "void") data.latestSession = null;
     return <AdminWorkspaceShell
       viewer={{ displayName: viewer.displayName, role: viewer.role }}
@@ -31,7 +36,9 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
       eventScoped
       competitionTool="overview"
     >
-      <DrawWorkbenchClient initialData={data} />
+      {isMainPhase(phaseCode)
+        ? <MainStageWorkbenchClient initialData={data} />
+        : <DrawWorkbenchClient initialData={data} />}
     </AdminWorkspaceShell>;
   } catch (error) {
     return <AdminWorkspaceShell
