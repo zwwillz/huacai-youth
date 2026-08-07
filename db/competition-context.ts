@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
 import { buildCompetitionPublicationSnapshot } from "./public-competition-live";
+import { requireEventAccess } from "./permissions";
 
 export type CompetitionContextGroup = { id: string; name: string; code: string };
 export type CompetitionPublicationModule = "schedule" | "matches" | "rankings";
@@ -22,17 +23,15 @@ export type CompetitionContextData = {
 
 type Viewer = { id: string; role: string };
 
-async function requireViewer(username: string, write = false): Promise<Viewer> {
-  const sql = getSqlClient();
-  const rows = await sql<Viewer[]>`select id,role from public.users where username=${username} and status='active' limit 1`;
-  const viewer = rows[0];
-  if (!viewer || !["system_admin","committee","referee"].includes(viewer.role)) throw new Error("当前账号没有竞赛执行权限。");
-  if (write && !["system_admin","committee"].includes(viewer.role)) throw new Error("发布到用户端需要系统管理员或组委会权限。");
-  return viewer;
+async function requireViewer(username: string, eventId: string, write = false): Promise<Viewer> {
+  return requireEventAccess(username, eventId, {
+    allowedRoles: write ? ["system_admin", "committee"] : ["system_admin", "committee", "referee"],
+    deniedMessage: write ? "发布到用户端需要系统管理员或组委会权限。" : "当前账号没有竞赛执行权限。",
+  });
 }
 
 export async function getCompetitionContextData(username: string, eventId: string): Promise<CompetitionContextData> {
-  await requireViewer(username);
+  await requireViewer(username, eventId);
   const sql = getSqlClient();
   const [events, groups, rows] = await Promise.all([
     sql<Array<{ id: string; shortTitle: string }>>`select id,short_title as "shortTitle" from public.events where id=${eventId} limit 1`,
@@ -53,7 +52,7 @@ export async function getCompetitionContextData(username: string, eventId: strin
 const publicationTitles: Record<CompetitionPublicationModule, string> = { schedule: "签表与赛程", matches: "对阵与比分", rankings: "最终排名" };
 
 export async function setCompetitionPublicationStatus(username: string, eventId: string, moduleType: CompetitionPublicationModule, status: "draft" | "published") {
-  const viewer = await requireViewer(username, true);
+  const viewer = await requireViewer(username, eventId, true);
   const sql = getSqlClient();
   const timestamp = new Date().toISOString();
   const rows = await sql<Array<{ id: string; versionNo: number; status: string; hasUnpublishedChanges: boolean; hasSnapshot: boolean }>>`

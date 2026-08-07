@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { getDb, getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 import { events, users } from "./schema";
 
 export type GuideBlock =
@@ -29,11 +30,11 @@ function newId(prefix: string) {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
 }
 
-async function requireEditor(username: string) {
-  const db = getDb();
-  const [account] = await db.select().from(users).where(and(eq(users.username, username), eq(users.status, "active"))).limit(1);
-  if (!account || !["system_admin", "committee"].includes(account.role)) throw new Error("当前账号没有编辑参赛提示的权限。");
-  return account;
+async function requireEditor(username: string, eventId: string) {
+  return requireEventAccess(username, eventId, {
+    allowedRoles: ["system_admin", "committee"],
+    deniedMessage: "当前账号没有编辑参赛提示的权限。",
+  });
 }
 
 function normalizeBlocks(value: unknown): GuideBlock[] {
@@ -59,7 +60,7 @@ function normalizeBlocks(value: unknown): GuideBlock[] {
 }
 
 export async function getGuideManagementData(username: string, eventId: string): Promise<GuideManagementData> {
-  await requireEditor(username);
+  await requireEditor(username, eventId);
   const db = getDb();
   const [event] = await db.select({ id: events.id, shortTitle: events.shortTitle, city: events.city }).from(events).where(eq(events.id, eventId)).limit(1);
   if (!event) throw new Error("没有找到这场赛事。");
@@ -88,7 +89,7 @@ export async function getGuideManagementData(username: string, eventId: string):
 }
 
 export async function saveGuideManagementData(username: string, eventId: string, input: GuideEditorItem[]) {
-  const account = await requireEditor(username);
+  const account = await requireEditor(username, eventId);
   const db = getDb();
   const [event] = await db.select({ id: events.id }).from(events).where(eq(events.id, eventId)).limit(1);
   if (!event) throw new Error("没有找到这场赛事。");

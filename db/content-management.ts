@@ -1,5 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "./index";
+import { requireEventAccess } from "./permissions";
 import {
   auditLogs,
   eventDetails,
@@ -104,17 +105,15 @@ function prizeMap(value: unknown) {
   return result;
 }
 
-async function requireEditor(username: string) {
-  const db = getDb();
-  const [account] = await db.select().from(users).where(and(eq(users.username, username), eq(users.status, "active"))).limit(1);
-  if (!account || !["system_admin", "committee"].includes(account.role)) {
-    throw new Error("当前账号没有编辑和发布赛事内容的权限。");
-  }
-  return account;
+async function requireEditor(username: string, eventId: string) {
+  return requireEventAccess(username, eventId, {
+    allowedRoles: ["system_admin", "committee"],
+    deniedMessage: "当前账号没有编辑和发布赛事内容的权限。",
+  });
 }
 
 export async function getContentManagementData(username: string, eventId: string): Promise<ContentManagementData> {
-  await requireEditor(username);
+  await requireEditor(username, eventId);
   const db = getDb();
   const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
   if (!event) throw new Error("没有找到这场赛事。");
@@ -197,7 +196,7 @@ function validate(input: ContentManagementInput) {
 
 export async function saveContentManagementData(username: string, input: ContentManagementInput) {
   validate(input);
-  const account = await requireEditor(username);
+  const account = await requireEditor(username, input.eventId);
   const db = getDb();
   const [event] = await db.select().from(events).where(eq(events.id, input.eventId)).limit(1);
   if (!event) throw new Error("没有找到这场赛事。");
@@ -299,7 +298,7 @@ export async function saveContentManagementData(username: string, input: Content
 }
 
 export async function setContentPublicationStatus(username: string, eventId: string, publicationId: string, status: "draft" | "published") {
-  const account = await requireEditor(username);
+  const account = await requireEditor(username, eventId);
   const db = getDb();
   const [before] = await db.select().from(publications).where(and(eq(publications.id, publicationId), eq(publications.eventId, eventId))).limit(1);
   if (!before) throw new Error("没有找到要发布的内容模块。");

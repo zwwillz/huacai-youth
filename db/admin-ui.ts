@@ -1,5 +1,5 @@
 import { hash } from "bcryptjs";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { getDb, getSqlClient } from "./index";
 import {
   adminSessions,
@@ -53,9 +53,15 @@ async function requireSystemAdmin(username: string) {
 }
 
 export async function getAdminNavigationEvents(username: string): Promise<AdminNavEvent[]> {
-  await requireActiveAccount(username);
+  const account = await requireActiveAccount(username);
   const db = getDb();
-  return db.select({
+  const memberEventIds = account.role === "system_admin" ? null : await db
+    .select({ eventId: eventMembers.eventId })
+    .from(eventMembers)
+    .where(and(eq(eventMembers.userId, account.id), eq(eventMembers.status, "active")))
+    .then((rows) => [...new Set(rows.map((row) => row.eventId))]);
+  if (memberEventIds && !memberEventIds.length) return [];
+  const base = db.select({
     id: events.id,
     shortTitle: events.shortTitle,
     stationNo: events.stationNo,
@@ -65,19 +71,21 @@ export async function getAdminNavigationEvents(username: string): Promise<AdminN
     city: events.city,
     venueName: venues.name,
     publishStatus: events.publishStatus,
-  }).from(events)
-    .leftJoin(venues, eq(events.venueId, venues.id))
-    .orderBy(desc(events.year), desc(events.stationNo))
-    .then((rows) => rows.map((row) => ({ ...row, venueName: row.venueName ?? "" })));
+  }).from(events).leftJoin(venues, eq(events.venueId, venues.id));
+  const rows = memberEventIds
+    ? await base.where(inArray(events.id, memberEventIds)).orderBy(desc(events.year), desc(events.stationNo))
+    : await base.orderBy(desc(events.year), desc(events.stationNo));
+  return rows.map((row) => ({ ...row, venueName: row.venueName ?? "" }));
 }
 
 export async function getAdminHomeData(username: string) {
   const db = getDb();
-  const [eventRows, pendingRegistrations, draftPublications] = await Promise.all([
-    getAdminNavigationEvents(username),
-    db.select({ total: count() }).from(registrations).where(eq(registrations.status, "pending")),
-    db.select({ total: count() }).from(publications).where(eq(publications.status, "draft")),
-  ]);
+  const eventRows = await getAdminNavigationEvents(username);
+  const eventIds = eventRows.map((event) => event.id);
+  const [pendingRegistrations, draftPublications] = eventIds.length ? await Promise.all([
+    db.select({ total: count() }).from(registrations).where(and(eq(registrations.status, "pending"), inArray(registrations.eventId, eventIds))),
+    db.select({ total: count() }).from(publications).where(and(eq(publications.status, "draft"), inArray(publications.eventId, eventIds))),
+  ]) : [[{ total: 0 }], [{ total: 0 }]];
   return {
     events: eventRows,
     metrics: {

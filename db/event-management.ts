@@ -1,5 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "./index";
+import { requireEventAccess } from "./permissions";
 import {
   auditLogs,
   eventDetails,
@@ -173,18 +174,16 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-async function requireEventEditor(username: string) {
-  const db = getDb();
-  const [account] = await db.select().from(users).where(and(eq(users.username, username), eq(users.status, "active"))).limit(1);
-  if (!account || !["system_admin", "committee"].includes(account.role)) {
-    throw new Error("当前账号没有编辑赛事资料的权限。");
-  }
-  return account;
+async function requireEventEditor(username: string, eventId: string) {
+  return requireEventAccess(username, eventId, {
+    allowedRoles: ["system_admin", "committee"],
+    deniedMessage: "当前账号没有编辑赛事资料的权限。",
+  });
 }
 
 export async function getEventManagementData(username: string, eventId: string): Promise<EventManagementData> {
   const db = getDb();
-  const account = await requireEventEditor(username);
+  const account = await requireEventEditor(username, eventId);
   const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
   if (!event) throw new Error("没有找到这场赛事。");
 
@@ -302,7 +301,7 @@ function validateInput(input: EventManagementInput) {
 export async function saveEventManagementData(username: string, input: EventManagementInput) {
   validateInput(input);
   const db = getDb();
-  const account = await requireEventEditor(username);
+  const account = await requireEventEditor(username, input.eventId);
   const [beforeEvent] = await db.select().from(events).where(eq(events.id, input.eventId)).limit(1);
   if (!beforeEvent) throw new Error("没有找到要修改的赛事。");
 
