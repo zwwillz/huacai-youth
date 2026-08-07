@@ -8,6 +8,7 @@ import {
 import { getCompetitionDrawWorkspaceData } from "@/db/competition-draw-workspace";
 import { createQualificationDrawFast } from "@/db/draw-engine-write";
 import { createMainStageDraw, getMainStageWorkspaceData, isMainPhase } from "@/db/main-stage-engine";
+import { assertMainRosterLocked } from "@/db/main-roster-lock-check";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
       const groupId = String(body.groupId || "");
       const phaseCode = String(body.phaseCode || "qualifier-one") as DrawPhaseCode;
       if (!eventId || !groupId) throw new Error("缺少赛事或组别参数。");
+      if (phaseCode === "main-one") await assertMainRosterLocked(eventId, groupId);
       const data = isMainPhase(phaseCode)
         ? await createMainStageDraw(viewer.username, { eventId, groupId, phaseCode })
         : await createQualificationDrawFast(viewer.username, {
