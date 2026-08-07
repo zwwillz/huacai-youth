@@ -95,10 +95,15 @@
 .tip-links strong{font-size:12px}
 .tip-links small{color:var(--muted);font-size:8px;letter-spacing:0}
 .tip-links button>b{color:#6134a7;font-size:9px;white-space:nowrap}
+.tip-links .dynamic-guide-link{min-height:82px;padding:14px;border:1px solid #e8e3ef;border-radius:14px;color:inherit;background:#fbfafe;display:grid;grid-template-columns:39px 1fr auto;gap:11px;align-items:center;text-align:left;text-decoration:none}
+.tip-links .dynamic-guide-link>span{width:39px;height:39px;border-radius:12px;color:#fff;background:linear-gradient(145deg,#6b36dc,#e949a4);display:grid;place-items:center;font-size:12px;font-weight:900}
+.tip-links .dynamic-guide-link>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.tip-links .dynamic-guide-link>b{color:#6134a7;font-size:9px;white-space:nowrap}
 .sponsor-section img{width:100%;height:auto;border-radius:13px;display:block}
 
 .pdf-actions{margin-top:15px;display:flex;gap:9px;flex-wrap:wrap}
 .pdf-actions .pdf-button{margin-top:0}
+.pdf-pending{min-height:38px;padding:9px 13px;border:1px dashed #d7cce5;border-radius:999px;color:#817589;background:#faf7fc;display:inline-flex;align-items:center;font-size:9px;font-weight:800}
 .referee-button{color:#fff!important;background:#bf3a89}
 .referee-button b{color:#fff}
 
