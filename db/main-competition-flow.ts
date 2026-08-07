@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 import { rebuildMainRosterIfReady } from "./main-roster-engine";
 
 export type SeedAttendanceStatus = "pending" | "confirmed" | "not_attending" | "ineligible" | "removed";
@@ -183,6 +184,7 @@ function effectiveSeat(row: Omit<SeedSeat,"effectivePlayerId"|"effectivePlayerNa
 
 export async function getMainRosterControlData(username: string, eventId: string): Promise<MainRosterControlData> {
   const viewer = await requireViewer(username);
+  await requireEventAccess(username, eventId);
   const sql = getSqlClient();
   const events = await sql<Array<{ id: string; shortTitle: string; year: number; stationNo: number }>>`
     select id,short_title as "shortTitle",year,station_no as "stationNo" from public.events where id=${eventId} limit 1
@@ -263,6 +265,7 @@ export async function getMainRosterControlData(username: string, eventId: string
 
 export async function initializeSeedsFromPreviousStation(username: string, eventId: string, groupId: string) {
   const viewer = await requireViewer(username, true);
+  await requireEventAccess(username, eventId, { write: true, allowedRoles: ["system_admin", "committee"] });
   const sql = getSqlClient();
   const { previous } = await previousEventFor(eventId);
   if (!previous) throw new Error("没有找到可以作为种子来源的上一站赛事。");
@@ -310,6 +313,7 @@ export async function updateSeedAttendance(username: string, seedEntryId: string
   const sql = getSqlClient();
   const rows = await sql<Array<{ eventId: string; eligibilityStatus: string }>>`select event_id as "eventId",eligibility_status as "eligibilityStatus" from public.competition_seed_entries where id=${seedEntryId} limit 1`;
   if (!rows[0]) throw new Error("没有找到这名种子候选。");
+  await requireEventAccess(username, rows[0].eventId, { write: true, allowedRoles: ["system_admin", "committee"] });
   if (attendanceStatus === 'confirmed' && rows[0].eligibilityStatus === 'ineligible') throw new Error("该球员已被标记为年龄/资格不符合，不能直接确认参赛。请先更正资格状态或使用递补。\n");
   const timestamp = now();
   await sql.begin(async (tx) => {
@@ -328,7 +332,7 @@ export async function updateSeedAttendance(username: string, seedEntryId: string
 }
 
 export async function confirmAllAvailableSeeds(username: string, eventId: string, groupId: string) {
-  const viewer = await requireViewer(username, true); const sql = getSqlClient(); const timestamp = now();
+  const viewer = await requireViewer(username, true); await requireEventAccess(username, eventId, { write: true, allowedRoles: ["system_admin", "committee"] }); const sql = getSqlClient(); const timestamp = now();
   await sql.begin(async (tx) => {
     await tx`update public.competition_seed_entries set attendance_status='confirmed',confirmed_by=${viewer.id},confirmed_at=${timestamp},updated_at=${timestamp}
       where event_id=${eventId} and group_id=${groupId} and status='active' and attendance_status='pending' and eligibility_status <> 'ineligible'`;
@@ -344,6 +348,7 @@ export async function assignSeedReplacement(username: string, seedEntryId: strin
     select event_id as "eventId",group_id as "groupId",attendance_status as "attendanceStatus",player_id as "playerId" from public.competition_seed_entries where id=${seedEntryId} and status='active' limit 1
   `;
   const seat = seats[0]; if (!seat) throw new Error("没有找到种子席位。");
+  await requireEventAccess(username, seat.eventId, { write: true, allowedRoles: ["system_admin", "committee"] });
   if (seat.attendanceStatus === 'confirmed') throw new Error("该种子已经确认参赛，不需要递补。\n");
   const pool = await replacementPool(seat.eventId, seat.groupId); const candidate = pool.find((item) => item.playerId === playerId);
   if (!candidate) throw new Error("该球员当前不在可用的局胜率递补池中。");
@@ -367,6 +372,7 @@ export async function clearSeedReplacement(username: string, seedEntryId: string
   const viewer = await requireViewer(username, true); const sql = getSqlClient(); const timestamp = now();
   const rows = await sql<Array<{ eventId: string }>>`select event_id as "eventId" from public.competition_seed_entries where id=${seedEntryId} limit 1`;
   if (!rows[0]) throw new Error("没有找到种子席位。");
+  await requireEventAccess(username, rows[0].eventId, { write: true, allowedRoles: ["system_admin", "committee"] });
   await sql.begin(async (tx) => {
     await tx`update public.competition_seed_entries set replacement_player_id=null,replacement_player_name=null,replacement_source_type=null,replacement_source_ref=null,replacement_metric_value=null,updated_at=${timestamp} where id=${seedEntryId}`;
     await tx`insert into public.audit_logs (id,actor_user_id,event_id,module_type,target_type,target_id,action,created_at) values (${newId('log')},${viewer.id},${rows[0].eventId},'competition','seed_entry',${seedEntryId},'clear_seed_replacement',${timestamp})`;
@@ -375,7 +381,7 @@ export async function clearSeedReplacement(username: string, seedEntryId: string
 }
 
 export async function lockMainRoster(username: string, eventId: string, groupId: string) {
-  const viewer = await requireViewer(username, true); const sql = getSqlClient();
+  const viewer = await requireViewer(username, true); await requireEventAccess(username, eventId, { write: true, allowedRoles: ["system_admin", "committee"] }); const sql = getSqlClient();
   const draws = await sql<Array<{ count: number }>>`select count(*)::int as count from public.draw_sessions where event_id=${eventId} and group_id=${groupId} and phase_code='main-one' and status in ('draft','confirmed')`;
   if ((draws[0]?.count ?? 0) > 0) throw new Error("正赛第一阶段已经有抽签版本，不能重新锁定名单。若需调整，请先作废抽签。\n");
   const rebuilt = await rebuildMainRosterIfReady(eventId, groupId);
@@ -404,6 +410,7 @@ export async function voidMainRosterLock(username: string, lockId: string, reaso
   const viewer = await requireViewer(username, true); const sql = getSqlClient();
   const rows = await sql<Array<{ eventId: string; groupId: string; status: string }>>`select event_id as "eventId",group_id as "groupId",status from public.competition_main_roster_locks where id=${lockId} limit 1`;
   const lock = rows[0]; if (!lock) throw new Error("没有找到正赛名单锁定版本。");
+  await requireEventAccess(username, lock.eventId, { write: true, allowedRoles: ["system_admin", "committee"] });
   const draws = await sql<Array<{ count: number }>>`select count(*)::int as count from public.draw_sessions where event_id=${lock.eventId} and group_id=${lock.groupId} and phase_code='main-one' and status in ('draft','confirmed')`;
   if ((draws[0]?.count ?? 0) > 0) throw new Error("已有正赛抽签，不能直接解锁名单。请先作废正赛抽签。\n");
   const timestamp = now();
@@ -439,6 +446,7 @@ export async function confirmMain32Advancement(username: string, batchId: string
     select event_id as "eventId",group_id as "groupId",source_draw_session_id as "sourceDrawSessionId",status,roster_json as roster from public.competition_main_advancement_batches where id=${batchId} limit 1
   `;
   const batch = rows[0]; if (!batch) throw new Error("没有找到32强确认批次。");
+  await requireEventAccess(username, batch.eventId, { write: true, allowedRoles: ["system_admin", "committee"] });
   if (batch.status === 'confirmed') return { ok: true, count: 32 };
   const active = await sql<Array<{ count: number }>>`select count(*)::int as count from public.draw_sessions where event_id=${batch.eventId} and group_id=${batch.groupId} and phase_code='main-two' and status in ('draft','confirmed')`;
   if ((active[0]?.count ?? 0) > 0) throw new Error("正赛第二阶段已经抽签，不能重新确认32强名单。\n");
@@ -521,7 +529,7 @@ export async function ensureFinalRankingDrafts(eventId: string) {
 }
 
 export async function getFinalRankingWorkspaceData(username:string,eventId:string):Promise<FinalRankingWorkspaceData>{
-  const viewer=await requireViewer(username); await ensureFinalRankingDrafts(eventId); const sql=getSqlClient();
+  const viewer=await requireViewer(username); await requireEventAccess(username, eventId); await ensureFinalRankingDrafts(eventId); const sql=getSqlClient();
   const events=await sql<Array<{id:string;shortTitle:string}>>`select id,short_title as "shortTitle" from public.events where id=${eventId} limit 1`; if(!events[0])throw new Error("没有找到这场赛事。");
   const groups=await sql<Array<{groupId:string;groupName:string}>>`select id as "groupId",name as "groupName" from public.event_groups where event_id=${eventId} and status='active' order by code`;
   const out:FinalRankingWorkspaceGroup[]=[];
@@ -536,13 +544,13 @@ export async function getFinalRankingWorkspaceData(username:string,eventId:strin
 }
 
 export async function confirmFinalRanking(username:string,batchId:string){
-  const viewer=await requireViewer(username,true); const sql=getSqlClient(); const rows=await sql<Array<{eventId:string;groupId:string;status:string}>>`select event_id as "eventId",group_id as "groupId",status from public.competition_final_ranking_batches where id=${batchId} limit 1`; const batch=rows[0]; if(!batch)throw new Error("没有找到最终排名批次。");
+  const viewer=await requireViewer(username,true); const sql=getSqlClient(); const rows=await sql<Array<{eventId:string;groupId:string;status:string}>>`select event_id as "eventId",group_id as "groupId",status from public.competition_final_ranking_batches where id=${batchId} limit 1`; const batch=rows[0]; if(!batch)throw new Error("没有找到最终排名批次。"); await requireEventAccess(username, batch.eventId, { write: true, allowedRoles: ["system_admin", "committee"] });
   if(batch.status==='published'||batch.status==='confirmed')return {ok:true}; const timestamp=now();
   await sql.begin(async tx=>{await tx`update public.event_rankings set status='confirmed',updated_at=${timestamp} where event_id=${batch.eventId} and group_id=${batch.groupId} and status='draft'`;await tx`update public.competition_final_ranking_batches set status='confirmed',confirmed_by=${viewer.id},confirmed_at=${timestamp},updated_at=${timestamp} where id=${batchId}`;await tx`insert into public.audit_logs (id,actor_user_id,event_id,module_type,target_type,target_id,action,created_at) values (${newId('log')},${viewer.id},${batch.eventId},'competition','final_ranking',${batchId},'confirm_final_ranking',${timestamp})`;}); return {ok:true};
 }
 
 export async function publishFinalRanking(username:string,batchId:string){
-  const viewer=await requireViewer(username,true); const sql=getSqlClient(); const rows=await sql<Array<{eventId:string;groupId:string;status:string}>>`select event_id as "eventId",group_id as "groupId",status from public.competition_final_ranking_batches where id=${batchId} limit 1`; const batch=rows[0]; if(!batch)throw new Error("没有找到最终排名批次。"); if(batch.status!=='confirmed'&&batch.status!=='published')throw new Error("请先确认最终排名，再进行发布。\n"); if(batch.status==='published')return {ok:true}; const timestamp=now();
+  const viewer=await requireViewer(username,true); const sql=getSqlClient(); const rows=await sql<Array<{eventId:string;groupId:string;status:string}>>`select event_id as "eventId",group_id as "groupId",status from public.competition_final_ranking_batches where id=${batchId} limit 1`; const batch=rows[0]; if(!batch)throw new Error("没有找到最终排名批次。"); await requireEventAccess(username, batch.eventId, { write: true, allowedRoles: ["system_admin", "committee"] }); if(batch.status!=='confirmed'&&batch.status!=='published')throw new Error("请先确认最终排名，再进行发布。\n"); if(batch.status==='published')return {ok:true}; const timestamp=now();
   await sql.begin(async tx=>{await tx`update public.event_rankings set status='published',updated_at=${timestamp} where event_id=${batch.eventId} and group_id=${batch.groupId} and status='confirmed'`;await tx`update public.competition_final_ranking_batches set status='published',published_by=${viewer.id},published_at=${timestamp},updated_at=${timestamp} where id=${batchId}`;await tx`update public.publications set status='published',published_by=${viewer.id},published_at=coalesce(published_at,${timestamp}),updated_at=${timestamp} where event_id=${batch.eventId} and module_type='rankings'`;await tx`insert into public.audit_logs (id,actor_user_id,event_id,module_type,target_type,target_id,action,created_at) values (${newId('log')},${viewer.id},${batch.eventId},'competition','final_ranking',${batchId},'publish_final_ranking',${timestamp})`;});
   const groups=await sql<Array<{id:string}>>`select id from public.event_groups where event_id=${batch.eventId} and status='active'`; const published=await sql<Array<{groupId:string;count:number}>>`select group_id as "groupId",count(*)::int as count from public.event_rankings where event_id=${batch.eventId} and status='published' group by group_id`; const map=new Map(published.map(x=>[x.groupId,x.count])); if(groups.length>0&&groups.every(g=>(map.get(g.id)??0)>=32))await sql`update public.events set status='finished',updated_at=${timestamp},updated_by=${viewer.id} where id=${batch.eventId}`;
   return {ok:true};
