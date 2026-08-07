@@ -10,7 +10,7 @@ import { getPublicSiteData } from "@/db/public";
 import { getPublicContentState } from "@/db/public-content";
 import { getPublicRankings } from "@/db/rankings";
 import { getCompetitionMatches } from "@/db/competition-matches";
-import { getPublicCompetitionEvents } from "@/db/public-competition-live";
+import { getPublicCompetitionEvents, type PublicCompetitionEvent } from "@/db/public-competition-live";
 import { getPublicPlayerDetail, getPublicPlayerSummaries } from "@/db/player-data";
 
 export const runtime = "nodejs";
@@ -42,7 +42,7 @@ function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>[
 export default async function Home() {
   const data = await getPublicSiteData();
   const langfangEventId = data.stations.find((station) => station.id === "langfang")?.eventId;
-  // 廊坊继续作为已经确认的前端UI基准；其它分站只要数据库有竞赛数据并由后台发布，统一走同一套动态竞赛UI。
+  // 廊坊继续作为已经确认的前端UI基准；其它分站只要后台发布对应模块，即使当前还没有签表数据，也保留统一入口与友好等待状态。
   const dynamicCompetitionEventIds = data.stations.filter((station) => station.id !== "langfang").map((station) => station.eventId);
   const [contentStates, rankings, dynamicRankings, competitionMatches, liveCompetitions, players] = await Promise.all([
     getPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title }))),
@@ -52,6 +52,14 @@ export default async function Home() {
     dynamicCompetitionEventIds.length ? getPublicCompetitionEvents(dynamicCompetitionEventIds) : Promise.resolve([]),
     getPublicPlayerSummaries(),
   ]);
+  const liveCompetitionByEvent = new Map(liveCompetitions.map((event) => [event.eventId, event]));
+  const normalizedLiveCompetitions: PublicCompetitionEvent[] = dynamicCompetitionEventIds.map((eventId) => liveCompetitionByEvent.get(eventId) ?? ({
+    eventId,
+    phaseSummaries: [],
+    matches: [],
+    qualificationEntries: [],
+    mainRoster: [],
+  }));
 
   const demoSummary = players.find((player) => competitionMatches.some((match) => match.playerAId === player.id || match.playerBId === player.id)) ?? players[0] ?? null;
   const demoPlayer = demoSummary ? await getPublicPlayerDetail(demoSummary.id) : null;
@@ -84,7 +92,7 @@ export default async function Home() {
     `}</style>
     <EventApp data={data} />
     <PublicContentEnhancer states={contentStates} />
-    <PublicCompetitionLiveV2 stations={data.stations} events={liveCompetitions} contentStates={contentStates} rankings={dynamicRankings} />
+    <PublicCompetitionLiveV2 stations={data.stations} events={normalizedLiveCompetitions} contentStates={contentStates} rankings={dynamicRankings} />
     <PublicTabsUnifier />
     <LangfangRankingStatic rankings={rankings} />
     <LangfangDbEnhancer matches={competitionMatches} />
