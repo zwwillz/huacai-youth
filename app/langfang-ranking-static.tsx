@@ -14,6 +14,11 @@ const medalBackground = (place:number) => {
   return undefined;
 };
 
+function isLangfangContext(){
+  const title=document.querySelector<HTMLElement>(".top h3")?.textContent?.trim()??"";
+  return title.includes("廊坊");
+}
+
 export default function LangfangRankingStatic({rankings}:{rankings:PublicRanking[]}){
   const [target,setTarget]=useState<HTMLElement|null>(null);
   const [group,setGroup]=useState<Group>("少年组");
@@ -24,14 +29,25 @@ export default function LangfangRankingStatic({rankings}:{rankings:PublicRanking
     let originalCard:HTMLElement|null=null;
     let frame=0;
 
+    const reset=()=>{
+      if(originalCard)originalCard.style.display="";
+      originalCard=null;
+      setTarget(current=>current===null?current:null);
+    };
+
     const sync=()=>{
+      // 这个组件只负责廊坊站静态排名。其它分站必须完全由各自数据库数据驱动，
+      // 不能再用廊坊排名去覆盖动态页面。
+      if(!isLangfangContext()){
+        reset();
+        return;
+      }
+
       const head=document.querySelector<HTMLElement>(".ranking-head");
       const card=document.querySelector<HTMLElement>(".card.ranking:not(.static-ranking)");
 
       if(!head||!card){
-        if(originalCard)originalCard.style.display="";
-        originalCard=null;
-        setTarget(current=>current===null?current:null);
+        reset();
         return;
       }
 
