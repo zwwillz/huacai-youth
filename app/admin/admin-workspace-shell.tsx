@@ -28,7 +28,12 @@ function sectionHref(id: ActiveSection, eventId?: string) { if (id === "dashboar
 export default function AdminWorkspaceShell({ viewer, events, active, pageTitle, pageHint, currentEventId, eventScoped = false, competitionTool = "overview", children }: Props) {
   const router = useRouter(); const [menuOpen, setMenuOpen] = useState(false); const currentEvent = events.find((event) => event.id === currentEventId);
   const visibleGroups = navGroups.map((group) => ({ ...group, items: group.items.filter((item) => { if (viewer.role === "system_admin") return true; if (viewer.role === "committee") return !["accounts", "logs"].includes(item.id); return ["dashboard", "competition"].includes(item.id); }) })).filter((group) => group.items.length > 0);
-  const switchEvent = (eventId: string) => { if (!eventId) return; if (active === "competition") { router.push(competitionToolHref(competitionTool, eventId)); return; } router.push(sectionHref(active, eventId)); };
+  const switchEvent = (eventId: string) => {
+    if (!eventId) return;
+    const target = active === "competition" ? competitionToolHref(competitionTool, eventId) : sectionHref(active, eventId);
+    window.dispatchEvent(new CustomEvent("admin:navigation-start", { detail: { target, label: "所选赛事" } }));
+    router.push(target);
+  };
   return <main className="backend-shell admin-workspace-shell">
     <aside className={menuOpen ? "backend-sidebar admin-workspace-sidebar open" : "backend-sidebar admin-workspace-sidebar"}>
       <Link href="/admin" prefetch className="backend-brand admin-workspace-brand"><span>华</span><div><strong>华彩赛事后台</strong><small>赛事运营与竞赛执行</small></div></Link>
