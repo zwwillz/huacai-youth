@@ -13,6 +13,8 @@ export async function requireEventAccess(
   username: string,
   eventId: string,
   options: {
+    /** Marks state-changing access for call-site clarity; role restrictions remain explicit via allowedRoles. */
+    write?: boolean;
     allowedRoles?: BackendRole[];
     deniedMessage?: string;
   } = {},
