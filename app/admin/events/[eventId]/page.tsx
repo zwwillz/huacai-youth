@@ -1,0 +1,42 @@
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { getAdminViewer } from "../../admin-viewer";
+import { getAdminNavigationEvents } from "@/db/admin-ui";
+import { getEventManagementData } from "@/db/event-management";
+import AdminWorkspaceShell from "../../admin-workspace-shell";
+import EventManagementClient from "../event-management-client";
+import { captureAdminLoad } from "../../capture-admin-load";
+import "../event-management.css";
+
+export const dynamic = "force-dynamic";
+
+export default async function EventManagementPage({ params }: { params: Promise<{ eventId: string }> }) {
+  const viewer = await getAdminViewer();
+  if (!viewer) redirect("/admin/login");
+  const { eventId } = await params;
+
+  const result = await captureAdminLoad(Promise.all([
+    getEventManagementData(viewer.username, eventId),
+    getAdminNavigationEvents(viewer.username),
+  ]));
+  if (!result.data) {
+    return <main className="backend-state backend-denied">
+      <div className="backend-state-logo">锁</div>
+      <small>赛事管理</small>
+      <h1>暂时不能打开这场赛事</h1>
+      <p>{result.error instanceof Error ? result.error.message : "赛事资料读取失败。"}</p>
+      <Link href="/admin/events">返回赛事管理</Link>
+    </main>;
+  }
+  const [data, navEvents] = result.data;
+  return <AdminWorkspaceShell
+      viewer={{ displayName: viewer.displayName, role: viewer.role }}
+      events={navEvents}
+      active="events"
+      pageTitle="赛事设置"
+      pageHint="赛事管理 · 分站主数据"
+      currentEventId={eventId}
+    >
+      <EventManagementClient initialData={data} />
+  </AdminWorkspaceShell>;
+}
