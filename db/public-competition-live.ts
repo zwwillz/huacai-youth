@@ -20,8 +20,8 @@ export type PublicLiveMatch = {
   playerA: string | null;
   playerBId: string | null;
   playerB: string | null;
-  scoreA: number | null;
-  scoreB: number | null;
+  scoreA: number | string | null;
+  scoreB: number | string | null;
   resultType: string | null;
   resultStatus: string;
   status: string;
