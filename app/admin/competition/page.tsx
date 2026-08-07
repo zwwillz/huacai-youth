@@ -8,10 +8,10 @@ import "./competition.css";
 export const dynamic = "force-dynamic";
 
 const phases = [
-  { code: "qualifier-one", no: "01", title: "资格赛第一场", note: "一次抽签 · 完整分区签表", source: "已审核参赛名单", active: true },
-  { code: "qualifier-two", no: "02", title: "资格赛第二场", note: "独立抽签 · 第一场未晋级球员", source: "第一场晋级确认后自动生成", active: true },
-  { code: "main-one", no: "03", title: "正赛第一阶段", note: "64人 · 8组双败", source: "资格赛48人 + 16名种子", active: true },
-  { code: "main-two", no: "04", title: "正赛第二阶段", note: "32强 · 重新抽签 · 单败", source: "正赛第一阶段胜部16人 + 败部16人", active: true },
+  { code: "qualifier-one", no: "01", title: "资格赛第一场", note: "一次抽签 · 完整分区签表", source: "已审核参赛名单" },
+  { code: "qualifier-two", no: "02", title: "资格赛第二场", note: "独立抽签 · 第一场未晋级球员", source: "第一场晋级确认后自动生成" },
+  { code: "main-one", no: "03", title: "正赛第一阶段", note: "64人 · 8组双败", source: "锁定的64人正赛名单" },
+  { code: "main-two", no: "04", title: "正赛第二阶段", note: "32强 · 重新抽签 · 单败", source: "组委会确认的32强名单" },
 ] as const;
 
 function drawStatusLabel(status?: string) {
@@ -36,7 +36,7 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
   return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={data.events} active="competition" pageTitle="抽签与签表" pageHint="竞赛执行 · 阶段控制" currentEventId={data.selectedEventId} eventScoped competitionTool="overview">
     <main className="competition-workspace-page">
       <section className="competition-workspace-shell">
-        <header className="competition-workspace-head"><div><small>COMPETITION OPERATIONS</small><h1>{currentEvent?.shortTitle || "竞赛执行工作区"}</h1><p>资格赛与正赛四个阶段都已进入同一竞赛引擎。阶段数据尚未产生时仍可进入查看规则和等待状态，不再隐藏入口。</p></div><b>竞赛引擎</b></header>
+        <header className="competition-workspace-head"><div><small>竞赛执行工作区</small><h1>{currentEvent?.shortTitle || "竞赛执行"}</h1><p>从资格赛抽签、晋级与种子确认，到正赛64人锁定、双败、32强重新抽签和最终排名发布，全部使用同一套竞赛数据。</p></div><b>竞赛引擎</b></header>
 
         {data.groups.length > 0 && <nav className="competition-group-tabs">{data.groups.map((group) => <Link key={group.id} className={selectedGroup?.id === group.id ? "active" : ""} href={`/admin/competition?event=${encodeURIComponent(data.selectedEventId)}&group=${encodeURIComponent(group.id)}`}><strong>{group.name}</strong><span>{group.approvedCount} 人已审核</span></Link>)}</nav>}
 
@@ -50,7 +50,7 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
         </section>}
 
         <section className="competition-stage-board">
-          <header><div><small>EVENT STAGES</small><h2>竞赛阶段</h2><p>资格赛两场各自独立抽签；正赛第一阶段64人分8组双败，产生32强；正赛第二阶段32人重新抽签，单败至冠军。</p></div></header>
+          <header><div><small>四个比赛阶段</small><h2>竞赛阶段</h2><p>资格赛两场各自独立抽签；正赛第一阶段必须先锁定64人名单，再以8组双败产生32强；32强由组委会确认后进入正赛第二阶段重新抽签。</p></div></header>
           <div className="competition-stage-grid">{phases.map((phase) => {
             const draw = selectedGroup?.draws[phase.code];
             return <article key={phase.code} className="ready">
@@ -63,16 +63,23 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
         </section>
 
         <section className="competition-flow">
-          <article className="available"><span>01</span><h2>抽签与签表</h2><p>资格赛支持附加赛、轮空与分区；正赛支持种子分散、8组双败和32强重新抽签。</p><b>已开放</b></article>
+          <article className="available"><span>01</span><h2>抽签与签表</h2><p>资格赛支持附加赛、轮空与分区；正赛只读取已经锁定或确认的正式名单。</p><b>已开放</b></article>
           <i>→</i>
-          <article className="available"><span>02</span><h2>赛程编排</h2><p>可配置时间段、球台与TV台，自动编排并支持人工调整和裁判分配。</p><b><Link href={`/admin/competition/schedules?event=${encodeURIComponent(data.selectedEventId)}`}>进入赛程编排</Link></b></article>
+          <article className="available"><span>02</span><h2>赛程编排</h2><p>配置时间、球台、TV台和裁判，自动编排后允许人工调整并检查冲突。</p><b><Link href={`/admin/competition/schedules?event=${encodeURIComponent(data.selectedEventId)}`}>进入赛程编排</Link></b></article>
           <i>→</i>
-          <article className="available"><span>03</span><h2>比分录入</h2><p>裁判独立入口现场录分；双败阶段会同时把胜者和负者自动送入正确路线。</p><b><Link href={`/admin/competition/scoring?event=${encodeURIComponent(data.selectedEventId)}`}>进入比分录入</Link></b></article>
+          <article className="available"><span>03</span><h2>比分录入</h2><p>裁判提交、组委会确认；只有确认后的赛果才推动签表并对公众端生效。</p><b><Link href={`/admin/competition/scoring?event=${encodeURIComponent(data.selectedEventId)}`}>进入比分录入</Link></b></article>
           <i>→</i>
-          <article className="available"><span>04</span><h2>晋级确认</h2><p>资格赛确认24人；正赛第一阶段胜部16人、败部16人确认后自动形成32强名单。</p><b><Link href={`/admin/competition/qualification?event=${encodeURIComponent(data.selectedEventId)}`}>进入晋级确认</Link></b></article>
+          <article className="available"><span>04</span><h2>晋级与正赛名单</h2><p>确认资格赛晋级、上一站16强种子、缺席递补，锁定64人；正赛第一阶段结束后再确认32强。</p><b><Link href={`/admin/competition/qualification?event=${encodeURIComponent(data.selectedEventId)}`}>进入名单控制</Link></b></article>
+          <i>→</i>
+          <article className="available"><span>05</span><h2>最终排名</h2><p>正赛第二阶段全部赛果确认后自动生成32强排名草稿，由组委会确认并单独发布。</p><b><Link href={`/admin/competition/final-ranking?event=${encodeURIComponent(data.selectedEventId)}`}>进入最终排名</Link></b></article>
         </section>
 
-        <section className="competition-principles"><article><strong>资格赛：每场只抽签一次</strong><p>512标准签表默认16个32人分区，每区1名冠军直接晋级；决胜负者按局胜率取前8，每场资格赛共24人晋级。</p></article><article><strong>正赛第一阶段：64人8组双败</strong><p>48名资格赛晋级球员与16名种子组成64人；种子按蛇形分散，每组2名，其余球员混抽。每组胜部2人、败部2人晋级。</p></article><article><strong>正赛第二阶段：32强重新抽签</strong><p>16名胜部晋级球员进入种子位，16名败部晋级球员混抽，单败淘汰至冠军，并保留三、四名决赛。</p></article></section>
+        <section className="competition-principles">
+          <article><strong>资格赛：每场只抽签一次</strong><p>512标准签表默认16个32人分区，每区1名冠军直接晋级；决胜负者按局胜率取前8，每场资格赛共24人晋级。</p></article>
+          <article><strong>正赛名单：先确认再锁定</strong><p>默认读取上一站16强作为种子候选；年龄不符或不参赛的空缺从资格赛局胜率候补池递补。48名资格赛晋级 + 16个已解决种子席位组成64人。</p></article>
+          <article><strong>正赛第一阶段：64人8组双败</strong><p>锁定名单后才允许抽签。每组胜部2人、败部2人，共32人；32强由组委会确认后才成为第二阶段正式名单。</p></article>
+          <article><strong>正赛第二阶段与排名</strong><p>32强重新抽签，16名胜部晋级进入种子位、16名败部晋级混抽；单败至冠军并进行三、四名决赛，最后确认并发布排名。</p></article>
+        </section>
       </section>
     </main>
   </AdminWorkspaceShell>;
