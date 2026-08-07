@@ -1,5 +1,7 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { generateBracketFromConfirmedDraw, getBracketDetail } from "@/db/bracket-engine";
+import { getDrawSessionDetail } from "@/db/draw-engine";
+import { generateMainStageBracket, isMainPhase } from "@/db/main-stage-engine";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,6 +29,11 @@ export async function POST(request: Request) {
     const sessionId = String(body.sessionId || "");
     if (!sessionId) throw new Error("缺少抽签版本ID。");
     if (action !== "generate") throw new Error("不支持的签表操作。");
+    const draw = await getDrawSessionDetail(viewer.username, sessionId);
+    if (isMainPhase(draw.session.phaseCode)) {
+      await generateMainStageBracket(viewer.username, sessionId);
+      return Response.json({ data: await getBracketDetail(viewer.username, sessionId, true) });
+    }
     return Response.json({ data: await generateBracketFromConfirmedDraw(viewer.username, sessionId) });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "签表生成失败。" }, { status: 400 });
