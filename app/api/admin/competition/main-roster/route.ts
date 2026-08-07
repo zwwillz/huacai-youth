@@ -11,6 +11,7 @@ import {
   voidMainRosterLock,
   type SeedAttendanceStatus,
 } from "@/db/main-competition-flow";
+import { assertMainRosterMutable, assertSeedEntryMutable } from "@/db/main-roster-lock-check";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -35,22 +36,37 @@ export async function POST(request: Request) {
     const body = await request.json() as Record<string, unknown>;
     const action = String(body.action || "");
     if (action === "initialize-seeds") {
-      return Response.json({ data: await initializeSeedsFromPreviousStation(viewer.username, String(body.eventId || ""), String(body.groupId || "")) });
+      const eventId = String(body.eventId || "");
+      const groupId = String(body.groupId || "");
+      await assertMainRosterMutable(eventId, groupId);
+      return Response.json({ data: await initializeSeedsFromPreviousStation(viewer.username, eventId, groupId) });
     }
     if (action === "seed-status") {
-      return Response.json({ data: await updateSeedAttendance(viewer.username, String(body.seedEntryId || ""), String(body.attendanceStatus || "pending") as SeedAttendanceStatus, String(body.note || "")) });
+      const seedEntryId = String(body.seedEntryId || "");
+      await assertSeedEntryMutable(seedEntryId);
+      return Response.json({ data: await updateSeedAttendance(viewer.username, seedEntryId, String(body.attendanceStatus || "pending") as SeedAttendanceStatus, String(body.note || "")) });
     }
     if (action === "confirm-all-seeds") {
-      return Response.json({ data: await confirmAllAvailableSeeds(viewer.username, String(body.eventId || ""), String(body.groupId || "")) });
+      const eventId = String(body.eventId || "");
+      const groupId = String(body.groupId || "");
+      await assertMainRosterMutable(eventId, groupId);
+      return Response.json({ data: await confirmAllAvailableSeeds(viewer.username, eventId, groupId) });
     }
     if (action === "assign-replacement") {
-      return Response.json({ data: await assignSeedReplacement(viewer.username, String(body.seedEntryId || ""), String(body.playerId || "")) });
+      const seedEntryId = String(body.seedEntryId || "");
+      await assertSeedEntryMutable(seedEntryId);
+      return Response.json({ data: await assignSeedReplacement(viewer.username, seedEntryId, String(body.playerId || "")) });
     }
     if (action === "clear-replacement") {
-      return Response.json({ data: await clearSeedReplacement(viewer.username, String(body.seedEntryId || "")) });
+      const seedEntryId = String(body.seedEntryId || "");
+      await assertSeedEntryMutable(seedEntryId);
+      return Response.json({ data: await clearSeedReplacement(viewer.username, seedEntryId) });
     }
     if (action === "lock-roster") {
-      return Response.json({ data: await lockMainRoster(viewer.username, String(body.eventId || ""), String(body.groupId || "")) });
+      const eventId = String(body.eventId || "");
+      const groupId = String(body.groupId || "");
+      await assertMainRosterMutable(eventId, groupId);
+      return Response.json({ data: await lockMainRoster(viewer.username, eventId, groupId) });
     }
     if (action === "unlock-roster") {
       return Response.json({ data: await voidMainRosterLock(viewer.username, String(body.lockId || ""), String(body.reason || "")) });
