@@ -29,7 +29,7 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
       pageHint="竞赛执行 · 抽签引擎"
       currentEventId={eventId}
       eventScoped
-      competitionTool="draw"
+      competitionTool="overview"
     >
       <DrawWorkbenchClient initialData={data} />
     </AdminWorkspaceShell>;
@@ -42,7 +42,7 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
       pageHint="竞赛执行 · 抽签引擎"
       currentEventId={eventId}
       eventScoped
-      competitionTool="draw"
+      competitionTool="overview"
     >
       <main className="backend-state backend-denied"><div className="backend-state-logo">签</div><small>抽签引擎</small><h1>当前还不能开始抽签</h1><p>{error instanceof Error ? error.message : "抽签数据读取失败。"}</p><a href={`/admin/competition?event=${encodeURIComponent(eventId)}`}>返回竞赛执行</a></main>
     </AdminWorkspaceShell>;
