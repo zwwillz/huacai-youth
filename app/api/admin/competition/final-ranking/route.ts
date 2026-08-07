@@ -1,5 +1,6 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { confirmFinalRanking, getFinalRankingWorkspaceData, publishFinalRanking } from "@/db/final-ranking-engine";
+import { saveFinalRankingManualOrder } from "@/db/final-ranking-manual";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,6 +26,10 @@ export async function POST(request: Request) {
     const action = String(body.action || "");
     const batchId = String(body.batchId || "");
     if (!batchId) throw new Error("缺少最终排名批次ID。");
+    if (action === "save-manual") {
+      const orderedPlayerIds = Array.isArray(body.orderedPlayerIds) ? body.orderedPlayerIds.map(String) : [];
+      return Response.json({ data: await saveFinalRankingManualOrder(viewer.username, batchId, orderedPlayerIds, String(body.reason || "")) });
+    }
     if (action === "confirm") return Response.json({ data: await confirmFinalRanking(viewer.username, batchId) });
     if (action === "publish") return Response.json({ data: await publishFinalRanking(viewer.username, batchId) });
     throw new Error("不支持的最终排名操作。");
