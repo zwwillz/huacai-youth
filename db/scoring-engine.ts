@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 import { prepareMain32Advancement } from "./main-competition-flow";
 import { prepareFinalRankingDraft } from "./final-ranking-engine";
 import { competitionPhaseLabel } from "./competition-labels";
@@ -94,6 +95,7 @@ function chooseDate(dates: ScoringDateOption[], requested?: string) {
 
 export async function getScoringWorkspaceData(username: string, eventId: string, filters: ScoringFilters = {}): Promise<ScoringWorkspaceData> {
   const viewer = await requireViewer(username);
+  await requireEventAccess(username, eventId, { allowedRoles: ["system_admin", "committee", "referee"], deniedMessage: "当前账号没有比分录入权限。" });
   const sql = getSqlClient();
   const [eventRows, groups] = await Promise.all([
     sql<Array<{ id: string; shortTitle: string; startDate: string; endDate: string }>>`
@@ -206,6 +208,7 @@ export async function submitMatchResult(username: string, input: { assignmentId:
   `;
   const match = rows[0];
   if (!match) throw new Error("没有找到这场比赛。");
+  await requireEventAccess(username, match.eventId, { allowedRoles: ["system_admin", "committee", "referee"], deniedMessage: "当前账号没有比分录入权限。" });
   if (viewer.role === "referee" && match.refereeUserId !== viewer.id) throw new Error("这场比赛没有分配给当前裁判账号。");
   if (match.resultStatus === "confirmed") throw new Error("赛果已经确认。如需更正，请由组委会在后续更正流程中处理。");
   const resultType = String(input.resultType || "normal");
@@ -214,7 +217,8 @@ export async function submitMatchResult(username: string, input: { assignmentId:
   const winner = winnerForResult({ resultType, scoreA, scoreB, ...match });
   const changedAt = now();
   await sql.begin(async (tx) => {
-    await tx`update public.competition_bracket_matches set score_a=${resultType === "normal" ? scoreA : null},score_b=${resultType === "normal" ? scoreB : null},result_type=${resultType},result_status='submitted',winner_player_id=${winner.id},winner_player_name=${winner.name},submitted_by=${viewer.id},submitted_at=${changedAt},result_note=${String(input.note || "").trim() || null},updated_at=${changedAt} where id=${match.bracketMatchId}`;
+    const updated = await tx<Array<{ id: string }>>`update public.competition_bracket_matches set score_a=${resultType === "normal" ? scoreA : null},score_b=${resultType === "normal" ? scoreB : null},result_type=${resultType},result_status='submitted',winner_player_id=${winner.id},winner_player_name=${winner.name},submitted_by=${viewer.id},submitted_at=${changedAt},result_note=${String(input.note || "").trim() || null},updated_at=${changedAt} where id=${match.bracketMatchId} and result_status <> 'confirmed' returning id`;
+    if (!updated.length) throw new Error("赛果已被其他人确认，请刷新后查看最新状态。");
     await tx`insert into public.audit_logs (id,actor_user_id,event_id,module_type,target_type,target_id,action,after_json,created_at) values (${newId("log")},${viewer.id},${match.eventId},'competition','match_result',${match.bracketMatchId},'submit_match_result',${JSON.stringify({ resultType, scoreA, scoreB, winner: winner.name, note: input.note || null })},${changedAt})`;
   });
   return { ok: true, eventId: match.eventId };
@@ -230,11 +234,13 @@ export async function confirmMatchResult(username: string, assignmentId: string)
   `;
   const match = rows[0];
   if (!match) throw new Error("没有找到这场比赛。");
+  await requireEventAccess(username, match.eventId, { allowedRoles: ["system_admin", "committee"], deniedMessage: "赛果确认需要系统管理员或组委会权限。" });
   if (match.resultStatus !== "submitted" || !match.winnerPlayerId || !match.winnerPlayerName) throw new Error("请先提交赛果，再进行确认。");
   const loser = match.playerAId === match.winnerPlayerId ? { id: match.playerBId, name: match.playerBName } : { id: match.playerAId, name: match.playerAName };
   const changedAt = now();
   await sql.begin(async (tx) => {
-    await tx`update public.competition_bracket_matches set result_status='confirmed',status='completed',confirmed_by=${viewer.id},confirmed_at=${changedAt},updated_at=${changedAt} where id=${match.bracketMatchId}`;
+    const confirmed = await tx<Array<{ id: string }>>`update public.competition_bracket_matches set result_status='confirmed',status='completed',confirmed_by=${viewer.id},confirmed_at=${changedAt},updated_at=${changedAt} where id=${match.bracketMatchId} and result_status='submitted' returning id`;
+    if (!confirmed.length) throw new Error("赛果状态已被其他人修改，请刷新后再操作。");
     const links = await tx<Array<{ targetMatchId: string; targetSide: string; sourceResult: string }>>`select target_match_id as "targetMatchId",target_side as "targetSide",source_result as "sourceResult" from public.competition_match_links where source_match_id=${match.bracketMatchId} and source_result in ('winner','loser')`;
     for (const link of links) {
       const player = link.sourceResult === "loser" ? loser : { id: match.winnerPlayerId, name: match.winnerPlayerName };
