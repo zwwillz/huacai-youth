@@ -18,7 +18,7 @@ const PHASES = [
   ["main-one", "正赛第一阶段"],
   ["main-two", "正赛第二阶段"],
 ] as const;
-const PHASE_ORDER = new Map(PHASES.map(([code], index) => [code, index]));
+const PHASE_ORDER: Record<string, number> = Object.fromEntries(PHASES.map(([code], index) => [code, index]));
 
 export default async function CompetitionSchedulesPage({ searchParams }: { searchParams: Promise<{ event?: string; group?: string; phase?: string }> }) {
   const viewer = await getAdminViewer();
@@ -33,7 +33,7 @@ export default async function CompetitionSchedulesPage({ searchParams }: { searc
   const availablePhases = [...new Set(items.map((item) => item.phaseCode))];
   const selectedPhase = PHASES.some(([code]) => code === query.phase)
     ? String(query.phase)
-    : [...availablePhases].sort((a, b) => (PHASE_ORDER.get(b) ?? -1) - (PHASE_ORDER.get(a) ?? -1))[0] || "qualifier-one";
+    : [...availablePhases].sort((a, b) => (PHASE_ORDER[b] ?? -1) - (PHASE_ORDER[a] ?? -1))[0] || "qualifier-one";
   const current = items.filter((item) => item.phaseCode === selectedPhase).sort((a, b) => b.drawVersion - a.drawVersion)[0] ?? null;
   const phaseOptions = PHASES.map(([code, title]) => {
     const item = items.filter((row) => row.phaseCode === code).sort((a, b) => b.drawVersion - a.drawVersion)[0];
