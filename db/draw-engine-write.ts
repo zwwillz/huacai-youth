@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
 import { calculateQualificationPlan, getDrawSessionDetail, type DrawPhaseCode } from "./draw-engine";
 
-type Participant = { playerId: string; playerName: string };
+type Participant = { playerId: string; playerName: string; sourceType: string };
 type Viewer = { id: string; role: string };
 
 function now() { return new Date().toISOString(); }
@@ -59,15 +59,26 @@ function balancedSpecialSlots(bracketSize: number, divisionSize: number, count: 
   return [...firstPass, ...secondPass].slice(0, count);
 }
 
-async function approvedParticipants(eventId: string, groupId: string) {
+async function phaseParticipants(eventId: string, groupId: string, phaseCode: DrawPhaseCode): Promise<Participant[]> {
   const sql = getSqlClient();
-  return sql<Participant[]>`
-    select distinct p.id as "playerId", p.full_name as "playerName"
-    from public.registrations r
-    join public.players p on p.id=r.player_id
-    where r.event_id=${eventId} and r.group_id=${groupId} and r.status='approved' and p.merged_into_player_id is null
-    order by p.full_name,p.id
-  `;
+  if (phaseCode === "qualifier-one") {
+    return sql<Participant[]>`
+      select distinct p.id as "playerId", p.full_name as "playerName", 'registration'::text as "sourceType"
+      from public.registrations r
+      join public.players p on p.id=r.player_id
+      where r.event_id=${eventId} and r.group_id=${groupId} and r.status='approved' and p.merged_into_player_id is null
+      order by p.full_name,p.id
+    `;
+  }
+  if (phaseCode === "qualifier-two") {
+    return sql<Participant[]>`
+      select pe.player_id as "playerId",pe.player_name as "playerName",'phase_entry'::text as "sourceType"
+      from public.competition_phase_entries pe
+      where pe.event_id=${eventId} and pe.group_id=${groupId} and pe.phase_code='qualifier-two' and pe.status='active'
+      order by pe.sort_order,pe.player_name,pe.player_id
+    `;
+  }
+  throw new Error("当前阶段的抽签名单来源尚未开放。");
 }
 
 export async function createQualificationDrawFast(username: string, input: {
@@ -82,9 +93,12 @@ export async function createQualificationDrawFast(username: string, input: {
   seedFillRule?: string;
 }) {
   const viewer = await requireViewer(username);
-  if (input.phaseCode !== "qualifier-one") throw new Error("第一版先开放“资格赛第一场”的正式抽签。资格赛第二场将在第一场晋级确认模块接入后开放，避免重复抽入已晋级球员。");
-  const participants = await approvedParticipants(input.eventId, input.groupId);
-  if (participants.length < 2) throw new Error("当前已审核参赛名单不足2人，不能开始抽签。");
+  if (!["qualifier-one", "qualifier-two"].includes(input.phaseCode)) throw new Error("当前只开放资格赛第一场和资格赛第二场的正式抽签。");
+  const participants = await phaseParticipants(input.eventId, input.groupId, input.phaseCode);
+  if (participants.length < 2) {
+    if (input.phaseCode === "qualifier-two") throw new Error("资格赛第二场参赛名单尚未生成。请先完成资格赛第一场晋级确认。");
+    throw new Error("当前已审核参赛名单不足2人，不能开始抽签。");
+  }
   const plan = calculateQualificationPlan({ entrantCount: participants.length, bracketSize: input.bracketSize, divisionSize: input.divisionSize, rateQualifierCount: input.rateQualifierCount, phaseCode: input.phaseCode });
   const sql = getSqlClient();
   const active = await sql<Array<{ versionNo: number; status: string }>>`
@@ -132,7 +146,7 @@ export async function createQualificationDrawFast(username: string, input: {
 
   const participantRows = randomized.map((player, index) => ({
     id: newId("dp"), session_id: sessionId, player_id: player.playerId, player_name: player.playerName,
-    source_type: "registration", seed_no: null, random_order: index + 1,
+    source_type: player.sourceType, seed_no: null, random_order: index + 1,
     assignment_type: assignment.get(player.playerId)!.type, display_draw_no: assignment.get(player.playerId)!.drawNo, created_at: createdAt,
   }));
 
