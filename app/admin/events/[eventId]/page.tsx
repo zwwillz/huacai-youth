@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getAdminViewer } from "../../admin-viewer";
 import { getAdminNavigationEvents } from "@/db/admin-ui";
 import { getEventManagementData } from "@/db/event-management";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import EventManagementClient from "../event-management-client";
+import { captureAdminLoad } from "../../capture-admin-load";
 import "../event-management.css";
 
 export const dynamic = "force-dynamic";
@@ -13,12 +15,21 @@ export default async function EventManagementPage({ params }: { params: Promise<
   if (!viewer) redirect("/admin/login");
   const { eventId } = await params;
 
-  try {
-    const [data, navEvents] = await Promise.all([
-      getEventManagementData(viewer.username, eventId),
-      getAdminNavigationEvents(viewer.username),
-    ]);
-    return <AdminWorkspaceShell
+  const result = await captureAdminLoad(Promise.all([
+    getEventManagementData(viewer.username, eventId),
+    getAdminNavigationEvents(viewer.username),
+  ]));
+  if (!result.data) {
+    return <main className="backend-state backend-denied">
+      <div className="backend-state-logo">锁</div>
+      <small>赛事管理</small>
+      <h1>暂时不能打开这场赛事</h1>
+      <p>{result.error instanceof Error ? result.error.message : "赛事资料读取失败。"}</p>
+      <Link href="/admin/events">返回赛事管理</Link>
+    </main>;
+  }
+  const [data, navEvents] = result.data;
+  return <AdminWorkspaceShell
       viewer={{ displayName: viewer.displayName, role: viewer.role }}
       events={navEvents}
       active="events"
@@ -27,14 +38,5 @@ export default async function EventManagementPage({ params }: { params: Promise<
       currentEventId={eventId}
     >
       <EventManagementClient initialData={data} />
-    </AdminWorkspaceShell>;
-  } catch (error) {
-    return <main className="backend-state backend-denied">
-      <div className="backend-state-logo">锁</div>
-      <small>赛事管理</small>
-      <h1>暂时不能打开这场赛事</h1>
-      <p>{error instanceof Error ? error.message : "赛事资料读取失败。"}</p>
-      <a href="/admin/events">返回赛事管理</a>
-    </main>;
-  }
+  </AdminWorkspaceShell>;
 }

@@ -12,6 +12,7 @@ import CompetitionContextBar from "../competition-context-bar";
 import CompetitionPublicationBar from "../competition-publication-bar";
 import DrawWorkbenchClient from "./draw-workbench-client";
 import MainStageWorkbenchClient from "./main-stage-workbench-client";
+import { captureAdminLoad } from "../../capture-admin-load";
 import "../competition-context-bar.css";
 import "./draw-workbench.css";
 import "./main-stage-workbench.css";
@@ -40,7 +41,7 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
     <div className="unified-competition-context">{child}</div>
   </AdminWorkspaceShell>;
 
-  try {
+  const result = await captureAdminLoad((async () => {
     if (isMainPhase(phaseCode)) {
       const data = await getMainStageWorkspaceData(viewer.username, eventId, query.group, phaseCode);
       if (data.latestSession?.status === "void") data.latestSession = null;
@@ -51,13 +52,20 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
           data.sourceNote = `${data.sourceNote} 请先在“晋级”中完成种子确认、递补并锁定64人名单。`;
         }
       }
-      return shell(<MainStageWorkbenchClient initialData={data} />, data.selectedGroupId, data.phaseTitle);
+      return { kind: "main" as const, data };
     }
     const data = await getCompetitionDrawWorkspaceData(viewer.username, eventId, query.group, phaseCode);
     if (data.latestSession?.status === "void") data.latestSession = null;
-    return shell(<DrawWorkbenchClient initialData={data} />, data.selectedGroupId, data.phaseTitle);
-  } catch (error) {
+    return { kind: "qualifier" as const, data };
+  })());
+  if (!result.data) {
     const selectedGroupId = context.groups.some((group) => group.id === query.group) ? String(query.group) : context.groups[0]?.id || "";
-    return shell(<main className="backend-state backend-denied"><div className="backend-state-logo">签</div><small>抽签引擎</small><h1>当前还不能开始抽签</h1><p>{error instanceof Error ? error.message : "抽签数据读取失败。"}</p><a href={`/admin/competition?event=${encodeURIComponent(eventId)}`}>返回竞赛执行</a></main>, selectedGroupId, PHASES.find((phase) => phase.code === phaseCode)?.title || "当前阶段");
+    return shell(<main className="backend-state backend-denied"><div className="backend-state-logo">签</div><small>抽签引擎</small><h1>当前还不能开始抽签</h1><p>{result.error instanceof Error ? result.error.message : "抽签数据读取失败。"}</p><a href={`/admin/competition?event=${encodeURIComponent(eventId)}`}>返回竞赛执行</a></main>, selectedGroupId, PHASES.find((phase) => phase.code === phaseCode)?.title || "当前阶段");
   }
+  if (result.data.kind === "main") {
+    const data = result.data.data;
+    return shell(<MainStageWorkbenchClient initialData={data} />, data.selectedGroupId, data.phaseTitle);
+  }
+  const data = result.data.data;
+  return shell(<DrawWorkbenchClient initialData={data} />, data.selectedGroupId, data.phaseTitle);
 }

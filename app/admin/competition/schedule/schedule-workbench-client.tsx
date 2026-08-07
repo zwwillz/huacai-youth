@@ -37,13 +37,12 @@ export default function ScheduleWorkbenchClient({ initialData }: Props) {
 
   const tvPositions = useMemo(() => [...new Set(tvText.split(/[，,\s]+/).map((value) => Number(value)).filter((value) => Number.isInteger(value) && value >= 1 && value <= tableCount))], [tvText, tableCount]);
   const tablePreview = useMemo(() => {
-    let normalNo = 0;
     return Array.from({ length: tableCount }, (_, index) => {
       const positionNo = index + 1;
       if (tableMode === "manual") return { positionNo, label: manualLabels[index] || `${positionNo}号台`, isTv: /^tv/i.test((manualLabels[index] || "").replaceAll("台", "")) };
       const tvIndex = tvPositions.indexOf(positionNo);
       if (tvIndex >= 0) return { positionNo, label: `TV${tvIndex + 1}台`, isTv: true };
-      normalNo += 1;
+      const normalNo = positionNo - tvPositions.filter((value) => value < positionNo).length;
       return { positionNo, label: `${normalNo}号台`, isTv: false };
     });
   }, [tableCount, tableMode, manualLabels, tvPositions]);

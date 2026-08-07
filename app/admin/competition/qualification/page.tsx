@@ -10,6 +10,7 @@ import CompetitionContextBar from "../competition-context-bar";
 import CompetitionPublicationBar from "../competition-publication-bar";
 import QualificationWorkbenchClient from "./qualification-workbench-client";
 import MainRosterControlClient from "./main-roster-control-client";
+import { captureAdminLoad } from "../../capture-admin-load";
 import "../competition-context-bar.css";
 import "./qualification.css";
 import "./main-roster-control.css";
@@ -30,7 +31,7 @@ export default async function QualificationPage({ searchParams }: { searchParams
   const eventId = events.some((event) => event.id === query.event) ? String(query.event) : events[0]?.id;
   if (!eventId) redirect("/admin/competition");
 
-  try {
+  const result = await captureAdminLoad((async () => {
     const [data, context] = await Promise.all([
       getQualificationWorkspaceData(viewer.username, eventId),
       getCompetitionContextData(viewer.username, eventId),
@@ -65,15 +66,17 @@ export default async function QualificationPage({ searchParams }: { searchParams
     const groupName = context.groups.find((group) => group.id === selectedGroupId)?.name || "当前组别";
     const filteredQualification = { ...data, stages: groupStages.filter((stage) => stage.phaseCode === selectedPhase) };
     const filteredRoster = mainRosterControl ? { ...mainRosterControl, groups: rosterGroup ? [rosterGroup] : [] } : null;
-
-    return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="晋级" pageHint="竞赛执行 · 当前阶段晋级确认" currentEventId={eventId} eventScoped competitionTool="qualification">
+    return { context, selectedGroupId, selectedPhase, phaseOptions, groupName, filteredQualification, filteredRoster };
+  })());
+  if (!result.data) {
+    return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="晋级" pageHint="竞赛执行 · 当前阶段晋级确认" currentEventId={eventId} eventScoped competitionTool="qualification"><main className="backend-state backend-denied"><div className="backend-state-logo">晋</div><small>晋级</small><h1>暂时不能进入晋级工作区</h1><p>{result.error instanceof Error ? result.error.message : "竞赛名单数据读取失败。"}</p><a href="/admin/competition">返回竞赛执行</a></main></AdminWorkspaceShell>;
+  }
+  const { context, selectedGroupId, selectedPhase, phaseOptions, groupName, filteredQualification, filteredRoster } = result.data;
+  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="晋级" pageHint="竞赛执行 · 当前阶段晋级确认" currentEventId={eventId} eventScoped competitionTool="qualification">
       <CompetitionContextBar eventId={eventId} eventTitle={context.event.shortTitle} groups={context.groups} selectedGroupId={selectedGroupId} basePath="/admin/competition/qualification" phases={phaseOptions} selectedPhase={selectedPhase} eyebrow="晋级" title={`${groupName} · ${PHASES.find((phase) => phase.code === selectedPhase)?.title || "当前阶段"}`} description="一次只处理一个组别、一个阶段。资格赛确认24人；正赛第一阶段负责种子/递补、64人锁定和32强确认；正赛第二阶段完成后直接进入最终排名。" />
       <CompetitionPublicationBar eventId={eventId} moduleType="schedule" title="签表、晋级与赛程" status={context.publications.schedule.status} hasUnpublishedChanges={context.publications.schedule.hasUnpublishedChanges} viewerRole={viewer.role} hint="晋级、种子、递补、64人锁定或32强确认只更新后台；用户端保持上一版正式名单和签表，直到再次发布更新。" />
       {selectedPhase.startsWith("qualifier") && <QualificationWorkbenchClient initialData={filteredQualification} />}
       {selectedPhase === "main-one" && filteredRoster && <MainRosterControlClient initialData={filteredRoster} />}
       {selectedPhase === "main-two" && <section className="qualification-main-two-note"><div><small>正赛第二阶段</small><h2>本阶段不再单独确认“晋级”</h2><p>32强名单已经在正赛第一阶段确认。第二阶段按照重新抽签后的单败签表一直比赛到冠军，并包含三、四名决赛。所有比赛结果确认完成后，系统自动生成本站最终排名草稿。</p></div><div><Link href={`/admin/competition/draw?event=${encodeURIComponent(eventId)}&group=${encodeURIComponent(selectedGroupId)}&phase=main-two`}>进入正赛第二阶段抽签 / 签表</Link><Link href={`/admin/competition/final-ranking?event=${encodeURIComponent(eventId)}&group=${encodeURIComponent(selectedGroupId)}`}>查看最终排名状态</Link></div></section>}
-    </AdminWorkspaceShell>;
-  } catch (error) {
-    return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="晋级" pageHint="竞赛执行 · 当前阶段晋级确认" currentEventId={eventId} eventScoped competitionTool="qualification"><main className="backend-state backend-denied"><div className="backend-state-logo">晋</div><small>晋级</small><h1>暂时不能进入晋级工作区</h1><p>{error instanceof Error ? error.message : "竞赛名单数据读取失败。"}</p><a href="/admin/competition">返回竞赛执行</a></main></AdminWorkspaceShell>;
-  }
+  </AdminWorkspaceShell>;
 }

@@ -118,6 +118,11 @@ export type DrawSessionDetail = {
   }>;
 };
 
+type DrawSessionRow = Omit<DrawSessionDetail["session"], "phaseCode" | "phaseTitle"> & { phaseCode: string };
+type DrawParticipantRow = DrawSessionDetail["participants"][number];
+type DrawPrelimMatchRow = DrawSessionDetail["prelimMatches"][number];
+type DrawSlotRow = DrawSessionDetail["slots"][number];
+
 type Viewer = { id: string; username: string; role: string };
 type Participant = { playerId: string; playerName: string };
 
@@ -464,7 +469,7 @@ export async function createQualificationDraw(username: string, input: { eventId
 export async function getDrawSessionDetail(username: string, sessionId: string): Promise<DrawSessionDetail> {
   const viewer = await requireViewer(username);
   const sql = getSqlClient();
-  const sessionRows = await sql<Array<any>>`
+  const sessionRows = await sql<DrawSessionRow[]>`
     select s.id, s.event_id as "eventId", e.short_title as "eventTitle", s.group_id as "groupId", g.name as "groupName",
       s.phase_code as "phaseCode", s.version_no as "versionNo", s.status, s.entrant_count as "entrantCount",
       s.bracket_size as "bracketSize", s.division_size as "divisionSize", s.division_count as "divisionCount",
@@ -483,15 +488,15 @@ export async function getDrawSessionDetail(username: string, sessionId: string):
   await requireEventAccess(username, raw.eventId);
   const phaseCode = raw.phaseCode as DrawPhaseCode;
   const [participants, prelimMatches, slots] = await Promise.all([
-    sql<Array<any>>`
+    sql<DrawParticipantRow[]>`
       select player_id as "playerId", player_name as "playerName", random_order as "randomOrder", assignment_type as "assignmentType", display_draw_no as "displayDrawNo"
       from public.draw_participants where session_id=${sessionId} order by random_order
     `,
-    sql<Array<any>>`
+    sql<DrawPrelimMatchRow[]>`
       select id,match_no as "matchNo",player_a_id as "playerAId",player_a_name as "playerAName",player_b_id as "playerBId",player_b_name as "playerBName",target_slot_no as "targetSlotNo",status
       from public.draw_prelim_matches where session_id=${sessionId} order by match_no
     `,
-    sql<Array<any>>`
+    sql<DrawSlotRow[]>`
       select slot_no as "slotNo",division_no as "divisionNo",division_slot_no as "divisionSlotNo",slot_type as "slotType",player_id as "playerId",player_name as "playerName",prelim_match_id as "prelimMatchId"
       from public.draw_slots where session_id=${sessionId} order by slot_no
     `,

@@ -36,8 +36,10 @@ export default function DrawScreenClient({ data }: Props) {
 
   useEffect(() => {
     if (stage !== "countdown") return;
-    if (countdown <= 0) { setStage("shuffle"); return; }
-    const timer = window.setTimeout(() => setCountdown((value) => value - 1), 800);
+    const timer = window.setTimeout(() => {
+      if (countdown <= 0) setStage("shuffle");
+      else setCountdown((value) => value - 1);
+    }, countdown <= 0 ? 0 : 800);
     return () => window.clearTimeout(timer);
   }, [stage, countdown]);
   useEffect(() => {
