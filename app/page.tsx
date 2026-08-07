@@ -52,6 +52,7 @@ export default async function Home() {
 
   return <>
     <style dangerouslySetInnerHTML={{ __html: visualCss }} />
+    <style>{`.content.public-competition-mode>.stack.public-live-stage-detail{display:flex!important}`}</style>
     <EventApp data={data} />
     <PublicContentEnhancer states={contentStates} />
     <PublicCompetitionLiveEnhancer stations={data.stations} competitions={liveCompetitions} />
