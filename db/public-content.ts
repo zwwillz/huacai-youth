@@ -22,7 +22,11 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
   const sql = getSqlClient();
   const eventIds = stations.map((station) => station.eventId);
   const [publicationRows, documentRows, guideRows] = await Promise.all([
-    db.select().from(publications).where(inArray(publications.eventId, eventIds)),
+    db.select({
+      eventId: publications.eventId,
+      moduleType: publications.moduleType,
+      status: publications.status,
+    }).from(publications).where(inArray(publications.eventId, eventIds)),
     db.select().from(eventDocuments).where(inArray(eventDocuments.eventId, eventIds)),
     sql<GuideSummaryRow[]>`
       select id, event_id, guide_type, title, sort_order
