@@ -7,6 +7,7 @@ import {
 } from "@/db/draw-engine";
 import { getCompetitionDrawWorkspaceData } from "@/db/competition-draw-workspace";
 import { createQualificationDrawFast } from "@/db/draw-engine-write";
+import { createMainStageDraw, getMainStageWorkspaceData, isMainPhase } from "@/db/main-stage-engine";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -22,6 +23,7 @@ export async function GET(request: Request) {
     const groupId = url.searchParams.get("groupId") || undefined;
     const phaseCode = (url.searchParams.get("phaseCode") || "qualifier-one") as DrawPhaseCode;
     if (!eventId) throw new Error("缺少赛事ID。");
+    if (isMainPhase(phaseCode)) return Response.json({ data: await getMainStageWorkspaceData(viewer.username, eventId, groupId, phaseCode) });
     return Response.json({ data: await getCompetitionDrawWorkspaceData(viewer.username, eventId, groupId, phaseCode) });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "抽签数据读取失败。" }, { status: 400 });
@@ -39,17 +41,19 @@ export async function POST(request: Request) {
       const groupId = String(body.groupId || "");
       const phaseCode = String(body.phaseCode || "qualifier-one") as DrawPhaseCode;
       if (!eventId || !groupId) throw new Error("缺少赛事或组别参数。");
-      const data = await createQualificationDrawFast(viewer.username, {
-        eventId,
-        groupId,
-        phaseCode,
-        bracketSize: Number(body.bracketSize || 512),
-        divisionSize: Number(body.divisionSize || 32),
-        rateQualifierCount: Number(body.rateQualifierCount || 0),
-        seedsEnabled: Boolean(body.seedsEnabled),
-        seedTargetCount: Number(body.seedTargetCount || 0),
-        seedFillRule: String(body.seedFillRule || "game_win_rate"),
-      });
+      const data = isMainPhase(phaseCode)
+        ? await createMainStageDraw(viewer.username, { eventId, groupId, phaseCode })
+        : await createQualificationDrawFast(viewer.username, {
+            eventId,
+            groupId,
+            phaseCode,
+            bracketSize: Number(body.bracketSize || 512),
+            divisionSize: Number(body.divisionSize || 32),
+            rateQualifierCount: Number(body.rateQualifierCount || 0),
+            seedsEnabled: Boolean(body.seedsEnabled),
+            seedTargetCount: Number(body.seedTargetCount || 0),
+            seedFillRule: String(body.seedFillRule || "game_win_rate"),
+          });
       return Response.json({ data });
     }
     if (action === "confirm") {
