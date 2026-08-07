@@ -4,12 +4,13 @@ import LangfangDbEnhancer from "./langfang-db-enhancer";
 import PublicContentEnhancer from "./public-content-enhancer";
 import PublicCompetitionLiveEnhancer from "./public-competition-live-enhancer";
 import PlayerDbView from "./player-db-view";
+import MePreview from "./me-preview";
 import { getPublicSiteData } from "@/db/public";
 import { getPublicContentState } from "@/db/public-content";
 import { getPublicRankings } from "@/db/rankings";
 import { getCompetitionMatches } from "@/db/competition-matches";
 import { getPublicCompetitionEvents } from "@/db/public-competition-live";
-import { getPublicPlayerSummaries } from "@/db/player-data";
+import { getPublicPlayerDetail, getPublicPlayerSummaries } from "@/db/player-data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,12 @@ export default async function Home() {
     jinanEventId ? getPublicCompetitionEvents([jinanEventId]) : Promise.resolve([]),
     getPublicPlayerSummaries(),
   ]);
+
+  const demoSummary = players.find((player) => competitionMatches.some((match) => match.playerAId === player.id || match.playerBId === player.id)) ?? players[0] ?? null;
+  const demoPlayer = demoSummary ? await getPublicPlayerDetail(demoSummary.id) : null;
+  const demoMatches = demoSummary
+    ? competitionMatches.filter((match) => match.playerAId === demoSummary.id || match.playerBId === demoSummary.id)
+    : [];
   const visualCss = eventVisualCss(data.stations);
 
   return <>
@@ -59,5 +66,6 @@ export default async function Home() {
     <LangfangRankingStatic rankings={rankings} />
     <LangfangDbEnhancer matches={competitionMatches} />
     <PlayerDbView players={players} />
+    <MePreview player={demoPlayer} matches={demoMatches} />
   </>;
 }
