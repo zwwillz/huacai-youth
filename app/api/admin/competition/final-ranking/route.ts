@@ -1,5 +1,5 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
-import { confirmFinalRanking, getFinalRankingWorkspaceData, publishFinalRanking } from "@/db/main-competition-flow";
+import { confirmFinalRanking, getFinalRankingWorkspaceData, publishFinalRanking } from "@/db/final-ranking-engine";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
