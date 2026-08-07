@@ -48,7 +48,7 @@ export default function ScheduleWorkbenchClient({ initialData }: Props) {
   }, [tableCount, tableMode, manualLabels, tvPositions]);
 
   const assignmentsBySlot = useMemo(() => {
-    const map = new Map<string, typeof data.assignments>();
+    const map = new Map<string, ScheduleWorkspaceData["assignments"]>();
     for (const assignment of data.assignments) {
       const key = assignment.timeSlotId || "unassigned";
       const list = map.get(key) ?? [];
