@@ -3,6 +3,7 @@ import LangfangRankingStatic from "./langfang-ranking-static";
 import LangfangDbEnhancer from "./langfang-db-enhancer";
 import PublicContentEnhancer from "./public-content-enhancer";
 import PublicCompetitionLiveV2 from "./public-competition-live-v2";
+import PublicTabsUnifier from "./public-tabs-unifier";
 import PlayerDbView from "./player-db-view";
 import MePreview from "./me-preview";
 import { getPublicSiteData } from "@/db/public";
@@ -61,9 +62,30 @@ export default async function Home() {
 
   return <>
     <style dangerouslySetInnerHTML={{ __html: visualCss }} />
+    <style>{`
+      /* 数据库竞赛分站的顶部菜单严格使用廊坊站原生 tabs 视觉，不使用单独的五列网格样式。 */
+      .tabs.public-five-tabs,.tabs.public-unified-tabs{
+        display:flex!important;
+        grid-template-columns:none!important;
+        width:max-content!important;
+        max-width:100%!important;
+        gap:5px!important;
+        padding:5px!important;
+      }
+      .tabs.public-five-tabs button,.tabs.public-unified-tabs button{
+        min-width:0!important;
+        padding:8px 14px!important;
+        font-size:11px!important;
+      }
+      @media(max-width:900px){
+        .tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;width:max-content!important}
+        .tabs.public-five-tabs button,.tabs.public-unified-tabs button{padding:8px 14px!important;font-size:11px!important}
+      }
+    `}</style>
     <EventApp data={data} />
     <PublicContentEnhancer states={contentStates} />
     <PublicCompetitionLiveV2 stations={data.stations} events={liveCompetitions} contentStates={contentStates} rankings={dynamicRankings} />
+    <PublicTabsUnifier />
     <LangfangRankingStatic rankings={rankings} />
     <LangfangDbEnhancer matches={competitionMatches} />
     <PlayerDbView players={players} />
