@@ -18,7 +18,7 @@ type Props = {
 export default function CompetitionPublicationBar({ eventId, moduleType, title, status, hasUnpublishedChanges = false, viewerRole, hint }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{ text: string; tone: "success" | "error" } | null>(null);
   const { ask, dialog } = useAdminActionDialog();
   const canWrite = viewerRole === "system_admin" || viewerRole === "committee";
   const published = status === "published";
@@ -33,7 +33,7 @@ export default function CompetitionPublicationBar({ eventId, moduleType, title, 
       : `确认暂时从用户端撤回“${title}”吗？后台数据和上一版发布快照都不会删除，之后可以再次发布。`;
     const confirmed = await ask({ title: nextStatus === "published" ? `${published ? "发布更新" : "发布"}“${title}”` : `撤回“${title}”`, description: text, confirmLabel: nextStatus === "published" ? "确认发布" : "确认撤回", tone: nextStatus === "published" ? "default" : "danger" });
     if (!confirmed) return;
-    setBusy(true); setMessage("");
+    setBusy(true); setMessage(null);
     try {
       const response = await fetch("/api/admin/competition/publication", {
         method: "POST",
@@ -42,16 +42,16 @@ export default function CompetitionPublicationBar({ eventId, moduleType, title, 
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "发布状态更新失败。");
-      setMessage(nextStatus === "published" ? "新版本已经发布，用户端已切换到本次正式快照。" : "已从用户端撤回，后台数据仍完整保留。" );
+      setMessage({ text: nextStatus === "published" ? "新版本已经发布，用户端已切换到本次正式快照。" : "已从用户端撤回，后台数据仍完整保留。", tone: "success" });
       router.refresh();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "发布状态更新失败。"); }
+    } catch (error) { setMessage({ text: error instanceof Error ? error.message : "发布状态更新失败。", tone: "error" }); }
     finally { setBusy(false); }
   }
 
   return <><section className="competition-publication-bar">
     <div className="competition-publication-copy">
       <span className={`competition-publication-status ${published && !hasUnpublishedChanges ? "published" : "draft"}`}>{stateLabel}</span>
-      <div><strong>{title}</strong><p>{message || hint}</p></div>
+      <div><strong>{title}</strong><p className={message?.tone}>{message?.text || hint}</p><small className="competition-publication-flow">后台保存 → 组委会复核 → 发布用户端</small></div>
     </div>
     {canWrite && <div className="competition-publication-actions">
       {needsPublish && <button type="button" disabled={busy} onClick={() => change("published")}>{busy ? "发布中…" : published ? "发布更新" : "发布到用户端"}</button>}
