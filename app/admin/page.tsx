@@ -4,6 +4,7 @@ import { getAdminHomeData } from "@/db/admin-ui";
 import AdminWorkspaceShell from "./admin-workspace-shell";
 import { getAdminViewer } from "./admin-viewer";
 import "./admin-home.css";
+import { eventStatusLabel } from "./admin-status";
 
 export const dynamic = "force-dynamic";
 
@@ -94,5 +95,5 @@ function ScopedPlaceholder({ title, eventTitle, description }: { title: string; 
 }
 
 function RankingsOverview({ events }: { events: Awaited<ReturnType<typeof getAdminHomeData>>["events"] }) {
-  return <main className="admin-simple-page"><section className="admin-simple-head"><small>GLOBAL RANKING</small><h2>排名积分</h2><p>排名积分是全局工作区，不被顶部“当前赛事”绑定。后续这里会包含系列总积分榜、分站排名和积分流水。</p></section><section className="admin-simple-card"><h3>已建立赛事</h3><div className="admin-simple-table">{events.map((event) => <div className="admin-simple-row" key={event.id}><div><b>第 {event.stationNo} 站</b><br/><small>{event.shortTitle}</small></div><span>{event.city}</span><span>{event.status}</span></div>)}</div></section></main>;
+  return <main className="admin-simple-page"><section className="admin-simple-head"><small>GLOBAL RANKING</small><h2>排名积分</h2><p>排名积分是全局工作区，不被顶部“当前赛事”绑定。后续这里会包含系列总积分榜、分站排名和积分流水。</p></section><section className="admin-simple-card"><h3>已建立赛事</h3><div className="admin-simple-table">{events.map((event) => <div className="admin-simple-row" key={event.id}><div><b>第 {event.stationNo} 站</b><br/><small>{event.shortTitle}</small></div><span>{event.city}</span><span>{eventStatusLabel(event.status)}</span></div>)}</div></section></main>;
 }
