@@ -1,24 +1,15 @@
 import { unstable_cache } from "next/cache";
 import EventApp from "./event-app";
-import LangfangRankingStatic from "./langfang-ranking-static";
-import LangfangDbEnhancer from "./langfang-db-enhancer";
-import PublicContentEnhancer from "./public-content-enhancer";
-import PublicCompetitionLiveV2 from "./public-competition-live-v2";
-import PublicTabsUnifier from "./public-tabs-unifier";
 import PlayerDbView from "./player-db-view";
 import MePreview from "./me-preview";
 import { getPublicSiteData } from "@/db/public";
 import { getPublicContentState } from "@/db/public-content";
-import { getPublicRankings } from "@/db/rankings";
-import { getCompetitionMatches } from "@/db/competition-matches";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const getCachedPublicSiteData = unstable_cache(getPublicSiteData, ["public-site-data-v2"], { revalidate: 60, tags: ["public-site"] });
 const getCachedPublicContentState = unstable_cache(getPublicContentState, ["public-content-state-v2"], { revalidate: 60, tags: ["public-content"] });
-const getCachedPublicRankings = unstable_cache(getPublicRankings, ["public-rankings-v2"], { revalidate: 60, tags: ["public-rankings"] });
-const getCachedCompetitionMatches = unstable_cache(getCompetitionMatches, ["legacy-competition-matches-v2"], { revalidate: 60, tags: ["legacy-matches"] });
 
 function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>["stations"]) {
   return stations.map((station) => {
@@ -44,12 +35,7 @@ function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>[
 
 export default async function Home() {
   const data = await getCachedPublicSiteData();
-  const langfangEventId = data.stations.find((station) => station.id === "langfang")?.eventId;
-  const [contentStates, rankings, competitionMatches] = await Promise.all([
-    getCachedPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title }))),
-    langfangEventId ? getCachedPublicRankings(langfangEventId) : Promise.resolve([]),
-    langfangEventId ? getCachedCompetitionMatches(langfangEventId) : Promise.resolve([]),
-  ]);
+  const contentStates = await getCachedPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title })));
   const visualCss = eventVisualCss(data.stations);
 
   return <>
@@ -59,12 +45,7 @@ export default async function Home() {
       .tabs.public-five-tabs button,.tabs.public-unified-tabs button{min-width:0!important;padding:8px 14px!important;font-size:11px!important}
       @media(max-width:900px){.tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;width:max-content!important}.tabs.public-five-tabs button,.tabs.public-unified-tabs button{padding:8px 14px!important;font-size:11px!important}}
     `}</style>
-    <EventApp data={data} />
-    <PublicContentEnhancer states={contentStates} />
-    <PublicCompetitionLiveV2 stations={data.stations} contentStates={contentStates} />
-    <PublicTabsUnifier />
-    <LangfangRankingStatic rankings={rankings} />
-    <LangfangDbEnhancer matches={competitionMatches} />
+    <EventApp data={data} contentStates={contentStates} />
     <PlayerDbView />
     <MePreview />
   </>;
