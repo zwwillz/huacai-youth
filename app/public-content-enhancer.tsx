@@ -48,6 +48,7 @@ export default function PublicContentEnhancer({ states }: { states: PublicConten
       detectCurrentStation();
       const state = stateMap.get(currentStationId);
       if (!state) return;
+      const competitionOpened = state.publishedModules.includes("schedule");
 
       document.querySelectorAll<HTMLButtonElement>(".tabs button").forEach((button) => {
         const label = button.textContent?.trim() ?? "";
@@ -56,7 +57,12 @@ export default function PublicContentEnhancer({ states }: { states: PublicConten
           button.style.display = "";
           return;
         }
-        button.style.display = state.publishedModules.includes(moduleType) ? "" : "none";
+        // 一旦赛程正式发布，赛程、对阵、排名三个竞赛入口全部开放。
+        // 后续模块即使暂时没有数据，也由对应页面显示“待公布/等待上一阶段”的说明，避免用户找不到入口。
+        const visible = moduleType === "regulation"
+          ? state.publishedModules.includes("regulation")
+          : competitionOpened || state.publishedModules.includes(moduleType);
+        button.style.display = visible ? "" : "none";
       });
 
       const tipSection = document.querySelector<HTMLElement>(".participant-tips");
