@@ -8,7 +8,6 @@ import {
   eventGuides,
   events,
   publications,
-  users,
 } from "./schema";
 
 export type ContentPublication = {

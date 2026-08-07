@@ -1,4 +1,4 @@
-import { loginWithPassword } from "@/db/auth";
+import { LoginRateLimitError, loginWithPassword } from "@/db/auth";
 import { setAdminSessionCookie } from "@/lib/auth/cookies";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,7 @@ export async function POST(request: Request) {
     await setAdminSessionCookie(session.token, session.expiresAt);
     return Response.json({ ok: true });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "登录失败。" }, { status: 401 });
+    const status = error instanceof LoginRateLimitError ? 429 : 401;
+    return Response.json({ error: error instanceof Error ? error.message : "登录失败。" }, { status });
   }
 }

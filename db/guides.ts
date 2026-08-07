@@ -1,7 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb, getSqlClient } from "./index";
 import { requireEventAccess } from "./permissions";
-import { events, users } from "./schema";
+import { events } from "./schema";
 
 export type GuideBlock =
   | { id: string; type: "paragraph"; text: string }
