@@ -59,7 +59,13 @@ export default async function Home() {
 
   return <>
     <style dangerouslySetInnerHTML={{ __html: visualCss }} />
-    <style>{`.content.public-competition-mode>.stack.public-live-stage-detail{display:flex!important}@media(max-width:900px){.tabs.short-tabs:has([data-public-comp-tab]){grid-template-columns:repeat(5,minmax(0,1fr))!important}}`}</style>
+    <style>{`
+.content.public-competition-mode>.stack.public-live-stage-detail{display:flex!important}
+.public-main-group-grid{grid-template-columns:.8fr 1.25fr .8fr!important;grid-template-areas:"loser first winner"}
+.public-main-group-grid>.public-main-lane:first-child{grid-area:first}.public-main-group-grid>.public-main-lane.winner{grid-area:winner}.public-main-group-grid>.public-main-lane.loser{grid-area:loser}
+@media(max-width:1100px){.public-main-group-grid{grid-template-columns:1fr 1fr!important;grid-template-areas:"first first" "loser winner"}}
+@media(max-width:760px){.public-main-group-grid{grid-template-columns:1fr!important;grid-template-areas:"first" "winner" "loser"}.tabs.short-tabs:has([data-public-comp-tab]){grid-template-columns:repeat(5,minmax(0,1fr))!important}}
+`}</style>
     <EventApp data={data} />
     <PublicContentEnhancer states={contentStates} />
     <PublicCompetitionLiveEnhancer stations={data.stations} events={liveCompetitions} />
