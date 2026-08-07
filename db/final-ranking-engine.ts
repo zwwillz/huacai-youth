@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 
 export type FinalRankingRow = {
   displayOrder: number;
@@ -214,6 +215,7 @@ export async function ensureFinalRankingDrafts(eventId: string) {
 
 export async function getFinalRankingWorkspaceData(username: string, eventId: string): Promise<FinalRankingWorkspaceData> {
   const viewer = await requireViewer(username);
+  await requireEventAccess(username, eventId);
   await ensureFinalRankingDrafts(eventId);
   const sql = getSqlClient();
   const events = await sql<Array<{ id: string; shortTitle: string }>>`select id,short_title as "shortTitle" from public.events where id=${eventId} limit 1`;
@@ -265,6 +267,7 @@ export async function confirmFinalRanking(username: string, batchId: string) {
   `;
   const batch = rows[0];
   if (!batch) throw new Error("没有找到最终排名批次。");
+  await requireEventAccess(username, batch.eventId, { write: true });
   if (batch.status === "published" || batch.status === "confirmed") return { ok: true };
   const timestamp = now();
   await sql.begin(async (tx) => {
@@ -284,6 +287,7 @@ export async function publishFinalRanking(username: string, batchId: string) {
   `;
   const batch = rows[0];
   if (!batch) throw new Error("没有找到最终排名批次。");
+  await requireEventAccess(username, batch.eventId, { write: true });
   if (batch.status !== "confirmed" && batch.status !== "published") throw new Error("请先确认最终排名，再进行发布。");
   if (batch.status === "published") return { ok: true };
   const timestamp = now();
