@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ScoringMatch, ScoringWorkspaceData } from "@/db/scoring-engine";
+import { useAdminActionDialog } from "../../admin-action-dialog";
 
 type Props = { initialData: ScoringWorkspaceData };
 type Draft = { scoreA: string; scoreB: string; resultType: string; note: string };
@@ -28,6 +29,7 @@ export default function ScoringWorkbenchClient({ initialData }: Props) {
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
+  const { ask, dialog } = useAdminActionDialog();
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return matches;
@@ -71,12 +73,14 @@ export default function ScoringWorkbenchClient({ initialData }: Props) {
 
   async function submit(match: ScoringMatch) {
     const draft = drafts[match.assignmentId] ?? makeDraft(match);
-    if (!window.confirm(`确认提交这场赛果？\n${match.playerAName || "A方"} ${draft.scoreA || "-"} : ${draft.scoreB || "-"} ${match.playerBName || "B方"}`)) return;
+    const confirmed = await ask({ title: "提交这场赛果", description: `${match.playerAName || "A方"} ${draft.scoreA || "-"} : ${draft.scoreB || "-"} ${match.playerBName || "B方"}`, confirmLabel: "确认提交" });
+    if (!confirmed) return;
     const ok = await post({ action: "submit", assignmentId: match.assignmentId, ...draft }, match.assignmentId);
     if (ok) setMessage("赛果已保存并提交，等待组委会确认；尚未发布到用户端。" );
   }
   async function confirm(match: ScoringMatch) {
-    if (!window.confirm(`确认这场赛果并推动晋级关系？\n\n确认后该场会从默认待办列表消失；对用户端的显示仍需点击上方“发布到用户端”。`)) return;
+    const confirmed = await ask({ title: "确认赛果并推动晋级关系", description: "确认后该场会从默认待办列表消失；对用户端的显示仍需点击上方“发布到用户端”。", confirmLabel: "确认赛果" });
+    if (!confirmed) return;
     const ok = await post({ action: "confirm", assignmentId: match.assignmentId }, match.assignmentId);
     if (ok) setMessage("赛果已正式确认并推动后续签表。对阵与比分已进入“待发布”状态。" );
   }
@@ -112,5 +116,6 @@ export default function ScoringWorkbenchClient({ initialData }: Props) {
       </article>;
     })}</section>
     {!filtered.length && <section className="scoring-empty"><strong>{initialData.counts.confirmed > 0 && !initialData.filters.showConfirmed ? "当前日期没有待处理比赛" : "当前阶段还没有可录入的比赛"}</strong><p>{initialData.counts.confirmed > 0 && !initialData.filters.showConfirmed ? "已确认场次默认自动收起；需要复核时点击“查看已确认”。" : "可能还未排赛程，或上一轮赛果尚未产生下一场对阵。"}</p></section>}
+    {dialog}
   </main>;
 }
