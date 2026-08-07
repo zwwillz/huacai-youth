@@ -21,7 +21,7 @@ export type AdminDialogOptions = {
 
 type DialogState = AdminDialogOptions & { value: string };
 
-function AdminActionDialog({ state, onCancel, onConfirm }: { state: DialogState; onCancel: () => void; onConfirm: (value: string | true) => void }) {
+function AdminActionDialog({ state, onCancel, onConfirm, onValueChange }: { state: DialogState; onCancel: () => void; onConfirm: (value: string | true) => void; onValueChange: (value: string) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
   const valid = !state.input || (!state.input.required || state.value.trim().length >= (state.input.minLength ?? 1));
@@ -29,16 +29,10 @@ function AdminActionDialog({ state, onCancel, onConfirm }: { state: DialogState;
     <section className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="admin-dialog-title">
       <header><span className={state.tone === "danger" ? styles.dangerMark : styles.mark}>{state.tone === "danger" ? "!" : "✓"}</span><div><small>请确认当前操作</small><h2 id="admin-dialog-title">{state.title}</h2></div></header>
       <div className={styles.description}>{state.description}</div>
-      {state.input && <label className={styles.input}><span>{state.input.label}</span><input ref={inputRef} type={state.input.type ?? "text"} value={state.value} minLength={state.input.minLength} required={state.input.required} placeholder={state.input.placeholder} onChange={(event) => onConfirmValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") onCancel(); }} /></label>}
+      {state.input && <label className={styles.input}><span>{state.input.label}</span><input ref={inputRef} type={state.input.type ?? "text"} value={state.value} minLength={state.input.minLength} required={state.input.required} placeholder={state.input.placeholder} onChange={(event) => onValueChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") onCancel(); }} /></label>}
       <footer><button type="button" className={styles.cancel} onClick={onCancel}>{state.cancelLabel || "取消"}</button><button type="button" className={state.tone === "danger" ? styles.danger : styles.confirm} disabled={!valid} onClick={() => onConfirm(state.input ? state.value.trim() : true)}>{state.confirmLabel || "确认"}</button></footer>
     </section>
   </div>;
-
-  function onConfirmValue(value: string) {
-    const input = document.querySelector<HTMLInputElement>('[aria-labelledby="admin-dialog-title"] input');
-    if (input && input.value !== value) input.value = value;
-    state.value = value;
-  }
 }
 
 export function useAdminActionDialog() {
@@ -61,6 +55,7 @@ export function useAdminActionDialog() {
     state={state}
     onCancel={() => finish(null)}
     onConfirm={(value) => finish(value)}
+    onValueChange={(value) => setState((current) => current ? { ...current, value } : current)}
   /> : null;
 
   return { ask, dialog };
