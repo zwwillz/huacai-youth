@@ -1,6 +1,7 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { getEventManagementData, saveEventManagementData, type EventManagementInput } from "@/db/event-management";
 import { syncEventOverviewPublication } from "@/db/event-publication-sync";
+import { revalidateTag } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
     const input = await request.json() as EventManagementInput;
     const data = await saveEventManagementData(viewer.username, input);
     await syncEventOverviewPublication(input.eventId, input.publishStatus === "published");
+    revalidateTag("admin-navigation-events", { expire: 0 });
     return Response.json({ data });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "赛事资料保存失败。" }, { status: 400 });
