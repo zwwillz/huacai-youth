@@ -38,8 +38,10 @@ export default async function QualificationPage({ searchParams }: { searchParams
     const selectedGroupId = context.groups.some((group) => group.id === query.group) ? String(query.group) : context.groups[0]?.id || "";
     const groupStages = data.stages.filter((stage) => stage.groupId === selectedGroupId);
     const rosterGroup = mainRosterControl.groups.find((group) => group.groupId === selectedGroupId);
-    const suggestedPhase = groupStages.find((stage) => stage.phaseCode === "qualifier-one" && !stage.confirmed) ? "qualifier-one"
-      : groupStages.find((stage) => stage.phaseCode === "qualifier-two" && !stage.confirmed) ? "qualifier-two"
+    const q1 = groupStages.find((stage) => stage.phaseCode === "qualifier-one");
+    const q2 = groupStages.find((stage) => stage.phaseCode === "qualifier-two");
+    const suggestedPhase = !q1 || !q1.confirmed ? "qualifier-one"
+      : !q2 || !q2.confirmed ? "qualifier-two"
       : !rosterGroup?.currentLock || rosterGroup.currentLock.status !== "locked" || rosterGroup.advancement?.status !== "confirmed" ? "main-one"
       : "main-two";
     const selectedPhase = PHASES.some((phase) => phase.code === query.phase) ? String(query.phase) : suggestedPhase;
