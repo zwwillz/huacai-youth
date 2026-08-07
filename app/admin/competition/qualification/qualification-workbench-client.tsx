@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { QualificationStage, QualificationWorkspaceData } from "@/db/qualification-engine";
+import { useAdminActionDialog } from "../../admin-action-dialog";
 
 type Props = { initialData: QualificationWorkspaceData };
 
@@ -21,6 +22,7 @@ export default function QualificationWorkbenchClient({ initialData }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const { ask, dialog } = useAdminActionDialog();
   const [selected, setSelected] = useState<Record<string, string[]>>(() => Object.fromEntries(
     initialData.stages.map((stage) => [stage.drawSessionId, stage.candidates.filter((candidate) => candidate.selected).map((candidate) => candidate.playerId)]),
   ));
@@ -44,7 +46,8 @@ export default function QualificationWorkbenchClient({ initialData }: Props) {
       setMessage(`请确认 ${stage.rateQualifierCount} 名局胜率增补球员，当前选择 ${ids.length} 名。`);
       return;
     }
-    if (!window.confirm(`确认${stage.groupName} · ${stage.phaseTitle}晋级名单？\n\n${stage.direct.length}名分区冠军直接晋级 + ${ids.length}名局胜率增补。确认后将锁定本阶段结果。`)) return;
+    const confirmed = await ask({ title: `确认${stage.groupName} · ${stage.phaseTitle}晋级名单`, description: `${stage.direct.length}名分区冠军直接晋级 + ${ids.length}名局胜率增补。确认后将锁定本阶段结果。`, confirmLabel: "确认并锁定" });
+    if (!confirmed) return;
     setBusyId(stage.drawSessionId);
     setMessage("");
     try {
@@ -135,5 +138,6 @@ export default function QualificationWorkbenchClient({ initialData }: Props) {
       <article><strong>资格赛第一场确认后</strong><p>系统自动从本场全部抽签球员中扣除已晋级球员，把其余球员生成“资格赛第二场参赛名单”，然后开放第二场独立抽签。</p></article>
       <article><strong>两场资格赛确认后</strong><p>下方继续处理上一站16强种子、年龄与参赛状态、局胜率递补。只有64人名单锁定后，才允许正赛第一阶段抽签。</p></article>
     </section>
+    {dialog}
   </main>;
 }
