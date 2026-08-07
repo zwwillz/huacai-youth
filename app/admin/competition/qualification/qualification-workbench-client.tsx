@@ -55,7 +55,10 @@ export default function QualificationWorkbenchClient({ initialData }: Props) {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "晋级确认失败。");
-      setMessage(stage.phaseCode === "qualifier-one" ? "晋级名单已确认，资格赛第一场未晋级球员已经自动生成资格赛第二场参赛名单。" : "晋级名单已确认。下一步将与另一场资格赛晋级名单及种子名单合并进入正赛。" );
+      setMessage(stage.phaseCode === "qualifier-one"
+        ? "晋级名单已确认，未晋级球员已经自动进入资格赛第二场参赛名单。"
+        : "资格赛第二场晋级名单已确认。请继续在下方完成种子确认、缺额递补并锁定64人正赛名单。"
+      );
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "晋级确认失败。");
@@ -66,7 +69,7 @@ export default function QualificationWorkbenchClient({ initialData }: Props) {
 
   return <main className="qualification-page">
     <section className="qualification-hero">
-      <div><small>QUALIFICATION CONTROL</small><h2>{initialData.event.shortTitle}</h2><p>分区决胜全部确认后，系统自动识别分区冠军和决胜负者，计算候补局胜率。组委会确认最终增补名单后，再生成下一阶段参赛名单。</p></div>
+      <div><small>资格赛晋级控制</small><h2>{initialData.event.shortTitle}</h2><p>分区决胜全部确认后，系统自动识别分区冠军和决胜负者，计算候补局胜率。组委会确认最终增补名单后，再生成下一阶段参赛名单。</p></div>
       <strong>16直晋 + 8增补</strong>
     </section>
 
@@ -90,12 +93,12 @@ export default function QualificationWorkbenchClient({ initialData }: Props) {
           </div>
 
           {stage.direct.length > 0 && <section className="qualification-direct">
-            <div className="qualification-section-title"><div><small>DIRECT QUALIFIERS</small><h4>分区冠军 · 直接晋级</h4></div><span>{stage.direct.length} 人</span></div>
+            <div className="qualification-section-title"><div><small>分区冠军</small><h4>分区冠军 · 直接晋级</h4></div><span>{stage.direct.length} 人</span></div>
             <div className="qualification-name-grid">{stage.direct.map((player) => <div key={player.playerId}><span>第{player.divisionNo}区</span><strong>{player.playerName}</strong></div>)}</div>
           </section>}
 
           {stage.candidates.length > 0 && <section className="qualification-candidates">
-            <div className="qualification-section-title"><div><small>GAME WIN RATE</small><h4>分区决胜负者 · 局胜率候补</h4></div><span>默认前 {stage.rateQualifierCount} 名</span></div>
+            <div className="qualification-section-title"><div><small>局胜率候补</small><h4>分区决胜负者 · 局胜率候补</h4></div><span>默认前 {stage.rateQualifierCount} 名</span></div>
             <p className="qualification-formula">局胜率 = 本阶段已确认正常比赛的总胜局 ÷（总胜局 + 总负局）。同率时系统暂按净胜局、总胜局、分区顺序排序；组委会可以在确认前人工调整最终增补人选。</p>
             <div className="qualification-candidate-table">
               <div className="head"><span>选择</span><span>排名</span><span>球员</span><span>分区</span><span>胜局</span><span>负局</span><span>净胜局</span><span>局胜率</span></div>
@@ -115,7 +118,7 @@ export default function QualificationWorkbenchClient({ initialData }: Props) {
 
           <footer>
             {stage.confirmed ? <>
-              <div><strong>晋级名单已锁定</strong><p>{stage.direct.length + selectedIds.length} 人晋级。{stage.nextPhaseCode === "qualifier-two" ? `已自动生成 ${stage.nextPhaseEntryCount} 名资格赛第二场参赛球员。` : "正赛名单将在种子确认后合并。"}</p></div>
+              <div><strong>晋级名单已锁定</strong><p>{stage.direct.length + selectedIds.length} 人晋级。{stage.nextPhaseCode === "qualifier-two" ? `已自动生成 ${stage.nextPhaseEntryCount} 名资格赛第二场参赛球员。` : "请继续在下方完成种子确认、递补与正赛名单锁定。"}</p></div>
               {stage.nextPhaseCode === "qualifier-two" && <Link href={`/admin/competition/draw?event=${encodeURIComponent(stage.eventId)}&group=${encodeURIComponent(stage.groupId)}&phase=qualifier-two`}>进入资格赛第二场抽签 →</Link>}
             </> : <>
               <div><strong>{stage.readyToConfirm ? `当前选择：${selectedIds.length}/${stage.rateQualifierCount}` : "等待全部分区决胜赛果确认"}</strong><p>{selectedNames.length ? `增补人选：${selectedNames.join("、")}` : "系统会在分区决胜完成后自动生成候补排名。"}</p></div>
@@ -130,7 +133,7 @@ export default function QualificationWorkbenchClient({ initialData }: Props) {
 
     <section className="qualification-rule">
       <article><strong>资格赛第一场确认后</strong><p>系统自动从本场全部抽签球员中扣除已晋级球员，把其余球员生成“资格赛第二场参赛名单”，然后开放第二场独立抽签。</p></article>
-      <article><strong>正赛种子仍单独确认</strong><p>两场资格赛各自确认晋级后，再与正赛种子名单合并。种子缺席产生的空位，后续从资格赛候补顺序中递补，并由组委会确认。</p></article>
+      <article><strong>两场资格赛确认后</strong><p>下方继续处理上一站16强种子、年龄与参赛状态、局胜率递补。只有64人名单锁定后，才允许正赛第一阶段抽签。</p></article>
     </section>
   </main>;
 }
