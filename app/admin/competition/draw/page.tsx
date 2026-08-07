@@ -5,6 +5,7 @@ import { getAdminNavigationEvents } from "@/db/admin-ui";
 import { type DrawPhaseCode } from "@/db/draw-engine";
 import { getCompetitionDrawWorkspaceData } from "@/db/competition-draw-workspace";
 import { getMainStageWorkspaceData, isMainPhase } from "@/db/main-stage-engine";
+import { getMainRosterLockStatus } from "@/db/main-roster-lock-check";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import DrawWorkbenchClient from "./draw-workbench-client";
 import MainStageWorkbenchClient from "./main-stage-workbench-client";
@@ -37,6 +38,13 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
     if (isMainPhase(phaseCode)) {
       const data = await getMainStageWorkspaceData(viewer.username, eventId, query.group, phaseCode);
       if (data.latestSession?.status === "void") data.latestSession = null;
+      if (phaseCode === "main-one") {
+        const lock = await getMainRosterLockStatus(eventId, data.selectedGroupId);
+        if (!lock || lock.status !== "locked") {
+          data.sourceReady = false;
+          data.sourceNote = `${data.sourceNote} 请先在“晋级与正赛名单”中完成种子确认、递补并锁定64人名单。`;
+        }
+      }
       return shell(<MainStageWorkbenchClient initialData={data} />);
     }
     const data = await getCompetitionDrawWorkspaceData(viewer.username, eventId, query.group, phaseCode);
