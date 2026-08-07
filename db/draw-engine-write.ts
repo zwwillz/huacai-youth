@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 import { calculateQualificationPlan, getDrawSessionDetail, type DrawPhaseCode } from "./draw-engine";
 
 type Participant = { playerId: string; playerName: string; sourceType: string };
@@ -93,6 +94,7 @@ export async function createQualificationDrawFast(username: string, input: {
   seedFillRule?: string;
 }) {
   const viewer = await requireViewer(username);
+  await requireEventAccess(username, input.eventId, { write: true });
   if (!["qualifier-one", "qualifier-two"].includes(input.phaseCode)) throw new Error("当前只开放资格赛第一场和资格赛第二场的正式抽签。");
   const participants = await phaseParticipants(input.eventId, input.groupId, input.phaseCode);
   if (participants.length < 2) {
