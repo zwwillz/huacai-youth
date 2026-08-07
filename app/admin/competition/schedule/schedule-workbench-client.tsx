@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ScheduleWorkspaceData } from "@/db/schedule-engine";
+import { useAdminActionDialog } from "../../admin-action-dialog";
 
 type Props = { initialData: ScheduleWorkspaceData };
 type SlotDraft = { matchDate: string; startTime: string };
@@ -32,6 +33,7 @@ export default function ScheduleWorkbenchClient({ initialData }: Props) {
   const [selectedSlotId, setSelectedSlotId] = useState(initialData.timeSlots[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const { ask, dialog } = useAdminActionDialog();
 
   const tvPositions = useMemo(() => [...new Set(tvText.split(/[，,\s]+/).map((value) => Number(value)).filter((value) => Number.isInteger(value) && value >= 1 && value <= tableCount))], [tvText, tableCount]);
   const tablePreview = useMemo(() => {
@@ -97,7 +99,8 @@ export default function ScheduleWorkbenchClient({ initialData }: Props) {
   }
 
   async function generate() {
-    if (!window.confirm("确认根据当前时间段和球台自动编排赛程？\n\n系统会先排附加赛，再按32进16、16进8、8进4……逐轮安排；BYE自动晋级节点不会占用球台。")) return;
+    const confirmed = await ask({ title: "自动编排赛程", description: "系统会先排附加赛，再按32进16、16进8、8进4……逐轮安排；BYE自动晋级节点不会占用球台。", confirmLabel: "确认开始编排" });
+    if (!confirmed) return;
     const next = await post({ action: "generate", minRestSlots, autoAssignReferees: autoReferees });
     if (next) {
       setSelectedSlotId(next.timeSlots[0]?.id ?? "");
@@ -106,7 +109,8 @@ export default function ScheduleWorkbenchClient({ initialData }: Props) {
   }
 
   async function clearSchedule() {
-    if (!window.confirm("确认清空当前自动排程？签表和抽签结果不会删除。")) return;
+    const confirmed = await ask({ title: "清空当前自动排程", description: "签表和抽签结果不会删除；清空后可以调整时间段、球台，再重新生成赛程。", confirmLabel: "确认清空排程", tone: "danger" });
+    if (!confirmed) return;
     const next = await post({ action: "clear" });
     if (next) setMessage("赛程编排已清空，可以重新调整时间段、球台后再次生成。签表关系保持不变。");
   }
@@ -194,6 +198,7 @@ export default function ScheduleWorkbenchClient({ initialData }: Props) {
         <section><small>裁判信息</small><h3>只属于后台</h3><p>裁判分配不会映射到公众前端。以后公众赛程只显示比赛时间、台号、双方选手和状态；裁判姓名只供组委会和裁判组工作使用。</p></section>
       </aside>
     </section>
+    {dialog}
   </main>;
 }
 
