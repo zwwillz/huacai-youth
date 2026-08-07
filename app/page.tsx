@@ -2,7 +2,7 @@ import EventApp from "./event-app";
 import LangfangRankingStatic from "./langfang-ranking-static";
 import LangfangDbEnhancer from "./langfang-db-enhancer";
 import PublicContentEnhancer from "./public-content-enhancer";
-import PublicCompetitionLiveEnhancer from "./public-competition-live-enhancer";
+import PublicCompetitionLiveV2 from "./public-competition-live-v2";
 import PlayerDbView from "./player-db-view";
 import MePreview from "./me-preview";
 import { getPublicSiteData } from "@/db/public";
@@ -42,9 +42,10 @@ export default async function Home() {
   const data = await getPublicSiteData();
   const langfangEventId = data.stations.find((station) => station.id === "langfang")?.eventId;
   const jinanEventId = data.stations.find((station) => station.city.includes("济南"))?.eventId;
-  const [contentStates, rankings, competitionMatches, liveCompetitions, players] = await Promise.all([
+  const [contentStates, rankings, jinanRankings, competitionMatches, liveCompetitions, players] = await Promise.all([
     getPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title }))),
     langfangEventId ? getPublicRankings(langfangEventId) : Promise.resolve([]),
+    jinanEventId ? getPublicRankings(jinanEventId) : Promise.resolve([]),
     langfangEventId ? getCompetitionMatches(langfangEventId) : Promise.resolve([]),
     jinanEventId ? getPublicCompetitionEvents([jinanEventId]) : Promise.resolve([]),
     getPublicPlayerSummaries(),
@@ -59,16 +60,9 @@ export default async function Home() {
 
   return <>
     <style dangerouslySetInnerHTML={{ __html: visualCss }} />
-    <style>{`
-.content.public-competition-mode>.stack.public-live-stage-detail{display:flex!important}
-.public-main-group-grid{grid-template-columns:.8fr 1.25fr .8fr!important;grid-template-areas:"loser first winner"}
-.public-main-group-grid>.public-main-lane:first-child{grid-area:first}.public-main-group-grid>.public-main-lane.winner{grid-area:winner}.public-main-group-grid>.public-main-lane.loser{grid-area:loser}
-@media(max-width:1100px){.public-main-group-grid{grid-template-columns:1fr 1fr!important;grid-template-areas:"first first" "loser winner"}}
-@media(max-width:760px){.public-main-group-grid{grid-template-columns:1fr!important;grid-template-areas:"first" "winner" "loser"}.tabs.short-tabs:has([data-public-comp-tab]){grid-template-columns:repeat(5,minmax(0,1fr))!important}}
-`}</style>
     <EventApp data={data} />
     <PublicContentEnhancer states={contentStates} />
-    <PublicCompetitionLiveEnhancer stations={data.stations} events={liveCompetitions} />
+    <PublicCompetitionLiveV2 stations={data.stations} events={liveCompetitions} contentStates={contentStates} rankings={jinanRankings} />
     <LangfangRankingStatic rankings={rankings} />
     <LangfangDbEnhancer matches={competitionMatches} />
     <PlayerDbView players={players} />
