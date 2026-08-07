@@ -6,13 +6,23 @@ import { type DrawPhaseCode } from "@/db/draw-engine";
 import { getCompetitionDrawWorkspaceData } from "@/db/competition-draw-workspace";
 import { getMainStageWorkspaceData, isMainPhase } from "@/db/main-stage-engine";
 import { getMainRosterLockStatus } from "@/db/main-roster-lock-check";
+import { getCompetitionContextData } from "@/db/competition-context";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
+import CompetitionContextBar from "../competition-context-bar";
+import CompetitionPublicationBar from "../competition-publication-bar";
 import DrawWorkbenchClient from "./draw-workbench-client";
 import MainStageWorkbenchClient from "./main-stage-workbench-client";
+import "../competition-context-bar.css";
 import "./draw-workbench.css";
 import "./main-stage-workbench.css";
 
 export const dynamic = "force-dynamic";
+const PHASES = [
+  { code: "qualifier-one", title: "资格赛第一场", hint: "一次抽签到底" },
+  { code: "qualifier-two", title: "资格赛第二场", hint: "未晋级球员重抽" },
+  { code: "main-one", title: "正赛第一阶段", hint: "64人 · 8组双败" },
+  { code: "main-two", title: "正赛第二阶段", hint: "32强重新抽签" },
+];
 
 export default async function DrawWorkbenchPage({ searchParams }: { searchParams: Promise<{ event?: string; group?: string; phase?: string }> }) {
   const viewer = await getAdminViewer();
@@ -22,17 +32,13 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
   const eventId = events.some((event) => event.id === query.event) ? String(query.event) : events[0]?.id;
   if (!eventId) redirect("/admin/events");
   const phaseCode = (["qualifier-one", "qualifier-two", "main-one", "main-two"].includes(String(query.phase)) ? query.phase : "qualifier-one") as DrawPhaseCode;
+  const context = await getCompetitionContextData(viewer.username, eventId);
 
-  const shell = (child: ReactNode) => <AdminWorkspaceShell
-    viewer={{ displayName: viewer.displayName, role: viewer.role }}
-    events={events}
-    active="competition"
-    pageTitle="抽签与签表"
-    pageHint="竞赛执行 · 抽签引擎"
-    currentEventId={eventId}
-    eventScoped
-    competitionTool="overview"
-  >{child}</AdminWorkspaceShell>;
+  const shell = (child: ReactNode, groupId: string, phaseTitle: string) => <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="抽签与签表" pageHint="竞赛执行 · 当前组别与阶段" currentEventId={eventId} eventScoped competitionTool="overview">
+    <CompetitionContextBar eventId={eventId} eventTitle={context.event.shortTitle} groups={context.groups} selectedGroupId={groupId} basePath="/admin/competition/draw" phases={PHASES} selectedPhase={phaseCode} eyebrow="抽签与签表" title={`${context.groups.find((group) => group.id === groupId)?.name || "当前组别"} · ${phaseTitle}`} description="抽签草稿只保存在后台；确认正式签表后仍由“签表与赛程”发布按钮控制用户端是否可见。四个阶段使用同一套组别、阶段切换逻辑。" />
+    <CompetitionPublicationBar eventId={eventId} moduleType="schedule" title="签表与赛程" status={context.publications.schedule.status} viewerRole={viewer.role} hint="抽签、重抽或赛程调整都会重新进入待发布状态。确认无误后再发布给用户端。" />
+    <div className="unified-competition-context">{child}</div>
+  </AdminWorkspaceShell>;
 
   try {
     if (isMainPhase(phaseCode)) {
@@ -42,15 +48,16 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
         const lock = await getMainRosterLockStatus(eventId, data.selectedGroupId);
         if (!lock || lock.status !== "locked") {
           data.sourceReady = false;
-          data.sourceNote = `${data.sourceNote} 请先在“晋级与正赛名单”中完成种子确认、递补并锁定64人名单。`;
+          data.sourceNote = `${data.sourceNote} 请先在“晋级”中完成种子确认、递补并锁定64人名单。`;
         }
       }
-      return shell(<MainStageWorkbenchClient initialData={data} />);
+      return shell(<MainStageWorkbenchClient initialData={data} />, data.selectedGroupId, data.phaseTitle);
     }
     const data = await getCompetitionDrawWorkspaceData(viewer.username, eventId, query.group, phaseCode);
     if (data.latestSession?.status === "void") data.latestSession = null;
-    return shell(<DrawWorkbenchClient initialData={data} />);
+    return shell(<DrawWorkbenchClient initialData={data} />, data.selectedGroupId, data.phaseTitle);
   } catch (error) {
-    return shell(<main className="backend-state backend-denied"><div className="backend-state-logo">签</div><small>抽签引擎</small><h1>当前还不能开始抽签</h1><p>{error instanceof Error ? error.message : "抽签数据读取失败。"}</p><a href={`/admin/competition?event=${encodeURIComponent(eventId)}`}>返回竞赛执行</a></main>);
+    const selectedGroupId = context.groups.some((group) => group.id === query.group) ? String(query.group) : context.groups[0]?.id || "";
+    return shell(<main className="backend-state backend-denied"><div className="backend-state-logo">签</div><small>抽签引擎</small><h1>当前还不能开始抽签</h1><p>{error instanceof Error ? error.message : "抽签数据读取失败。"}</p><a href={`/admin/competition?event=${encodeURIComponent(eventId)}`}>返回竞赛执行</a></main>, selectedGroupId, PHASES.find((phase) => phase.code === phaseCode)?.title || "当前阶段");
   }
 }
