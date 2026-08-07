@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { DrawSessionDetail } from "@/db/draw-engine";
+import { useAdminActionDialog } from "../../admin-action-dialog";
 
 type MainData = {
   viewerRole: string;
@@ -26,6 +27,7 @@ export default function MainStageWorkbenchClient({ initialData }: { initialData:
   const [session, setSession] = useState<DrawSessionDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const { ask, dialog } = useAdminActionDialog();
   const selectedGroup = initialData.groups.find((item) => item.id === initialData.selectedGroupId);
   const groups = useMemo(() => {
     if (!session) return [] as Array<{ no: number; slots: DrawSessionDetail["slots"] }>;
@@ -56,12 +58,15 @@ export default function MainStageWorkbenchClient({ initialData }: { initialData:
   }
   async function create() {
     const text = initialData.selectedPhase === "main-one" ? "确认使用当前64人正赛名单生成抽签草稿？16名种子会按蛇形分散到8个组，其余48人随机入位。" : "确认使用当前32强名单生成抽签草稿？16名胜部晋级球员进入种子位，16名败部晋级球员随机入位。";
-    if (!window.confirm(text)) return;
+    const approved = await ask({ title: "生成正赛抽签草稿", description: text, confirmLabel: "生成抽签草稿" });
+    if (!approved) return;
     const data = await post({ action: "create", eventId: initialData.event.id, groupId: initialData.selectedGroupId, phaseCode: initialData.selectedPhase });
     if (data) { setSession(data); setMessage("抽签草稿已经生成并固定结果。可以直接打开大屏进行现场揭晓，再回来确认正式签表。" ); router.refresh(); }
   }
   async function confirm() {
-    if (!session || !window.confirm("确认当前抽签成为正式签表？确认后系统会生成完整比赛关系。")) return;
+    if (!session) return;
+    const approved = await ask({ title: "确认当前抽签为正式签表", description: "确认后系统会生成完整比赛关系。如需更改，必须先作废当前版本。", confirmLabel: "确认正式签表" });
+    if (!approved) return;
     const data = await post({ action: "confirm", sessionId: session.session.id });
     if (!data) return;
     setSession(data);
@@ -76,8 +81,8 @@ export default function MainStageWorkbenchClient({ initialData }: { initialData:
   async function voidDraw() {
     const id = session?.session.id || initialData.latestSession?.id;
     if (!id) return;
-    const reason = window.prompt("请输入作废原因：", "");
-    if (!reason) return;
+    const reason = await ask({ title: "作废当前正赛抽签", description: "用户端不会读取作废版本；原因会写入操作日志。", confirmLabel: "确认作废", tone: "danger", input: { label: "作废原因", required: true, placeholder: "请填写重新抽签的原因" } });
+    if (typeof reason !== "string") return;
     const data = await post({ action: "void", sessionId: id, reason });
     if (data) { setSession(null); setMessage("原抽签已经作废，可以重新抽签。用户端不会读取作废版本。" ); router.refresh(); }
   }
@@ -95,5 +100,5 @@ export default function MainStageWorkbenchClient({ initialData }: { initialData:
 
     {message && <p className="main-stage-message">{message}</p>}
     {visible && <section className="main-stage-draw"><header><div><small>抽签结果</small><h3>V{visible.session.versionNo} · {visible.session.status === "confirmed" ? "正式签表" : "抽签草稿"}</h3></div><div><Link target="_blank" href={`/admin/competition/draw/${encodeURIComponent(visible.session.id)}/screen`}>大屏展示</Link>{visible.session.status === "draft" && initialData.viewerRole !== "referee" && <button onClick={confirm} disabled={busy}>确认正式签表</button>}{initialData.viewerRole !== "referee" && <button className="danger" onClick={voidDraw} disabled={busy}>作废重抽</button>}</div></header>{initialData.selectedPhase === "main-one" ? <div className="main-stage-groups">{groups.map((group) => <article key={group.no}><h4>第{group.no}组</h4><div>{group.slots.map((slot) => <p key={slot.slotNo}><span>{String(slot.slotNo).padStart(2,"0")}</span><strong>{slot.playerName}</strong><b>{slot.slotType === "seed" ? "种子" : ""}</b></p>)}</div></article>)}</div> : <div className="main-two-slots">{visible.slots.map((slot) => <p key={slot.slotNo}><span>{String(slot.slotNo).padStart(2,"0")}</span><strong>{slot.playerName}</strong><b>{slot.slotType === "seed" ? "胜部种子位" : "败部混抽"}</b></p>)}</div>}</section>}
-  </main>;
+  {dialog}</main>;
 }

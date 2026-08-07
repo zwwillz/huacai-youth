@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { DrawSessionDetail, DrawWorkspaceData } from "@/db/draw-engine";
+import { useAdminActionDialog } from "../../admin-action-dialog";
 
 type Props = { initialData: DrawWorkspaceData };
 
@@ -26,6 +27,7 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
   const [session, setSession] = useState<DrawSessionDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const { ask, dialog } = useAdminActionDialog();
   const [division, setDivision] = useState(1);
 
   const entrantCount = initialData.plan.entrantCount;
@@ -75,7 +77,8 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
   }
 
   async function createDraw() {
-    if (!window.confirm(`确认使用当前阶段的 ${entrantCount} 名球员生成抽签草稿？\n\n本阶段只抽签一次，签表将从当前人数一路运行到每区冠军；最后由${directQualifierCount}名分区冠军直接晋级，并从分区决胜轮负者中按局胜率增补 ${rateQualifierCount} 人。`)) return;
+    const confirmed = await ask({ title: `生成${initialData.phaseTitle}抽签草稿`, description: `将使用当前阶段的 ${entrantCount} 名球员生成固定抽签结果。本阶段只抽签一次，最后由 ${directQualifierCount} 名分区冠军直接晋级，并按局胜率增补 ${rateQualifierCount} 人。`, confirmLabel: "生成抽签草稿" });
+    if (!confirmed) return;
     const data = await post({
       action: "create",
       eventId: initialData.event.id,
@@ -114,7 +117,9 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
   }
 
   async function confirmDraw() {
-    if (!session || !window.confirm("确认把当前抽签版本设为正式签表？确认后需要先作废才能重新抽签。确认后系统会自动生成完整分区比赛关系。")) return;
+    if (!session) return;
+    const approved = await ask({ title: "确认当前版本为正式签表", description: "确认后系统会生成完整分区比赛关系。如需重新抽签，必须先作废当前正式版本并填写原因。", confirmLabel: "确认正式签表" });
+    if (!approved) return;
     const data = await post({ action: "confirm", sessionId: session.session.id });
     if (data) {
       const confirmed = data as DrawSessionDetail;
@@ -127,8 +132,8 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
 
   async function voidDraw() {
     if (!session) return;
-    const reason = window.prompt("请输入作废原因。该原因会进入操作日志：", "");
-    if (!reason) return;
+    const reason = await ask({ title: "作废当前抽签版本", description: "旧版完整签表会保留为历史版本，不再作为当前正式数据使用。作废原因会写入操作日志。", confirmLabel: "确认作废", tone: "danger", input: { label: "作废原因", required: true, placeholder: "请填写需要重新抽签的原因" } });
+    if (typeof reason !== "string") return;
     const data = await post({ action: "void", sessionId: session.session.id, reason });
     if (data) {
       setMessage("抽签版本已作废，可以重新生成新版本。旧版完整签表会保留为历史版本，不会被作为当前正式数据使用。");
@@ -204,5 +209,5 @@ export default function DrawWorkbenchClient({ initialData }: Props) {
         <section><small>赛程层</small><h3>时间稍后配置</h3><p>签表关系不绑定时间。单独设置 09:00、10:45、13:30 等比赛时段，再结合球台和裁判自动编排，临时换台不会改变签表。</p></section>
       </aside>
     </section>
-  </main>;
+  {dialog}</main>;
 }
