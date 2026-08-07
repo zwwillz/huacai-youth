@@ -1,13 +1,13 @@
 "use client";
 
-import { createPortal } from "react-dom";
 import { CSSProperties, PointerEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Group, Phase, PhaseId, Station } from "./public-types";
 import type { PublicCompetitionEvent, PublicLiveMatch, PublicPhaseSummary } from "@/db/public-competition-live";
 import type { PublicContentState } from "@/db/public-content";
 import type { PublicRanking } from "@/db/rankings";
 
-type LiveTab = "schedule" | "matches" | "rankings";
+export type PublicCompetitionTab = "schedule" | "matches" | "rankings";
+type LiveTab = PublicCompetitionTab;
 type StationMeta = Pick<Station, "id" | "eventId" | "title" | "city" | "phases" | "format" | "prizes">;
 
 const PHASE_ORDER: PhaseId[] = ["qualifier-one", "qualifier-two", "main-one", "main-two"];
@@ -32,6 +32,7 @@ const liveCss = `
 .public-roster-groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.public-roster-group{padding:13px;border:1px solid #e8e2ec;border-radius:12px;background:#fff}.public-roster-group header{display:flex;justify-content:space-between;align-items:end;margin-bottom:9px}.public-roster-group h3{margin:0;font-size:12px}.public-roster-group header span{color:#774f98;font-size:8px;font-weight:900}.public-roster-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}.public-roster-grid div{display:flex;align-items:center;gap:6px;min-width:0;padding:7px 8px;border-radius:8px;background:#f8f6fa}.public-roster-grid span{width:22px;color:#9b8ba5;font-size:7px}.public-roster-grid strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px}
 .public-final-ranking{margin-top:16px;border-top:1px solid var(--line)}.public-final-ranking>div{min-height:54px;display:grid;grid-template-columns:48px 90px minmax(120px,1fr) auto;gap:10px;align-items:center;border-bottom:1px solid var(--line)}.public-final-ranking span{width:28px;height:28px;display:grid;place-items:center;border-radius:50%;color:#765f8b;background:#f0edf5;font-size:9px}.public-final-ranking>div:nth-child(-n+4) span{color:#fff;background:linear-gradient(145deg,#ef459a,#6934d5)}.public-final-ranking b{color:#5a2da8;font-size:10px}.public-final-ranking strong{font-size:11px}.public-final-ranking em{color:#4c288e;font-size:10px;font-style:normal;font-weight:800}
 .public-main-empty-note{padding:8px 17px;color:#755c88;background:#f5f0fa;font-size:9px}.public-main-empty-note strong{color:#56317f}
+.public-module-state{min-height:300px;display:grid;place-items:center;padding:36px 22px;border:1px solid #e6dff0;border-radius:18px;background:linear-gradient(145deg,#fff,#f8f4fb);text-align:center}.public-module-state>div{max-width:460px}.public-module-state span{width:52px;height:52px;display:grid;place-items:center;margin:0 auto 14px;border-radius:16px;color:#fff;background:linear-gradient(145deg,#6734ce,#d7469c);font-size:18px;font-weight:900}.public-module-state h2{margin:0 0 9px;color:#2c173f;font-size:20px}.public-module-state p{margin:0;color:#817489;font-size:11px;line-height:1.8}.public-module-state button{margin-top:16px;padding:10px 18px;border:0;border-radius:999px;color:#fff;background:#6235b0;font-size:10px;font-weight:900;cursor:pointer}
 .public-third-place{width:240px;margin:20px 0 0}.public-third-place h3{margin:0 0 9px;color:#fff;font-size:12px}
 @media(max-width:900px){.tabs.public-five-tabs{width:100%!important}.tabs.public-five-tabs button{font-size:10px!important;padding:8px 2px!important}.public-roster-groups{grid-template-columns:1fr}.public-prelim-grid{grid-template-columns:repeat(2,154px)}}
 @media(max-width:520px){.public-final-ranking>div{grid-template-columns:36px 70px minmax(90px,1fr) auto;gap:6px}.public-prelim-grid{grid-template-columns:154px}}
@@ -159,27 +160,37 @@ function PublicMatches({ station, data }: { station: StationMeta; data: PublicCo
   return <div className="match-list-page stack public-competition-overlay"><section className="match-list-head with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>对阵</h1><p>默认显示最近一个已有比赛的日期，可切换查看其它比赛日</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="match-filter"><nav className="match-days">{days.map((value) => <button className={selectedDay === value ? "active" : ""} onClick={() => setDay(value)} key={value}><small>{weekday(value)}</small><b>{compactDate(value)}</b></button>)}</nav><label><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索球员、球台或场次" /></label></section><div className="match-count"><strong>{selectedDay ? compactDate(selectedDay) : "—"}</strong><span>{group} · {matches.length}场对阵</span></div>{matches.length ? <section className="versus-list">{matches.map((match) => <article className="versus-card" key={match.id}><header><b>{match.time || "待定"}</b><span>{PHASE_LABELS[match.phaseId]} · {match.roundName} · {displayMatchCode(match.matchCode, match.phaseId)}</span></header><section><div className="match-player"><i>{displayName(match.playerA, "待").slice(0, 1)}</i><strong>{displayName(match.playerA, "待定")}</strong></div><div className="match-center"><strong>{scoreLabel(match)}</strong><span className={matchStatus(match) === "已结束" ? "ended" : ""}>{matchStatus(match)}</span><b className={match.isTv ? "tv" : ""}>{match.table || "球台待定"}</b></div><div className="match-player"><i>{displayName(match.playerB, "待").slice(0, 1)}</i><strong>{displayName(match.playerB, "待定")}</strong></div></section></article>)}</section> : <section className="match-empty"><i>○</i><h2>当日对阵待公布</h2><p>该日期目前没有已发布的比赛，可切换其它日期查看。</p></section>}</div>;
 }
 
+function rankingNumberStyle(place: number): CSSProperties | undefined {
+  if (place === 1) return { background: "linear-gradient(145deg,#f5d36c,#c99316)", color: "#fff", fontWeight: 900 };
+  if (place === 2) return { background: "linear-gradient(145deg,#d9dde5,#8e96a4)", color: "#fff", fontWeight: 900 };
+  if (place === 3) return { background: "linear-gradient(145deg,#d99a68,#9a5a36)", color: "#fff", fontWeight: 900 };
+  if (place === 4) return { background: "linear-gradient(145deg,#7b52e8,#5122c0)", color: "#fff", fontWeight: 900 };
+  return undefined;
+}
+
 function PublicRankings({ station, rankings }: { station: StationMeta; rankings: PublicRanking[] }) {
   const [group, setGroup] = useState<Group>("少年组"); const finalRows = rankings.filter((row) => row.group === group).sort((a, b) => a.displayOrder - b.displayOrder); const prizes = station.prizes[group] ?? [];
-  return <div className="stack public-competition-overlay"><section className="ranking-head"><div><small className="event-name-kicker">{station.title}</small><h1>比赛排名</h1><p>{finalRows.length ? "组委会已发布本站正赛最终排名" : "最终排名待组委会确认并发布"}</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="card ranking"><header><div><small>{group}</small><h2>{finalRows.length ? "本站赛事排名" : "奖金设置"}</h2></div></header>{finalRows.length ? <div className="public-final-ranking">{finalRows.map((row) => <div key={row.id}><span>{row.displayOrder}</span><b>{row.placementLabel}</b><strong>{row.playerName}</strong><em>{row.prizeDisplay || "—"}</em></div>)}</div> : <><div className="ranking-wait"><i /><div><strong>比赛结果尚未全部完成</strong><p>排名仅统计正赛最终名次。待组委会确认并发布本站排名后，这里会自动切换为正式排名。</p></div></div><div className="prizes">{prizes.map(([rank, amount], index) => <div key={`${rank}-${index}`}><span>{index + 1}</span><strong>{rank}</strong><b>{amount}</b></div>)}</div></>}</section></div>;
+  return <div className="stack public-competition-overlay"><section className="ranking-head"><div><small className="event-name-kicker">{station.title}</small><h1>比赛排名</h1><p>{finalRows.length ? "组委会已发布本站正赛最终排名" : "最终排名待组委会确认并发布"}</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="card ranking"><header><div><small>{group}</small><h2>{finalRows.length ? "本站赛事排名" : "奖金设置"}</h2></div></header>{finalRows.length ? <div className="public-final-ranking">{finalRows.map((row) => <div key={row.id}><span style={rankingNumberStyle(row.displayOrder)}>{row.displayOrder}</span><b>{row.placementLabel}</b><strong>{row.playerName}</strong><em>{row.prizeDisplay || "—"}</em></div>)}</div> : <><div className="ranking-wait"><i /><div><strong>比赛结果尚未全部完成</strong><p>排名仅统计正赛最终名次。待组委会确认并发布本站排名后，这里会自动切换为正式排名。</p></div></div><div className="prizes">{prizes.map(([rank, amount], index) => <div key={`${rank}-${index}`}><span>{index + 1}</span><strong>{rank}</strong><b>{amount}</b></div>)}</div></>}</section></div>;
 }
 
 function CompetitionOverlay({ tab, station, data, rankings }: { tab: LiveTab; station: StationMeta; data: PublicCompetitionEvent; rankings: PublicRanking[] }) { if (tab === "schedule") return <PublicSchedule station={station} data={data} />; if (tab === "matches") return <PublicMatches station={station} data={data} />; return <PublicRankings station={station} rankings={rankings} />; }
 
-export default function PublicCompetitionLiveV2({ stations, contentStates }: { stations: StationMeta[]; contentStates: PublicContentState[] }) {
-  const [activeTab, setActiveTab] = useState<LiveTab | null>(null);
-  const [currentStationId, setCurrentStationId] = useState("");
-  const currentStationRef = useRef("");
-  const [target, setTarget] = useState<HTMLElement | null>(null);
+export default function PublicCompetitionLiveV2({
+  station,
+  contentState,
+  activeTab,
+}: {
+  station: StationMeta;
+  contentState?: PublicContentState;
+  activeTab: PublicCompetitionTab | null;
+}) {
   const [competitionByEvent, setCompetitionByEvent] = useState<Map<string, PublicCompetitionEvent>>(() => new Map());
   const [rankingsByEvent, setRankingsByEvent] = useState<Map<string, PublicRanking[]>>(() => new Map());
   const [loadingEventId, setLoadingEventId] = useState("");
   const [loadError, setLoadError] = useState("");
   const versions = useRef(new Map<string, string>());
-  const stationById = useMemo(() => new Map(stations.map((station) => [station.id, station])), [stations]);
-  const contentByStation = useMemo(() => new Map(contentStates.map((state) => [state.stationId, state])), [contentStates]);
-  const station = stationById.get(currentStationId);
-  const competition = station ? competitionByEvent.get(station.eventId) : undefined;
+  const competition = competitionByEvent.get(station.eventId);
+  const published = activeTab ? Boolean(contentState?.publishedModules.includes(activeTab)) : false;
 
   const loadEvent = useCallback(async (eventId: string, force = false) => {
     if (!force && competitionByEvent.has(eventId)) return;
@@ -200,109 +211,59 @@ export default function PublicCompetitionLiveV2({ stations, contentStates }: { s
   }, [competitionByEvent]);
 
   useEffect(() => {
-    if (!document.getElementById("public-live-competition-v2-css")) {
-      const style = document.createElement("style");
-      style.id = "public-live-competition-v2-css";
-      style.textContent = liveCss;
-      document.head.append(style);
-    }
-    const clearDynamic = () => document.querySelectorAll<HTMLElement>("[data-public-comp-tab],[data-public-comp-action]").forEach((element) => element.remove());
-    const detect = () => {
-      const root = document.querySelector<HTMLElement>("main[data-huacai-view]");
-      const next = root?.dataset.huacaiView === "event" ? root.dataset.huacaiStation || "" : "";
-      currentStationRef.current = next;
-      if (next !== currentStationId) { setCurrentStationId(next); setActiveTab(null); setLoadError(""); }
-      const meta = stationById.get(next);
-      const contentState = contentByStation.get(next);
-      const tabs = document.querySelector<HTMLElement>(".content > .tabs");
-      const content = document.querySelector<HTMLElement>(".content");
-      setTarget((current) => current === content ? current : content);
-      if (!meta || !tabs || !contentState) { clearDynamic(); tabs?.classList.remove("public-five-tabs"); return; }
-      const desired: Array<[LiveTab, string, string]> = [["schedule", "赛程", "schedule"], ["matches", "对阵", "matches"], ["rankings", "排名", "rankings"]];
-      for (const element of [...tabs.querySelectorAll<HTMLElement>("[data-public-comp-tab]")]) {
-        const id = element.dataset.publicCompTab as LiveTab;
-        const publishedModule = desired.find(([tab]) => tab === id)?.[2];
-        if (!publishedModule || !contentState.publishedModules.includes(publishedModule)) element.remove();
-      }
-      for (const [id, label, module] of desired) {
-        if (!contentState.publishedModules.includes(module) || tabs.querySelector(`[data-public-comp-tab="${id}"]`)) continue;
-        const button = document.createElement("button");
-        button.type = "button";
-        button.dataset.publicCompTab = id;
-        button.textContent = label;
-        tabs.appendChild(button);
-      }
-      const competitionTabCount = desired.filter(([, , module]) => contentState.publishedModules.includes(module)).length;
-      tabs.classList.toggle("public-five-tabs", competitionTabCount === 3);
-      const schedulePublished = contentState.publishedModules.includes("schedule");
-      document.querySelectorAll<HTMLElement>('[data-public-comp-action="schedule"]').forEach((element) => { if (!schedulePublished) element.remove(); });
-      if (schedulePublished) {
-        const heroButtons = document.querySelector<HTMLElement>(".station-hero .hero-buttons");
-        if (heroButtons && !heroButtons.querySelector('[data-public-comp-action="schedule"]')) {
-          const button = document.createElement("button"); button.type = "button"; button.dataset.publicCompAction = "schedule"; button.textContent = "查看赛程"; heroButtons.prepend(button);
-        }
-        const intro = document.querySelector<HTMLElement>(".introduction .inline-actions");
-        if (intro && !intro.querySelector('[data-public-comp-action="schedule"]')) {
-          const button = document.createElement("button"); button.type = "button"; button.dataset.publicCompAction = "schedule"; button.textContent = "查看分阶段赛程"; intro.appendChild(button);
-        }
-      }
-    };
-    const click = (event: MouseEvent) => {
-      const element = event.target as Element | null;
-      const liveButton = element?.closest<HTMLElement>("[data-public-comp-tab],[data-public-comp-action]");
-      if (liveButton) {
-        const id = (liveButton.dataset.publicCompTab || liveButton.dataset.publicCompAction) as LiveTab;
-        const meta = stationById.get(currentStationRef.current);
-        if (id) {
-          event.preventDefault(); event.stopPropagation(); setActiveTab(id);
-          if (meta) void loadEvent(meta.eventId);
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        }
-        return;
-      }
-      const normalTab = element?.closest<HTMLElement>(".tabs button");
-      if (normalTab && !normalTab.dataset.publicCompTab) setActiveTab(null);
-    };
-    window.addEventListener("huacai:navigation", detect);
-    document.addEventListener("click", click, true);
-    detect();
-    return () => {
-      window.removeEventListener("huacai:navigation", detect);
-      document.removeEventListener("click", click, true);
-    };
-  }, [contentByStation, currentStationId, loadEvent, stationById]);
+    if (document.getElementById("public-live-competition-v2-css")) return;
+    const style = document.createElement("style");
+    style.id = "public-live-competition-v2-css";
+    style.textContent = liveCss;
+    document.head.append(style);
+  }, []);
 
   useEffect(() => {
-    const content = document.querySelector<HTMLElement>(".content");
-    if (!content) return;
-    content.classList.toggle("public-competition-mode", Boolean(activeTab && station));
-    const tabs = content.querySelector<HTMLElement>(".tabs");
-    if (activeTab && tabs) tabs.querySelectorAll("button").forEach((button) => button.classList.toggle("active", (button as HTMLElement).dataset.publicCompTab === activeTab));
-  }, [activeTab, station]);
+    if (!activeTab || !published) return;
+    const timer = window.setTimeout(() => { void loadEvent(station.eventId); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, loadEvent, published, station.eventId]);
 
   useEffect(() => {
-    const eventId = activeTab && station ? station.eventId : "";
-    if (!eventId) return;
+    if (!activeTab || !published) return;
+    const eventId = station.eventId;
     const checkVersion = async () => {
       if (document.hidden) return;
       try {
         const response = await fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition?versionOnly=1`, { cache: "no-store" });
         const payload = await response.json() as { data?: { version: string } };
-        const next = payload.data?.version;
-        const previous = versions.current.get(eventId);
-        if (next && previous && next !== previous) await loadEvent(eventId, true);
-        else if (next && !previous) versions.current.set(eventId, next);
+        const nextVersion = payload.data?.version;
+        const currentVersion = versions.current.get(eventId);
+        if (nextVersion && currentVersion && nextVersion !== currentVersion) await loadEvent(eventId, true);
+        else if (nextVersion && !currentVersion) versions.current.set(eventId, nextVersion);
       } catch {
-        // A transient version check failure must not replace the last published public snapshot.
+        // Keep the last published snapshot visible when a lightweight version check fails.
       }
     };
     const timer = window.setInterval(checkVersion, 20_000);
     const onVisibility = () => { if (!document.hidden) void checkVersion(); };
     document.addEventListener("visibilitychange", onVisibility);
-    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisibility); };
-  }, [activeTab, loadEvent, station]);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [activeTab, loadEvent, published, station.eventId]);
 
-  if (!target || !station || !activeTab) return null;
-  if (!competition) return createPortal(<section className="public-competition-overlay public-main-pending"><span>{loadError ? "读取失败" : "正在读取"}</span><h2>{loadError || "正在加载本站已发布数据…"}</h2><p>{loadError ? "请稍后重试，上一版公众数据不会被后台草稿覆盖。" : "只在打开赛程、对阵或排名时读取本站数据，首页不再预载全部签表。"}</p>{loadError && <button onClick={() => void loadEvent(station.eventId, true)}>重新加载</button>}</section>, target);
-  return createPortal(<CompetitionOverlay tab={activeTab} station={station} data={competition} rankings={rankingsByEvent.get(station.eventId) ?? []} />, target);
+  if (!activeTab) return null;
+
+  if (!published) {
+    const copy: Record<PublicCompetitionTab, { icon: string; title: string; description: string }> = {
+      schedule: { icon: "赛", title: "本站赛程正在编排中", description: "待组委会确认后，将在这里发布完整的分阶段赛程。" },
+      matches: { icon: "阵", title: "本站对阵尚未发布", description: "对阵确定后会在这里更新比赛时间、球台和参赛选手。" },
+      rankings: { icon: "榜", title: "本站比赛排名待发布", description: "比赛结束并经组委会确认后，这里将显示正式排名和奖金信息。" },
+    };
+    const state = copy[activeTab];
+    return <section className="public-module-state" role="status"><div><span>{state.icon}</span><h2>{state.title}</h2><p>{state.description}<br />感谢关注，最新信息会在确认后及时更新。</p></div></section>;
+  }
+
+  if (!competition || loadingEventId === station.eventId) {
+    return <section className="public-module-state" aria-busy={!loadError}><div><span>{loadError ? "!" : "…"}</span><h2>{loadError || "正在加载本站已发布数据"}</h2><p>{loadError ? "网络暂时没有响应，已发布内容不会受到影响。" : "数据量较大时可能需要几秒，请稍候。"}</p>{loadError && <button onClick={() => void loadEvent(station.eventId, true)}>重新加载</button>}</div></section>;
+  }
+
+  return <CompetitionOverlay tab={activeTab} station={station} data={competition} rankings={rankingsByEvent.get(station.eventId) ?? []} />;
 }
