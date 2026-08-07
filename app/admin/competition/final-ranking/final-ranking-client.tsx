@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { FinalRankingRow, FinalRankingWorkspaceData } from "@/db/final-ranking-engine";
+import { useAdminActionDialog } from "../../admin-action-dialog";
 
 function tierLabel(order: number) {
   if (order === 1) return "冠军";
@@ -20,12 +21,14 @@ export default function FinalRankingClient({ initialData }: { initialData: Final
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState(false);
+  const { ask, dialog } = useAdminActionDialog();
   const group = initialData.groups[0];
   const [manualRows, setManualRows] = useState<FinalRankingRow[]>(() => group?.rows ?? []);
   const readOnly = initialData.viewerRole === "referee";
 
   async function post(action: "confirm" | "publish", batchId: string, label: string) {
-    if (!window.confirm(action === "confirm" ? `确认${label}最终排名？\n\n确认后排名被锁定，不能继续用“人工调整”修改；仍需单独点击发布，用户端才会显示。` : `发布${label}最终排名到用户端？\n\n发布后用户端排名页会自动切换为本站正式排名。`)) return;
+    const confirmed = await ask(action === "confirm" ? { title: `确认${label}最终排名`, description: "确认后排名会被锁定，不能继续使用人工调整；仍需单独点击发布，用户端才会显示。", confirmLabel: "确认并锁定" } : { title: `发布${label}最终排名`, description: "发布后用户端排名页会切换为本站正式排名。请确认当前名单已经完成最终复核。", confirmLabel: "发布到用户端" });
+    if (!confirmed) return;
     setBusy(`${action}-${batchId}`); setMessage("");
     try {
       const response = await fetch("/api/admin/competition/final-ranking", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, batchId }) });
@@ -49,9 +52,8 @@ export default function FinalRankingClient({ initialData }: { initialData: Final
 
   async function saveManual() {
     if (!group?.batch) return;
-    const reason = window.prompt("请填写人工调整原因。该说明会写入操作日志：", "组委会根据现场最终裁定调整名次");
-    if (!reason) return;
-    if (!window.confirm("确认保存人工调整后的64人排名草稿？\n\n这一步只保存后台草稿，不会发布到用户端。保存后仍需“确认最终排名”再“发布到用户端”。")) return;
+    const reason = await ask({ title: "保存人工调整后的排名草稿", description: "这一步只保存后台草稿，不会发布到用户端。保存后仍需“确认最终排名”，再单独“发布到用户端”。", confirmLabel: "保存后台草稿", input: { label: "人工调整原因（写入操作日志）", initialValue: "组委会根据现场最终裁定调整名次", required: true, placeholder: "请填写调整依据" } });
+    if (typeof reason !== "string") return;
     setBusy(`manual-${group.batch.id}`); setMessage("");
     try {
       const response = await fetch("/api/admin/competition/final-ranking", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "save-manual", batchId: group.batch.id, orderedPlayerIds: manualRows.map((row) => row.playerId), reason }) });
@@ -85,5 +87,5 @@ export default function FinalRankingClient({ initialData }: { initialData: Final
       </div>}</footer>
     </article></section>
     <section className="final-ranking-rules"><article><strong>自动生成</strong><p>系统根据正式赛果形成完整64人排名草稿。</p></article><article><strong>人工调整</strong><p>仅草稿阶段可触发，必须填写调整原因，并写入操作日志。</p></article><article><strong>确认并发布</strong><p>确认后锁定；只有点击发布，用户端才显示本站正式排名。</p></article></section>
-  </main>;
+  {dialog}</main>;
 }

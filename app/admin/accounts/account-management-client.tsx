@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AccountManagementRow } from "@/db/account-admin";
+import { useAdminActionDialog } from "../admin-action-dialog";
 
 type CreateDraft = { username: string; displayName: string; password: string; role: "committee" | "referee" };
 
@@ -18,6 +19,7 @@ export default function AccountManagementClient({ initialAccounts }: { initialAc
   const [draft, setDraft] = useState<CreateDraft>({ username: "", displayName: "", password: "", role: "committee" });
   const [working, setWorking] = useState("");
   const [message, setMessage] = useState("");
+  const { ask, dialog } = useAdminActionDialog();
 
   const reload = async (showMessage = true) => {
     setWorking("refresh");
@@ -46,8 +48,14 @@ export default function AccountManagementClient({ initialAccounts }: { initialAc
     await call({ action: "create", ...draft }, "create", "后台账号已创建并已加入账号列表。下一步可到具体赛事的“后台成员”中分配赛事权限。" );
     setDraft({ username: "", displayName: "", password: "", role: "committee" });
   };
-  const resetPassword = async (account: AccountManagementRow) => { const password = window.prompt(`为 ${account.displayName} 设置新密码（8—72位）：`); if (password) await call({ action: "password", id: account.id, password }, account.id, "密码已重置，该账号原登录会话已失效。"); };
-  const deleteAccount = async (account: AccountManagementRow) => { if (window.confirm(`确认删除账号“${account.displayName} / ${account.username}”吗？\n\n该账号会立即退出登录，并移出所有赛事成员关系。操作日志会继续保留。`)) await call({ action: "delete", id: account.id }, account.id, "账号已删除，历史操作日志仍保留。" ); };
+  const resetPassword = async (account: AccountManagementRow) => {
+    const password = await ask({ title: `重置 ${account.displayName} 的密码`, description: "新密码保存后，该账号现有登录会话会立即失效，需要使用新密码重新登录。", confirmLabel: "确认重置密码", input: { label: "新密码（8—72位）", type: "password", minLength: 8, required: true, placeholder: "请输入至少8位的新密码" } });
+    if (typeof password === "string") await call({ action: "password", id: account.id, password }, account.id, "密码已重置，该账号原登录会话已失效。");
+  };
+  const deleteAccount = async (account: AccountManagementRow) => {
+    const confirmed = await ask({ title: `删除账号“${account.displayName}”`, description: `用户名：${account.username}\n\n该账号会立即退出登录，并移出所有赛事成员关系。历史操作日志会继续保留。`, confirmLabel: "确认删除账号", tone: "danger" });
+    if (confirmed) await call({ action: "delete", id: account.id }, account.id, "账号已删除，历史操作日志仍保留。");
+  };
 
   return <main className="admin-system-page">
     <section className="admin-system-head"><div><small>ACCOUNT & PERMISSION</small><h2>账号与权限</h2><p>这里管理系统级后台账号和角色。创建成功后会立即刷新列表；具体“能操作哪一站赛事”仍在对应赛事的“后台成员”中分配。</p></div><button type="button" disabled={working === "refresh"} onClick={() => reload()}>{working === "refresh" ? "刷新中…" : `刷新账号列表 · ${accounts.length}`}</button></section>
@@ -68,5 +76,5 @@ export default function AccountManagementClient({ initialAccounts }: { initialAc
         <div className="admin-account-actions">{account.role !== "system_admin" && <><button disabled={working === account.id} onClick={() => call({ action: "status", id: account.id, status: account.status === "active" ? "disabled" : "active" }, account.id, account.status === "active" ? "账号已停用。" : "账号已重新启用。")}>{account.status === "active" ? "停用" : "启用"}</button><button disabled={working === account.id} onClick={() => resetPassword(account)}>重置密码</button><button className="danger" disabled={working === account.id} onClick={() => deleteAccount(account)}>删除账号</button></>}</div>
       </div>)}</div></article>
     </section>
-  </main>;
+  {dialog}</main>;
 }
