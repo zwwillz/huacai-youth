@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
 import { getAdminNavigationEvents } from "@/db/admin-ui";
-import { getFinalRankingWorkspaceData } from "@/db/main-competition-flow";
+import { getFinalRankingWorkspaceData } from "@/db/final-ranking-engine";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import FinalRankingClient from "./final-ranking-client";
 import "./final-ranking.css";
