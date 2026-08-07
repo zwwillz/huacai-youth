@@ -32,11 +32,11 @@ export default function CompetitionContextBar({ eventId, eventTitle, groups, sel
     <div className="competition-context-top">
       <div className="competition-context-copy"><small>{eyebrow}</small><h2>{title || eventTitle}</h2>{description && <p>{description}</p>}</div>
       <div className="competition-group-toggle" aria-label="选择比赛组别">
-        {groups.map((group) => <Link key={group.id} className={group.id === selectedGroup?.id ? "active" : ""} href={href(basePath, eventId, group.id, selectedPhase, extraQuery)}><b>{group.code}</b><span>{group.name}</span></Link>)}
+        {groups.map((group) => <Link key={group.id} className={group.id === selectedGroup?.id ? "active" : ""} aria-current={group.id === selectedGroup?.id ? "true" : undefined} href={href(basePath, eventId, group.id, selectedPhase, extraQuery)}><b>{group.code}</b><span>{group.name}</span></Link>)}
       </div>
     </div>
     {phases.length > 0 && <nav className="competition-phase-toggle" aria-label="选择比赛阶段">
-      {phases.map((phase) => phase.disabled ? <span key={phase.code} className="disabled"><strong>{phase.title}</strong>{phase.hint && <small>{phase.hint}</small>}</span> : <Link key={phase.code} className={phase.code === selectedPhase ? "active" : ""} href={href(basePath, eventId, selectedGroup?.id || selectedGroupId, phase.code, extraQuery)}><strong>{phase.title}</strong>{phase.hint && <small>{phase.hint}</small>}</Link>)}
+      {phases.map((phase) => phase.disabled ? <span key={phase.code} className="disabled"><strong>{phase.title}</strong>{phase.hint && <small>{phase.hint}</small>}</span> : <Link key={phase.code} className={phase.code === selectedPhase ? "active" : ""} aria-current={phase.code === selectedPhase ? "step" : undefined} href={href(basePath, eventId, selectedGroup?.id || selectedGroupId, phase.code, extraQuery)}><strong>{phase.title}</strong>{phase.hint && <small>{phase.hint}</small>}</Link>)}
     </nav>}
   </section>;
 }
