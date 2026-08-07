@@ -94,8 +94,7 @@ function chooseDate(dates: ScoringDateOption[], requested?: string) {
 }
 
 export async function getScoringWorkspaceData(username: string, eventId: string, filters: ScoringFilters = {}): Promise<ScoringWorkspaceData> {
-  const viewer = await requireViewer(username);
-  await requireEventAccess(username, eventId, { allowedRoles: ["system_admin", "committee", "referee"], deniedMessage: "当前账号没有比分录入权限。" });
+  const viewer = await requireEventAccess(username, eventId, { allowedRoles: ["system_admin", "committee", "referee"], deniedMessage: "当前账号没有比分录入权限。" });
   const sql = getSqlClient();
   const [eventRows, groups] = await Promise.all([
     sql<Array<{ id: string; shortTitle: string; startDate: string; endDate: string }>>`
