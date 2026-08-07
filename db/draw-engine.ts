@@ -463,7 +463,6 @@ export async function createQualificationDraw(username: string, input: { eventId
 
 export async function getDrawSessionDetail(username: string, sessionId: string): Promise<DrawSessionDetail> {
   const viewer = await requireViewer(username);
-  await requireEventAccess(username, eventId);
   const sql = getSqlClient();
   const sessionRows = await sql<Array<any>>`
     select s.id, s.event_id as "eventId", e.short_title as "eventTitle", s.group_id as "groupId", g.name as "groupName",
