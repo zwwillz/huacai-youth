@@ -35,8 +35,8 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
   const context = await getCompetitionContextData(viewer.username, eventId);
 
   const shell = (child: ReactNode, groupId: string, phaseTitle: string) => <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="抽签与签表" pageHint="竞赛执行 · 当前组别与阶段" currentEventId={eventId} eventScoped competitionTool="overview">
-    <CompetitionContextBar eventId={eventId} eventTitle={context.event.shortTitle} groups={context.groups} selectedGroupId={groupId} basePath="/admin/competition/draw" phases={PHASES} selectedPhase={phaseCode} eyebrow="抽签与签表" title={`${context.groups.find((group) => group.id === groupId)?.name || "当前组别"} · ${phaseTitle}`} description="抽签草稿只保存在后台；确认正式签表后仍由“签表与赛程”发布按钮控制用户端是否可见。四个阶段使用同一套组别、阶段切换逻辑。" />
-    <CompetitionPublicationBar eventId={eventId} moduleType="schedule" title="签表与赛程" status={context.publications.schedule.status} viewerRole={viewer.role} hint="抽签、重抽或赛程调整都会重新进入待发布状态。确认无误后再发布给用户端。" />
+    <CompetitionContextBar eventId={eventId} eventTitle={context.event.shortTitle} groups={context.groups} selectedGroupId={groupId} basePath="/admin/competition/draw" phases={PHASES} selectedPhase={phaseCode} eyebrow="抽签与签表" title={`${context.groups.find((group) => group.id === groupId)?.name || "当前组别"} · ${phaseTitle}`} description="抽签草稿只保存在后台；用户端始终保持上一版正式签表，直到再次点击发布更新。四个阶段使用同一套组别、阶段切换逻辑。" />
+    <CompetitionPublicationBar eventId={eventId} moduleType="schedule" title="签表与赛程" status={context.publications.schedule.status} hasUnpublishedChanges={context.publications.schedule.hasUnpublishedChanges} viewerRole={viewer.role} hint="抽签、重抽或赛程调整只更新后台草稿；已发布的用户端继续保持上一版，确认无误后再发布更新。" />
     <div className="unified-competition-context">{child}</div>
   </AdminWorkspaceShell>;
 
