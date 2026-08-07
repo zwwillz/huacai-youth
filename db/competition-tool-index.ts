@@ -28,7 +28,7 @@ async function requireViewer(username: string) {
   return viewer;
 }
 
-export async function getCompetitionBracketIndex(username: string, eventId: string) {
+export async function getCompetitionBracketIndex(username: string, eventId: string, filters: { groupId?: string; phaseCode?: string } = {}) {
   await requireViewer(username);
   const sql = getSqlClient();
   const rows = await sql<CompetitionBracketIndexItem[]>`
@@ -43,8 +43,10 @@ export async function getCompetitionBracketIndex(username: string, eventId: stri
     left join public.competition_schedules s on s.bracket_id=b.id
     left join public.competition_match_schedules ms on ms.schedule_id=s.id
     where b.event_id=${eventId}
+      and (${filters.groupId || ""}='' or b.group_id=${filters.groupId || ""})
+      and (${filters.phaseCode || ""}='' or b.phase_code=${filters.phaseCode || ""})
     group by ds.id,b.id,eg.name,eg.code,ep.title,s.id
-    order by eg.code,b.phase_code,ds.version_no desc
+    order by eg.code,case b.phase_code when 'qualifier-one' then 1 when 'qualifier-two' then 2 when 'main-one' then 3 when 'main-two' then 4 else 99 end,ds.version_no desc
   `;
   return rows.map((item) => ({ ...item, phaseTitle: competitionPhaseLabel(item.phaseCode, item.phaseTitle) }));
 }
