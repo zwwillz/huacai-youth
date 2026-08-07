@@ -27,9 +27,12 @@ export default async function CompetitionSchedulesPage({ searchParams }: { searc
   const events = await getAdminNavigationEvents(viewer.username);
   const eventId = events.some((event) => event.id === query.event) ? String(query.event) : events[0]?.id;
   if (!eventId) redirect("/admin/competition");
-  const context = await getCompetitionContextData(viewer.username, eventId);
+  const [context, allItems] = await Promise.all([
+    getCompetitionContextData(viewer.username, eventId),
+    getCompetitionBracketIndex(viewer.username, eventId),
+  ]);
   const selectedGroupId = context.groups.some((group) => group.id === query.group) ? String(query.group) : context.groups[0]?.id || "";
-  const items = selectedGroupId ? await getCompetitionBracketIndex(viewer.username, eventId, { groupId: selectedGroupId }) : [];
+  const items = selectedGroupId ? allItems.filter((item) => item.groupId === selectedGroupId) : [];
   const availablePhases = [...new Set(items.map((item) => item.phaseCode))];
   const selectedPhase = PHASES.some(([code]) => code === query.phase)
     ? String(query.phase)
