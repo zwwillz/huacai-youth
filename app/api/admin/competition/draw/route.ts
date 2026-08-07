@@ -2,10 +2,10 @@ import { getAdminViewer } from "@/app/admin/admin-viewer";
 import {
   confirmDrawSession,
   getDrawSessionDetail,
-  getDrawWorkspaceData,
   voidDrawSession,
   type DrawPhaseCode,
 } from "@/db/draw-engine";
+import { getCompetitionDrawWorkspaceData } from "@/db/competition-draw-workspace";
 import { createQualificationDrawFast } from "@/db/draw-engine-write";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     const groupId = url.searchParams.get("groupId") || undefined;
     const phaseCode = (url.searchParams.get("phaseCode") || "qualifier-one") as DrawPhaseCode;
     if (!eventId) throw new Error("缺少赛事ID。");
-    return Response.json({ data: await getDrawWorkspaceData(viewer.username, eventId, groupId, phaseCode) });
+    return Response.json({ data: await getCompetitionDrawWorkspaceData(viewer.username, eventId, groupId, phaseCode) });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "抽签数据读取失败。" }, { status: 400 });
   }
