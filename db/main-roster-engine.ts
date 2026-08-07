@@ -46,8 +46,8 @@ export async function getMainRosterSummaries(eventId: string): Promise<MainRoste
       sql<Array<{ total: number; confirmed: number; replacements: number; resolved: number }>>`
         select count(*)::int as total,
           count(*) filter (where attendance_status='confirmed' and status='active' and eligibility_status <> 'ineligible')::int as confirmed,
-          count(*) filter (where replacement_player_id is not null and status='active')::int as replacements,
-          count(*) filter (where status='active' and ((attendance_status='confirmed' and eligibility_status <> 'ineligible') or replacement_player_id is not null))::int as resolved
+          count(*) filter (where attendance_status in ('not_attending','ineligible','removed') and replacement_player_id is not null and status='active')::int as replacements,
+          count(*) filter (where status='active' and ((attendance_status='confirmed' and eligibility_status <> 'ineligible') or (attendance_status in ('not_attending','ineligible','removed') and replacement_player_id is not null)))::int as resolved
         from public.competition_seed_entries
         where event_id=${eventId} and group_id=${group.groupId} and status='active'
       `,
@@ -113,7 +113,7 @@ export async function rebuildMainRosterIfReady(eventId: string, groupId: string)
     if (item.attendanceStatus === 'confirmed' && item.eligibilityStatus !== 'ineligible') {
       return [{ playerId: item.playerId, playerName: item.playerName, seedNo: item.seedNo, sourceRef: item.id, replacement: false }];
     }
-    if (item.replacementPlayerId && item.replacementPlayerName) {
+    if (["not_attending","ineligible","removed"].includes(item.attendanceStatus) && item.replacementPlayerId && item.replacementPlayerName) {
       return [{ playerId: item.replacementPlayerId, playerName: item.replacementPlayerName, seedNo: item.seedNo, sourceRef: item.id, replacement: true }];
     }
     return [];
