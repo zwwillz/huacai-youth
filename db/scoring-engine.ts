@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
+import { maybeBuildMainTwoRoster } from "./main-stage-engine";
 
 export type ScoringMatch = {
   assignmentId: string;
@@ -166,9 +167,13 @@ export async function confirmMatchResult(username: string, assignmentId: string)
   if (!["system_admin", "committee"].includes(viewer.role)) throw new Error("赛果确认需要系统管理员或组委会权限。");
   const sql = getSqlClient();
   const rows = await sql<Array<{
-    bracketMatchId: string; eventId: string; resultStatus: string; winnerPlayerId: string | null; winnerPlayerName: string | null;
+    bracketMatchId: string; eventId: string; groupId: string; phaseCode: string; resultStatus: string;
+    winnerPlayerId: string | null; winnerPlayerName: string | null;
+    playerAId: string | null; playerAName: string | null; playerBId: string | null; playerBName: string | null;
   }>>`
-    select bm.id as "bracketMatchId",bm.event_id as "eventId",bm.result_status as "resultStatus",bm.winner_player_id as "winnerPlayerId",bm.winner_player_name as "winnerPlayerName"
+    select bm.id as "bracketMatchId",bm.event_id as "eventId",bm.group_id as "groupId",bm.phase_code as "phaseCode",bm.result_status as "resultStatus",
+      bm.winner_player_id as "winnerPlayerId",bm.winner_player_name as "winnerPlayerName",
+      bm.player_a_id as "playerAId",bm.player_a_name as "playerAName",bm.player_b_id as "playerBId",bm.player_b_name as "playerBName"
     from public.competition_match_schedules ms
     join public.competition_bracket_matches bm on bm.id=ms.bracket_match_id
     where ms.id=${assignmentId}
@@ -177,6 +182,9 @@ export async function confirmMatchResult(username: string, assignmentId: string)
   const match = rows[0];
   if (!match) throw new Error("没有找到这场比赛。");
   if (match.resultStatus !== "submitted" || !match.winnerPlayerId || !match.winnerPlayerName) throw new Error("请先提交赛果，再进行确认。");
+  const loser = match.playerAId === match.winnerPlayerId
+    ? { id: match.playerBId, name: match.playerBName }
+    : { id: match.playerAId, name: match.playerAName };
   const changedAt = now();
 
   await sql.begin(async (tx) => {
@@ -185,20 +193,23 @@ export async function confirmMatchResult(username: string, assignmentId: string)
       set result_status='confirmed',status='completed',confirmed_by=${viewer.id},confirmed_at=${changedAt},updated_at=${changedAt}
       where id=${match.bracketMatchId}
     `;
-    const links = await tx<Array<{ targetMatchId: string; targetSide: string }>>`
-      select target_match_id as "targetMatchId",target_side as "targetSide"
+    const links = await tx<Array<{ targetMatchId: string; targetSide: string; sourceResult: string }>>`
+      select target_match_id as "targetMatchId",target_side as "targetSide",source_result as "sourceResult"
       from public.competition_match_links
-      where source_match_id=${match.bracketMatchId} and source_result='winner'
+      where source_match_id=${match.bracketMatchId} and source_result in ('winner','loser')
     `;
     for (const link of links) {
+      const player = link.sourceResult === "loser" ? loser : { id: match.winnerPlayerId, name: match.winnerPlayerName };
+      if (!player.id || !player.name) continue;
       if (link.targetSide === "A") {
-        await tx`update public.competition_bracket_matches set player_a_id=${match.winnerPlayerId},player_a_name=${match.winnerPlayerName},updated_at=${changedAt} where id=${link.targetMatchId}`;
+        await tx`update public.competition_bracket_matches set player_a_id=${player.id},player_a_name=${player.name},updated_at=${changedAt} where id=${link.targetMatchId}`;
       } else {
-        await tx`update public.competition_bracket_matches set player_b_id=${match.winnerPlayerId},player_b_name=${match.winnerPlayerName},updated_at=${changedAt} where id=${link.targetMatchId}`;
+        await tx`update public.competition_bracket_matches set player_b_id=${player.id},player_b_name=${player.name},updated_at=${changedAt} where id=${link.targetMatchId}`;
       }
     }
     await tx`insert into public.audit_logs (id,actor_user_id,event_id,module_type,target_type,target_id,action,after_json,created_at)
-      values (${newId("log")},${viewer.id},${match.eventId},'competition','match_result',${match.bracketMatchId},'confirm_match_result',${JSON.stringify({ winner: match.winnerPlayerName, propagatedTo: links.length })},${changedAt})`;
+      values (${newId("log")},${viewer.id},${match.eventId},'competition','match_result',${match.bracketMatchId},'confirm_match_result',${JSON.stringify({ winner: match.winnerPlayerName, loser: loser.name, propagatedTo: links.length })},${changedAt})`;
   });
+  if (match.phaseCode === "main-one") await maybeBuildMainTwoRoster(match.eventId, match.groupId);
   return { ok: true, eventId: match.eventId };
 }
