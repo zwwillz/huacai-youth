@@ -4,7 +4,8 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
-import { PersonalCenterLoadingShell, PlayerLoadingShell } from "./public-view-loading";
+import MePreview from "./me-preview";
+import { PlayerLoadingShell } from "./public-view-loading";
 import type { PublicCompetitionTab } from "./public-competition-live-v2";
 import type { EventData, Group, Station } from "./public-types";
 import type { PublicContentState } from "@/db/public-content";
@@ -12,14 +13,51 @@ import type { PublicContentState } from "@/db/public-content";
 type MainView = "event" | "players" | "me";
 type EventTab = "overview" | "rules" | "schedule" | "matches" | "rankings" | "guide";
 type GuideKind = "transport" | "clothing";
+type EventDetail = { station: Station; contentState: PublicContentState | null };
 
 const PublicCompetitionLiveV2 = dynamic(() => import("./public-competition-live-v2"), { ssr: false });
 const PlayerDbView = dynamic(() => import("./player-db-view"), { ssr: false, loading: () => <PlayerLoadingShell /> });
-const MePreview = dynamic(() => import("./me-preview"), { ssr: false, loading: () => <PersonalCenterLoadingShell /> });
+
+const eventDetailCache = new Map<string, { data: EventDetail; loadedAt: number }>();
+const eventDetailRequests = new Map<string, Promise<EventDetail | null>>();
+const competitionWarmRequests = new Map<string, Promise<void>>();
+const EVENT_DETAIL_TTL = 300_000;
 
 function preloadMainView(view: MainView) {
   if (view === "players") void import("./player-db-view");
-  if (view === "me") void import("./me-preview");
+}
+
+function requestEventDetail(eventId: string) {
+  const cached = eventDetailCache.get(eventId);
+  if (cached && Date.now() - cached.loadedAt < EVENT_DETAIL_TTL) return Promise.resolve(cached.data);
+  const pending = eventDetailRequests.get(eventId);
+  if (pending) return pending;
+  const request = fetch(`/api/public/events/${encodeURIComponent(eventId)}/detail`)
+    .then(async (response) => {
+      if (!response.ok) return null;
+      const payload = await response.json() as { data?: EventDetail };
+      if (!payload.data) return null;
+      eventDetailCache.set(eventId, { data: payload.data, loadedAt: Date.now() });
+      return payload.data;
+    })
+    .catch(() => null)
+    .finally(() => { eventDetailRequests.delete(eventId); });
+  eventDetailRequests.set(eventId, request);
+  return request;
+}
+
+function warmCompetition(eventId: string) {
+  const pending = competitionWarmRequests.get(eventId);
+  if (pending) return pending;
+  const request = import("./public-competition-live-v2")
+    .then(async () => {
+      const response = await fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition`);
+      if (response.ok) await response.json();
+    })
+    .catch(() => undefined)
+    .finally(() => { competitionWarmRequests.delete(eventId); });
+  competitionWarmRequests.set(eventId, request);
+  return request;
 }
 
 function EventCenter({data,openEvent}:{data:EventData;openEvent:(id:string)=>void}) {
@@ -41,56 +79,23 @@ function guideIcon(title: string, guideType: string) {
   return title.slice(0, 1) || "提";
 }
 
-function StationOverview({
-  station,
-  contentState,
-  openRules,
-  openSchedule,
-  openGuide,
-}: {
-  station: Station;
-  contentState?: PublicContentState;
-  openRules: () => void;
-  openSchedule: () => void;
-  openGuide: (kind: GuideKind) => void;
-}) {
+function StationOverview({station,contentState,openRules,openSchedule,openGuide}:{station:Station;contentState?:PublicContentState;openRules:()=>void;openSchedule:()=>void;openGuide:(kind:GuideKind)=>void}) {
   const isLangfang = station.id === "langfang";
   const guides = contentState?.guides ?? [];
-
   return <div className="stack">
     <StationHero station={station} openRules={openRules} openSchedule={openSchedule} />
     <section className="metrics">
       <article><strong>{station.totalPrize}</strong><span>本站总奖金</span></article>
-      {isLangfang ? <>
-        <article><strong>{station.publicPlayerCount ?? 0}</strong><span>少年组已公布出场选手</span></article>
-        <article><strong>{station.publicMatchCount ?? 0}</strong><span>少年组已公布首轮对阵</span></article>
-      </> : <>
-        <article><strong>2</strong><span>少年组与青年组</span></article>
-        <article><strong>{station.mainSize}</strong><span>正赛规模</span></article>
-      </>}
+      {isLangfang ? <><article><strong>{station.publicPlayerCount ?? "—"}</strong><span>少年组已公布出场选手</span></article><article><strong>{station.publicMatchCount ?? "—"}</strong><span>少年组已公布首轮对阵</span></article></> : <><article><strong>2</strong><span>少年组与青年组</span></article><article><strong>{station.mainSize}</strong><span>正赛规模</span></article></>}
       <article><strong>{station.duration}</strong><span>本站比赛周期</span></article>
     </section>
-    <section className="card introduction">
-      <div><small>赛事简介</small><h2>{station.stop} · {station.city}</h2></div>
-      <div><p>{station.intro}</p><div className="inline-actions"><button onClick={openRules}>查看完整竞赛规程</button><button onClick={openSchedule}>查看分阶段赛程</button></div></div>
-    </section>
+    <section className="card introduction"><div><small>赛事简介</small><h2>{station.stop} · {station.city}</h2></div><div><p>{station.intro}</p><div className="inline-actions"><button onClick={openRules}>查看完整竞赛规程</button><button onClick={openSchedule}>查看分阶段赛程</button></div></div></section>
     <section className="rules">
-      <article className="card"><small>少年组 U16</small><h2>{station.age.少年组}</h2><p>{station.format[0][2]}；本站少年组冠军奖金{station.prizes.少年组[0][1]}。</p><dl><div><dt>组别</dt><dd>少年组</dd></div><div><dt>正赛规模</dt><dd>64人</dd></div></dl></article>
-      <article className="card"><small>青年组 U20</small><h2>{station.age.青年组}</h2><p>{station.format[0][3]}；本站青年组冠军奖金{station.prizes.青年组[0][1]}。</p><dl><div><dt>组别</dt><dd>青年组</dd></div><div><dt>正赛规模</dt><dd>64人</dd></div></dl></article>
+      <article className="card"><small>少年组 U16</small><h2>{station.age.少年组}</h2><p>{station.format[0]?.[2] ?? "详情加载中"}；本站少年组冠军奖金{station.prizes.少年组[0]?.[1] ?? "详情加载中"}。</p><dl><div><dt>组别</dt><dd>少年组</dd></div><div><dt>正赛规模</dt><dd>64人</dd></div></dl></article>
+      <article className="card"><small>青年组 U20</small><h2>{station.age.青年组}</h2><p>{station.format[0]?.[3] ?? "详情加载中"}；本站青年组冠军奖金{station.prizes.青年组[0]?.[1] ?? "详情加载中"}。</p><dl><div><dt>组别</dt><dd>青年组</dd></div><div><dt>正赛规模</dt><dd>64人</dd></div></dl></article>
     </section>
-    <section className="card organizers">
-      <div><small>官方信息</small><h2>赛事组织</h2></div>
-      <dl>{station.organizers.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}<div><dt>比赛地点</dt><dd>{station.venueDetail}</dd></div></dl>
-    </section>
-    <section className="card participant-tips">
-      <header><div><small>参赛提示</small><h2>参赛友好提示</h2></div><b>信息将持续更新</b></header>
-      <div className="tip-links">
-        {guides.length ? guides.map((guide) => <a href={`/guide/${encodeURIComponent(guide.id)}`} className="dynamic-guide-link" key={guide.id}><span>{guideIcon(guide.title, guide.guideType)}</span><div><strong>{guide.title}</strong><small>查看组委会发布的参赛提示</small></div><b>查看 ›</b></a>) : <>
-          <button onClick={() => openGuide("transport")}><span>行</span><div><strong>交通住宿攻略</strong><small>路线、场馆周边及住宿信息</small></div><b>查看 ›</b></button>
-          <button onClick={() => openGuide("clothing")}><span>装</span><div><strong>服装要求</strong><small>查看参赛着装相关提示</small></div><b>查看 ›</b></button>
-        </>}
-      </div>
-    </section>
+    <section className="card organizers"><div><small>官方信息</small><h2>赛事组织</h2></div><dl>{station.organizers.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}<div><dt>比赛地点</dt><dd>{station.venueDetail}</dd></div></dl></section>
+    <section className="card participant-tips"><header><div><small>参赛提示</small><h2>参赛友好提示</h2></div><b>信息将持续更新</b></header><div className="tip-links">{guides.length ? guides.map((guide) => <a href={`/guide/${encodeURIComponent(guide.id)}`} className="dynamic-guide-link" key={guide.id}><span>{guideIcon(guide.title, guide.guideType)}</span><div><strong>{guide.title}</strong><small>查看组委会发布的参赛提示</small></div><b>查看 ›</b></a>) : <><button onClick={() => openGuide("transport")}><span>行</span><div><strong>交通住宿攻略</strong><small>路线、场馆周边及住宿信息</small></div><b>查看 ›</b></button><button onClick={() => openGuide("clothing")}><span>装</span><div><strong>服装要求</strong><small>查看参赛着装相关提示</small></div><b>查看 ›</b></button></>}</div></section>
     {isLangfang && <section className="card sponsor-section"><header><div><small>赛事支持</small><h2>合作伙伴</h2></div></header><img src="/langfang-sponsors.jpg" alt="河北廊坊站合作伙伴标识" width="1242" height="367" /></section>}
   </div>;
 }
@@ -99,14 +104,7 @@ function CompetitionRules({ station, contentState }: { station: Station; content
   const regulationDocument = contentState?.documents.regulation;
   const refereeDocument = contentState?.documents.referee_list;
   return <div className="regulation stack">
-    <section className="regulation-head">
-      <h1>{station.city}竞赛规程</h1><p>{station.title}</p>
-      <span>以下为竞赛规程重点摘要，具体执行以官方原文及组委会最新通知为准</span>
-      <div className="pdf-actions">
-        {regulationDocument?.published && regulationDocument.url ? <a className="pdf-button" href={regulationDocument.url} target="_blank" rel="noreferrer">查看完整竞赛规程 <b>原文 ↗</b></a> : <span className="pdf-pending">完整规程原文待组委会发布</span>}
-        {refereeDocument?.published && refereeDocument.url ? <a className="pdf-button referee-button" href={refereeDocument.url} target="_blank" rel="noreferrer">查看裁判员名单 <b>原文 ↗</b></a> : <span className="pdf-pending">裁判员名单待组委会发布</span>}
-      </div>
-    </section>
+    <section className="regulation-head"><h1>{station.city}竞赛规程</h1><p>{station.title}</p><span>以下为竞赛规程重点摘要，具体执行以官方原文及组委会最新通知为准</span><div className="pdf-actions">{regulationDocument?.published && regulationDocument.url ? <a className="pdf-button" href={regulationDocument.url} target="_blank" rel="noreferrer">查看完整竞赛规程 <b>原文 ↗</b></a> : <span className="pdf-pending">完整规程原文待组委会发布</span>}{refereeDocument?.published && refereeDocument.url ? <a className="pdf-button referee-button" href={refereeDocument.url} target="_blank" rel="noreferrer">查看裁判员名单 <b>原文 ↗</b></a> : <span className="pdf-pending">裁判员名单待组委会发布</span>}</div></section>
     <section className="rule-nav">{["基本信息", "参赛资格", "竞赛办法", "种子与抽签", "报名与费用", "奖金设置"].map((item, index) => <a href={`#rule-${station.id}-${index + 1}`} key={item}><b>{String(index + 1).padStart(2, "0")}</b>{item}</a>)}</section>
     <section id={`rule-${station.id}-1`} className="rule-section card"><header><span>01</span><div><small>赛事基本信息</small><h2>时间、地点与组织机构</h2></div></header><dl className="facts"><div><dt>比赛时间</dt><dd>资格赛：{station.qualDate}<br />正赛：{station.mainDate}</dd></div><div><dt>比赛地点</dt><dd>{station.venueDetail}</dd></div>{station.organizers.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl></section>
     <section id={`rule-${station.id}-2`} className="rule-section card"><header><span>02</span><div><small>参赛资格</small><h2>少年组与青年组</h2></div></header><div className="eligibility"><article><b>U16</b><h3>少年组</h3><p>{station.age.少年组}</p></article><article><b>U20</b><h3>青年组</h3><p>{station.age.青年组}</p></article></div><p className="rule-note">{station.minimumAge}</p></section>
@@ -126,17 +124,32 @@ function ParticipantGuide({kind,onBack}:{kind:GuideKind;onBack:()=>void}){
   return <div className="guide-page stack"><button className="draw-back" onClick={onBack}>‹ 返回赛事概览</button><section className="guide-hero"><span>{isClothing?"装":"行"}</span><div><small>参赛友好提示</small><h1>{isClothing?"服装要求":"交通住宿攻略"}</h1><p>2026中国华彩十六球青少年系列赛廊坊站</p></div></section><section className="card guide-placeholder"><span>待</span><h2>待组委会更新</h2><p>{isClothing?"参赛服装、鞋履及现场着装要求将在组委会确认后更新。":"场馆交通路线、停车信息及周边住宿建议将在组委会确认后更新。"}</p></section></div>;
 }
 
-export default function EventApp({ data, contentStates }: { data: EventData; contentStates: PublicContentState[] }) {
+export default function EventApp({ data }: { data: EventData }) {
   const [view, setView] = useState<MainView>("event");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<EventTab>("overview");
   const [guideKind, setGuideKind] = useState<GuideKind>("clothing");
-  const station = selectedId ? data.stations.find((item) => item.id === selectedId) ?? null : null;
-  const contentState = station ? contentStates.find((item) => item.eventId === station.eventId) : undefined;
-  const activeCompetitionTab = tab === "schedule" || tab === "matches" || tab === "rankings" ? tab as PublicCompetitionTab : null;
+  const [eventDetails, setEventDetails] = useState<Map<string, EventDetail>>(() => new Map([...eventDetailCache].map(([id, value]) => [id, value.data])));
+  const baseStation = selectedId ? data.stations.find((item) => item.id === selectedId) ?? null : null;
+  const detail = baseStation ? eventDetails.get(baseStation.eventId) : undefined;
+  const station = detail?.station ?? baseStation;
+  const contentState = detail?.contentState ?? undefined;
+  const requestedCompetitionTab = tab === "schedule" || tab === "matches" || tab === "rankings" ? tab as PublicCompetitionTab : null;
+  const activeCompetitionTab = requestedCompetitionTab && contentState ? requestedCompetitionTab : null;
+
+  const hydrateEvent = (eventId: string) => {
+    void requestEventDetail(eventId).then((next) => {
+      if (!next) return;
+      setEventDetails((current) => new Map(current).set(eventId, next));
+    });
+  };
 
   const openEvent = (id: string) => {
-    void import("./public-competition-live-v2");
+    const next = data.stations.find((item) => item.id === id);
+    if (next) {
+      hydrateEvent(next.eventId);
+      void warmCompetition(next.eventId);
+    }
     setSelectedId(id);
     setTab("overview");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -144,8 +157,8 @@ export default function EventApp({ data, contentStates }: { data: EventData; con
   const back = () => { setSelectedId(null); setTab("overview"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const enter = (nextView: MainView) => { preloadMainView(nextView); setView(nextView); if (nextView === "event") setSelectedId(null); };
   const title = view === "players" ? "球员数据" : view === "me" ? "个人中心" : station?.city || "赛事中心";
-  const openGuide = (kind: GuideKind) => { setGuideKind(kind); setTab("guide"); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const changeTab = (nextTab: EventTab) => { setTab(nextTab); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const openGuide = (kind: GuideKind) => { setGuideKind(kind); setTab("guide"); if (station) void warmCompetition(station.eventId); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const changeTab = (nextTab: EventTab) => { if (station) void warmCompetition(station.eventId); setTab(nextTab); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("huacai:navigation", { detail: { view, stationId: selectedId ?? "", tab } }));
@@ -154,29 +167,22 @@ export default function EventApp({ data, contentStates }: { data: EventData; con
   return <main data-huacai-view={view} data-huacai-station={selectedId ?? ""} data-huacai-tab={tab}>
     <header className="top"><button className="brand" onClick={() => { setView("event"); back(); }}><span>华</span><strong>华彩赛事</strong></button><h3>{title}</h3><a className="admin" href="/admin">组委会入口</a></header>
     <div className="layout">
-      <aside className="side">{[["event", "赛", "赛事", "官方赛事与赛程"], ["players", "员", "球员", "球员档案与数据"], ["me", "我", "我的", "报名、比赛与积分"]].map((item) => {
-        const nextView=item[0] as MainView;
-        return <button className={view === item[0] ? "active" : ""} onPointerEnter={() => preloadMainView(nextView)} onPointerDown={() => preloadMainView(nextView)} onFocus={() => preloadMainView(nextView)} onClick={() => enter(nextView)} key={item[0]}><span>{item[1]}</span><div><strong>{item[2]}</strong><small>{item[3]}</small></div></button>;
-      })}</aside>
+      <aside className="side">{[["event", "赛", "赛事", "官方赛事与赛程"], ["players", "员", "球员", "球员档案与数据"], ["me", "我", "我的", "报名、比赛与积分"]].map((item) => { const nextView=item[0] as MainView; return <button className={view === item[0] ? "active" : ""} onPointerEnter={() => preloadMainView(nextView)} onPointerDown={() => preloadMainView(nextView)} onFocus={() => preloadMainView(nextView)} onClick={() => enter(nextView)} key={item[0]}><span>{item[1]}</span><div><strong>{item[2]}</strong><small>{item[3]}</small></div></button>; })}</aside>
       <div className="content">
         {view === "event" && !station && <EventCenter data={data} openEvent={openEvent} />}
         {view === "event" && station && <>
           <button className="back" onClick={back}>‹ 返回赛事中心</button>
-          <nav className="tabs public-five-tabs public-unified-tabs" aria-label="赛事内容">
-            {([["overview", "概览"], ["rules", "竞赛规程"], ["schedule", "赛程"], ["matches", "对阵"], ["rankings", "排名"]] as [EventTab, string][]).map(([id, label]) => <button className={tab === id || (tab === "guide" && id === "overview") ? "active" : ""} onClick={() => changeTab(id)} key={id}>{label}</button>)}
-          </nav>
+          <nav className="tabs public-five-tabs public-unified-tabs" aria-label="赛事内容">{([["overview", "概览"], ["rules", "竞赛规程"], ["schedule", "赛程"], ["matches", "对阵"], ["rankings", "排名"]] as [EventTab, string][]).map(([id, label]) => <button className={tab === id || (tab === "guide" && id === "overview") ? "active" : ""} onClick={() => changeTab(id)} key={id}>{label}</button>)}</nav>
           {tab === "overview" && <StationOverview station={station} contentState={contentState} openRules={() => changeTab("rules")} openSchedule={() => changeTab("schedule")} openGuide={openGuide} />}
           {tab === "guide" && <ParticipantGuide kind={guideKind} onBack={() => changeTab("overview")} />}
-          {tab === "rules" && (contentState?.publishedModules.includes("regulation") ? <CompetitionRules station={station} contentState={contentState} /> : <PublicModuleEmpty icon="规" title="本站竞赛规程正在完善中" description="待组委会确认后，将在这里发布正式规程、参赛要求和相关文件。" />)}
+          {tab === "rules" && (!contentState ? <PublicModuleEmpty icon="…" title="正在读取竞赛规程" description="赛事页面已经打开，详细规程正在后台补齐。" /> : contentState.publishedModules.includes("regulation") ? <CompetitionRules station={station} contentState={contentState} /> : <PublicModuleEmpty icon="规" title="本站竞赛规程正在完善中" description="待组委会确认后，将在这里发布正式规程、参赛要求和相关文件。" />)}
+          {requestedCompetitionTab && !contentState ? <PublicModuleEmpty icon="…" title="正在准备本站比赛数据" description="赛程、对阵和排名已在后台预加载，详细发布状态正在补齐。" /> : null}
           <PublicCompetitionLiveV2 station={station} contentState={contentState} activeTab={activeCompetitionTab} />
         </>}
         {view === "players" && <PlayerDbView />}
         {view === "me" && <MePreview />}
       </div>
     </div>
-    <nav className="bottom">{[["event", "赛", "赛事"], ["players", "员", "球员"], ["me", "我", "我的"]].map((item) => {
-      const nextView=item[0] as MainView;
-      return <button className={view === item[0] ? "active" : ""} onPointerEnter={() => preloadMainView(nextView)} onPointerDown={() => preloadMainView(nextView)} onFocus={() => preloadMainView(nextView)} onClick={() => enter(nextView)} key={item[0]}><span>{item[1]}</span><strong>{item[2]}</strong></button>;
-    })}</nav>
+    <nav className="bottom">{[["event", "赛", "赛事"], ["players", "员", "球员"], ["me", "我", "我的"]].map((item) => { const nextView=item[0] as MainView; return <button className={view === item[0] ? "active" : ""} onPointerEnter={() => preloadMainView(nextView)} onPointerDown={() => preloadMainView(nextView)} onFocus={() => preloadMainView(nextView)} onClick={() => enter(nextView)} key={item[0]}><span>{item[1]}</span><strong>{item[2]}</strong></button>; })}</nav>
   </main>;
 }
