@@ -116,15 +116,20 @@ export async function confirmMatchResultFast(inputPrincipal: AdminPrincipalInput
     const propagated = await tx<Array<{ id: string }>>`
       update public.competition_bracket_matches target
       set
-        player_a_id=case when link.target_side='A' then case when link.source_result='winner' then ${match.winnerPlayerId} else ${loser.id} end else target.player_a_id end,
-        player_a_name=case when link.target_side='A' then case when link.source_result='winner' then ${match.winnerPlayerName} else ${loser.name} end else target.player_a_name end,
-        player_b_id=case when link.target_side='B' then case when link.source_result='winner' then ${match.winnerPlayerId} else ${loser.id} end else target.player_b_id end,
-        player_b_name=case when link.target_side='B' then case when link.source_result='winner' then ${match.winnerPlayerName} else ${loser.name} end else target.player_b_name end,
+        player_a_id=case when links.source_a='winner' then ${match.winnerPlayerId} when links.source_a='loser' then ${loser.id} else target.player_a_id end,
+        player_a_name=case when links.source_a='winner' then ${match.winnerPlayerName} when links.source_a='loser' then ${loser.name} else target.player_a_name end,
+        player_b_id=case when links.source_b='winner' then ${match.winnerPlayerId} when links.source_b='loser' then ${loser.id} else target.player_b_id end,
+        player_b_name=case when links.source_b='winner' then ${match.winnerPlayerName} when links.source_b='loser' then ${loser.name} else target.player_b_name end,
         updated_at=${changedAt}
-      from public.competition_match_links link
-      where link.source_match_id=${match.bracketMatchId}
-        and link.source_result in ('winner','loser')
-        and link.target_match_id=target.id
+      from (
+        select target_match_id,
+          max(case when target_side='A' then source_result end) as source_a,
+          max(case when target_side='B' then source_result end) as source_b
+        from public.competition_match_links
+        where source_match_id=${match.bracketMatchId} and source_result in ('winner','loser')
+        group by target_match_id
+      ) links
+      where links.target_match_id=target.id
       returning target.id
     `;
     propagatedCount = propagated.length;
