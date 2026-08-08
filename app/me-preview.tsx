@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { PublicPlayerDetail, PublicPlayerEvent } from "@/db/player-data";
 import styles from "./me-preview.module.css";
@@ -168,20 +168,22 @@ export default function MePreview() {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [data, setData] = useState<Props>({ player: null, matches: [] });
   const [loading, setLoading] = useState(false);
-  const loaded = useMemo(() => ({ current: false }), []);
+  const loaded = useRef(false);
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     let original: HTMLElement | null = null;
     let host: HTMLElement | null = null;
 
     const load = async () => {
-      if (loaded.current || loading) return;
+      if (loaded.current || loadingRef.current) return;
+      loadingRef.current = true;
       setLoading(true);
       try {
         const response = await fetch("/api/public/players/preview", { cache: "no-store" });
         const payload = await response.json() as { data?: Props };
         if (response.ok && payload.data) { setData(payload.data); loaded.current = true; }
-      } finally { setLoading(false); }
+      } finally { loadingRef.current = false; setLoading(false); }
     };
 
     const sync = () => {
@@ -206,7 +208,7 @@ export default function MePreview() {
     window.addEventListener("huacai:navigation", sync);
     sync();
     return () => { window.removeEventListener("huacai:navigation", sync); if (original) original.style.display = ""; if (host) host.remove(); };
-  }, [loaded, loading]);
+  }, []);
 
   if (!target) return null;
   if (loading && !data.player) return createPortal(<div className={styles.root}><section className={styles.empty}>正在读取球员模式预览…</section></div>, target);
