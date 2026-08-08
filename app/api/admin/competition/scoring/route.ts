@@ -1,6 +1,6 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { getScoringWorkspaceBundleFast } from "@/db/scoring-fast";
-import { confirmMatchResult, submitMatchResult } from "@/db/scoring-engine";
+import { confirmMatchResultFast, submitMatchResultFast } from "@/db/scoring-write-fast";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,6 +27,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
   const viewer = await getAdminViewer();
   if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
   try {
@@ -35,18 +36,20 @@ export async function POST(request: Request) {
     if (action === "submit") {
       const assignmentId = String(body.assignmentId || "");
       if (!assignmentId) throw new Error("缺少比赛ID。");
-      return Response.json({ data: await submitMatchResult(viewer.username, {
+      const data = await submitMatchResultFast(viewer, {
         assignmentId,
         resultType: String(body.resultType || "normal"),
         scoreA: body.scoreA === "" || body.scoreA === null || body.scoreA === undefined ? null : Number(body.scoreA),
         scoreB: body.scoreB === "" || body.scoreB === null || body.scoreB === undefined ? null : Number(body.scoreB),
         note: String(body.note || ""),
-      }) });
+      });
+      return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
     }
     if (action === "confirm") {
       const assignmentId = String(body.assignmentId || "");
       if (!assignmentId) throw new Error("缺少比赛ID。");
-      return Response.json({ data: await confirmMatchResult(viewer.username, assignmentId) });
+      const data = await confirmMatchResultFast(viewer, assignmentId);
+      return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
     }
     throw new Error("不支持的比分操作。");
   } catch (error) {
