@@ -14,7 +14,16 @@ export default function AdminNavigationFeedback() {
   const searchParams = useSearchParams();
   const currentKey = useMemo(() => navigationKey(pathname, searchParams.toString()), [pathname, searchParams]);
   const [pending, setPending] = useState<PendingNavigation | null>(null);
+  const [visibleTarget, setVisibleTarget] = useState("");
   const busy = Boolean(pending && pending.origin === currentKey && pending.target !== currentKey);
+  const visible = Boolean(busy && pending && visibleTarget === pending.target);
+
+  useEffect(() => {
+    if (!busy || !pending) return;
+    const target = pending.target;
+    const timer = window.setTimeout(() => setVisibleTarget(target), 180);
+    return () => window.clearTimeout(timer);
+  }, [busy, pending]);
 
   useEffect(() => {
     const begin = (target: string, label: string) => setPending({ origin: currentKey, target, label: label || "后台页面" });
@@ -42,9 +51,8 @@ export default function AdminNavigationFeedback() {
     };
   }, [currentKey]);
 
-  if (!busy) return null;
+  if (!visible) return null;
   return <div className="admin-navigation-feedback" role="status" aria-live="polite" aria-label={`正在打开${pending?.label || "后台页面"}`}>
     <span className="admin-navigation-progress" />
-    <div><i /><strong>正在打开{pending?.label || "后台页面"}…</strong><small>数据正在读取，请稍候</small></div>
   </div>;
 }
