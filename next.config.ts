@@ -1,11 +1,8 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  // EdgeOne Pages deploys this project as a full-stack Next.js application.
-  // Standalone output makes the Node SSR/server handler explicit for the
-  // EdgeOne OpenNext adapter instead of allowing the build to fall back to
-  // a "pure project" when server-handler detection is unstable.
-  output: "standalone",
-};
+// EdgeOne Makers detects and adapts Next.js automatically. Leave the output
+// mode unset so the platform can select its own Next.js server entry instead
+// of combining that adapter with Next's standalone-server output.
+const nextConfig: NextConfig = {};
 
 export default nextConfig;
