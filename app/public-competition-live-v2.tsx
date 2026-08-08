@@ -7,7 +7,7 @@ import type { PublicContentState } from "@/db/public-content";
 import type { PublicRanking } from "@/db/rankings";
 
 export type PublicCompetitionTab = "schedule" | "matches" | "rankings";
-type LiveTab = PublicCompetitionTab;
+export type PublicCompetitionWarmIntent = "entry" | PublicCompetitionTab;
 type StationMeta = Pick<Station, "id" | "eventId" | "title" | "city" | "phases" | "format" | "prizes">;
 type PublicDisplayMatch = Pick<PublicLiveMatch,
   "id" | "group" | "phaseId" | "divisionNo" | "roundNo" | "roundName" | "matchCode" |
@@ -15,6 +15,105 @@ type PublicDisplayMatch = Pick<PublicLiveMatch,
   "winnerPlayerName" | "date" | "time" | "table" | "isTv"
 >;
 type PublicCompetitionDisplayEvent = Omit<PublicCompetitionEvent, "matches"> & { matches: PublicDisplayMatch[] };
+type EventPayload = { version: string; event: PublicCompetitionDisplayEvent };
+type RankingPayload = { version: string; rankings: PublicRanking[] };
+
+const summaryCache = new Map<string, EventPayload>();
+const competitionCache = new Map<string, EventPayload>();
+const rankingsCache = new Map<string, RankingPayload>();
+const summaryRequests = new Map<string, Promise<EventPayload>>();
+const competitionRequests = new Map<string, Promise<EventPayload>>();
+const rankingsRequests = new Map<string, Promise<RankingPayload>>();
+const competitionVersions = new Map<string, string>();
+
+function requestQuery(force: boolean, requestedVersion: string) {
+  if (requestedVersion) return `?version=${encodeURIComponent(requestedVersion)}`;
+  return force ? `?refresh=${Date.now()}` : "";
+}
+
+async function requestSummary(eventId: string, force = false, requestedVersion = "") {
+  if (!force) {
+    const cached = summaryCache.get(eventId);
+    if (cached) return cached;
+    const pending = summaryRequests.get(eventId);
+    if (pending) return pending;
+  }
+  const request = fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition/summary${requestQuery(force, requestedVersion)}`)
+    .then(async (response) => {
+      const payload = await response.json() as { data?: EventPayload; error?: string };
+      if (!response.ok || !payload.data) throw new Error(payload.error || "赛事摘要读取失败。");
+      summaryCache.set(eventId, payload.data);
+      competitionVersions.set(eventId, payload.data.version);
+      return payload.data;
+    })
+    .finally(() => { summaryRequests.delete(eventId); });
+  if (!force) summaryRequests.set(eventId, request);
+  return request;
+}
+
+async function requestCompetition(eventId: string, force = false, requestedVersion = "") {
+  if (!force) {
+    const cached = competitionCache.get(eventId);
+    if (cached) return cached;
+    const pending = competitionRequests.get(eventId);
+    if (pending) return pending;
+  }
+  const request = fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition/matches${requestQuery(force, requestedVersion)}`)
+    .then(async (response) => {
+      const payload = await response.json() as { data?: EventPayload; error?: string };
+      if (!response.ok || !payload.data) throw new Error(payload.error || "比赛数据读取失败。");
+      competitionCache.set(eventId, payload.data);
+      summaryCache.set(eventId, { ...payload.data, event: { ...payload.data.event, matches: [] } });
+      competitionVersions.set(eventId, payload.data.version);
+      return payload.data;
+    })
+    .finally(() => { competitionRequests.delete(eventId); });
+  if (!force) competitionRequests.set(eventId, request);
+  return request;
+}
+
+async function requestRankings(eventId: string, force = false, requestedVersion = "") {
+  if (!force) {
+    const cached = rankingsCache.get(eventId);
+    if (cached) return cached;
+    const pending = rankingsRequests.get(eventId);
+    if (pending) return pending;
+  }
+  const request = fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition/rankings${requestQuery(force, requestedVersion)}`)
+    .then(async (response) => {
+      const payload = await response.json() as { data?: RankingPayload; error?: string };
+      if (!response.ok || !payload.data) throw new Error(payload.error || "排名数据读取失败。");
+      rankingsCache.set(eventId, payload.data);
+      competitionVersions.set(eventId, payload.data.version);
+      return payload.data;
+    })
+    .finally(() => { rankingsRequests.delete(eventId); });
+  if (!force) rankingsRequests.set(eventId, request);
+  return request;
+}
+
+export async function preloadPublicCompetition(eventId: string, intent: PublicCompetitionWarmIntent = "entry") {
+  try {
+    if (intent === "rankings") {
+      await requestRankings(eventId);
+      return;
+    }
+    if (intent === "matches") {
+      await requestCompetition(eventId);
+      return;
+    }
+    if (intent === "schedule") {
+      const summary = requestSummary(eventId);
+      void requestCompetition(eventId).catch(() => undefined);
+      await summary;
+      return;
+    }
+    await Promise.all([requestSummary(eventId), requestRankings(eventId)]);
+    window.setTimeout(() => { void requestCompetition(eventId).catch(() => undefined); }, 450);
+  } catch {
+    // Prefetch is opportunistic. The active tab will retry and surface errors if needed.
+  }
+}
 
 const PHASE_ORDER: PhaseId[] = ["qualifier-one", "qualifier-two", "main-one", "main-two"];
 const PHASE_LABELS: Record<PhaseId, string> = {
@@ -152,13 +251,14 @@ function MainRosterDetail({ station, data, group, setGroup, onBack }: { station:
   return <div className="bracket-page stack public-live-stage-detail"><button className="draw-back" onClick={onBack}>‹ 返回赛程阶段</button><section className="bracket-title with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>正赛64人名单</h1><p>资格赛晋级48人 + 种子16人</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="public-roster-intro"><small>正赛 · 64人</small><h2><strong>{roster.length}/64</strong> 正赛名单已就绪</h2><p>两场资格赛各晋级24人，共48人；另有16名种子选手进入正赛。</p></section><section className="public-roster-groups">{[["资格赛第一场晋级", q1], ["资格赛第二场晋级", q2], ["种子选手", seeds]].map(([title, values]) => <article className="public-roster-group" key={String(title)}><header><h3>{String(title)}</h3><span>{(values as typeof roster).length}人</span></header><div className="public-roster-grid">{(values as typeof roster).map((player, index) => <div key={player.playerId}><span>{String(index + 1).padStart(2, "0")}</span><strong>{player.playerName}</strong></div>)}</div></article>)}</section></div>;
 }
 
-function PublicSchedule({ station, data }: { station: StationMeta; data: PublicCompetitionDisplayEvent }) {
+function PublicSchedule({ station, data, detailsReady, ensureDetails }: { station: StationMeta; data: PublicCompetitionDisplayEvent; detailsReady: boolean; ensureDetails: () => void }) {
   const [group, setGroup] = useState<Group>("少年组"); const [detail, setDetail] = useState<PhaseId | null>(null); const [showRoster, setShowRoster] = useState(false);
+  const openDetail = (phaseId: PhaseId) => { ensureDetails(); setDetail(phaseId); };
   if (showRoster) return <MainRosterDetail station={station} data={data} group={group} setGroup={setGroup} onBack={() => setShowRoster(false)} />;
   if (detail?.startsWith("qualifier")) return <QualifierStageDetail station={station} data={data} group={group} setGroup={setGroup} phaseId={detail} onBack={() => setDetail(null)} />;
   if (detail === "main-one") return <MainOneDetail station={station} data={data} group={group} setGroup={setGroup} onBack={() => setDetail(null)} />;
   if (detail === "main-two") return <MainTwoDetail station={station} data={data} group={group} setGroup={setGroup} onBack={() => setDetail(null)} />;
-  return <div className="schedule-page stack public-competition-overlay"><section className="schedule-head with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>赛程</h1><p>按比赛阶段查看完整赛程表</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="phase-schedule compact-phases">{PHASE_ORDER.map((phaseId) => { const phase = phaseFor(station, phaseId); const summary = phaseSummary(data, group, phaseId); const phaseMs = phaseMatches(data, group, phaseId); const rosterCount = data.mainRoster.filter((item) => item.group === group).length; const qualifier = phaseId.startsWith("qualifier"); const progress = qualifier && summary ? `${summary.entrantCount}人 → 晋级24人` : phaseId === "main-one" ? `64进32 · 正赛名单 ${rosterCount}/64` : "32进1 · 单败淘汰"; const note = qualifier && summary ? `${summary.playoffMatchCount ? `附加赛${summary.playoffMatchCount}场 · ` : ""}${summary.byeCount ? `轮空${summary.byeCount}个 · ` : ""}${summary.divisionCount}个分区` : phaseId === "main-one" ? (phaseMs.length ? "8组双败签表与赛程已发布" : "正赛名单已就绪，签表待发布") : (phaseMs.length ? "32强签表与赛程已发布" : "等待32强产生后重新抽签"); return <article className="phase-card compact-phase" key={phaseId}><div className="phase-status-line"><b className={`phase-status status-${phase.status}`}>{phase.status}</b><time>{phase.date}</time></div><h2>{phase.title}</h2><h3>{progress}</h3><div className="phase-meta"><span>{qualifier ? "一次抽签到底 · 16区" : phaseId === "main-one" ? "8组双败" : "32强单败"}</span><span>{raceLabel(group, phaseId)}</span></div>{qualifier && <div className="qualify-rule"><strong>晋级24人</strong><span>16名分区冠军直接晋级</span><i>＋</i><span>决胜负者按局胜率取前8</span></div>}<footer><small>{note}</small><div className="public-phase-actions">{phaseId === "main-one" && rosterCount > 0 && <button className="roster" onClick={() => setShowRoster(true)}>查看正赛名单</button>}<button onClick={() => setDetail(phaseId)}>查看赛程表 <i>›</i></button></div></footer></article>; })}</section></div>;
+  return <div className="schedule-page stack public-competition-overlay"><section className="schedule-head with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>赛程</h1><p>按比赛阶段查看完整赛程表</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="phase-schedule compact-phases">{PHASE_ORDER.map((phaseId) => { const phase = phaseFor(station, phaseId); const summary = phaseSummary(data, group, phaseId); const phaseMs = phaseMatches(data, group, phaseId); const rosterCount = data.mainRoster.filter((item) => item.group === group).length; const qualifier = phaseId.startsWith("qualifier"); const progress = qualifier && summary ? `${summary.entrantCount}人 → 晋级24人` : phaseId === "main-one" ? `64进32 · 正赛名单 ${rosterCount}/64` : "32进1 · 单败淘汰"; const note = !detailsReady ? "详细赛程正在后台预加载" : qualifier && summary ? `${summary.playoffMatchCount ? `附加赛${summary.playoffMatchCount}场 · ` : ""}${summary.byeCount ? `轮空${summary.byeCount}个 · ` : ""}${summary.divisionCount}个分区` : phaseId === "main-one" ? (phaseMs.length ? "8组双败签表与赛程已发布" : "正赛名单已就绪，签表待发布") : (phaseMs.length ? "32强签表与赛程已发布" : "等待32强产生后重新抽签"); return <article className="phase-card compact-phase" key={phaseId}><div className="phase-status-line"><b className={`phase-status status-${phase.status}`}>{phase.status}</b><time>{phase.date}</time></div><h2>{phase.title}</h2><h3>{progress}</h3><div className="phase-meta"><span>{qualifier ? "一次抽签到底 · 16区" : phaseId === "main-one" ? "8组双败" : "32强单败"}</span><span>{raceLabel(group, phaseId)}</span></div>{qualifier && <div className="qualify-rule"><strong>晋级24人</strong><span>16名分区冠军直接晋级</span><i>＋</i><span>决胜负者按局胜率取前8</span></div>}<footer><small>{note}</small><div className="public-phase-actions">{phaseId === "main-one" && rosterCount > 0 && <button className="roster" onClick={() => setShowRoster(true)}>查看正赛名单</button>}<button onClick={() => openDetail(phaseId)}>查看赛程表 <i>›</i></button></div></footer></article>; })}</section></div>;
 }
 
 function PublicMatches({ station, data }: { station: StationMeta; data: PublicCompetitionDisplayEvent }) {
@@ -180,43 +280,58 @@ function PublicRankings({ station, rankings }: { station: StationMeta; rankings:
   return <div className="stack public-competition-overlay"><section className="ranking-head"><div><small className="event-name-kicker">{station.title}</small><h1>比赛排名</h1><p>{finalRows.length ? "组委会已发布本站正赛最终排名" : "最终排名待组委会确认并发布"}</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="card ranking"><header><div><small>{group}</small><h2>{finalRows.length ? "本站赛事排名" : "奖金设置"}</h2></div></header>{finalRows.length ? <div className="public-final-ranking">{finalRows.map((row) => <div key={row.id}><span style={rankingNumberStyle(row.displayOrder)}>{row.displayOrder}</span><b>{row.placementLabel}</b><strong>{row.playerName}</strong><em>{row.prizeDisplay || "—"}</em></div>)}</div> : <><div className="ranking-wait"><i /><div><strong>比赛结果尚未全部完成</strong><p>排名仅统计正赛最终名次。待组委会确认并发布本站排名后，这里会自动切换为正式排名。</p></div></div><div className="prizes">{prizes.map(([rank, amount], index) => <div key={`${rank}-${index}`}><span>{index + 1}</span><strong>{rank}</strong><b>{amount}</b></div>)}</div></>}</section></div>;
 }
 
-function CompetitionOverlay({ tab, station, data, rankings }: { tab: LiveTab; station: StationMeta; data: PublicCompetitionDisplayEvent; rankings: PublicRanking[] }) { if (tab === "schedule") return <PublicSchedule station={station} data={data} />; if (tab === "matches") return <PublicMatches station={station} data={data} />; return <PublicRankings station={station} rankings={rankings} />; }
-
-export default function PublicCompetitionLiveV2({
-  station,
-  contentState,
-  activeTab,
-}: {
-  station: StationMeta;
-  contentState?: PublicContentState;
-  activeTab: PublicCompetitionTab | null;
-}) {
-  const [competitionByEvent, setCompetitionByEvent] = useState<Map<string, PublicCompetitionDisplayEvent>>(() => new Map());
-  const [rankingsByEvent, setRankingsByEvent] = useState<Map<string, PublicRanking[]>>(() => new Map());
-  const [loadingEventId, setLoadingEventId] = useState("");
+export default function PublicCompetitionLiveV2({ station, contentState, activeTab }: { station: StationMeta; contentState?: PublicContentState; activeTab: PublicCompetitionTab | null }) {
+  const [summaryByEvent, setSummaryByEvent] = useState<Map<string, PublicCompetitionDisplayEvent>>(() => new Map([...summaryCache].map(([id, payload]) => [id, payload.event])));
+  const [competitionByEvent, setCompetitionByEvent] = useState<Map<string, PublicCompetitionDisplayEvent>>(() => new Map([...competitionCache].map(([id, payload]) => [id, payload.event])));
+  const [rankingsByEvent, setRankingsByEvent] = useState<Map<string, PublicRanking[]>>(() => new Map([...rankingsCache].map(([id, payload]) => [id, payload.rankings])));
+  const [loadingSummaryId, setLoadingSummaryId] = useState("");
+  const [loadingCompetitionId, setLoadingCompetitionId] = useState("");
+  const [loadingRankingsId, setLoadingRankingsId] = useState("");
   const [loadError, setLoadError] = useState("");
-  const versions = useRef(new Map<string, string>());
+  const summary = summaryByEvent.get(station.eventId);
   const competition = competitionByEvent.get(station.eventId);
+  const rankings = rankingsByEvent.get(station.eventId);
   const published = activeTab ? Boolean(contentState?.publishedModules.includes(activeTab)) : false;
 
-  const loadEvent = useCallback(async (eventId: string, force = false, requestedVersion = "") => {
-    if (!force && competitionByEvent.has(eventId)) return;
-    setLoadingEventId(eventId);
-    setLoadError("");
+  const loadSummary = useCallback(async (eventId: string, force = false, requestedVersion = "") => {
+    if (!force && summaryByEvent.has(eventId)) return;
+    setLoadingSummaryId(eventId); setLoadError("");
     try {
-      const versionQuery = requestedVersion ? `?version=${encodeURIComponent(requestedVersion)}` : "";
-      const response = await fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition${versionQuery}`);
-      const payload = await response.json() as { data?: { version: string; event: PublicCompetitionDisplayEvent; rankings: PublicRanking[] }; error?: string };
-      if (!response.ok || !payload.data) throw new Error(payload.error || "赛事数据读取失败。");
-      versions.current.set(eventId, payload.data.version);
-      setCompetitionByEvent((current) => new Map(current).set(eventId, payload.data!.event));
-      setRankingsByEvent((current) => new Map(current).set(eventId, payload.data!.rankings));
+      const payload = await requestSummary(eventId, force, requestedVersion);
+      setSummaryByEvent((current) => new Map(current).set(eventId, payload.event));
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "赛事数据读取失败。");
+      setLoadError(error instanceof Error ? error.message : "赛事摘要读取失败。");
     } finally {
-      setLoadingEventId((current) => current === eventId ? "" : current);
+      setLoadingSummaryId((current) => current === eventId ? "" : current);
+    }
+  }, [summaryByEvent]);
+
+  const loadCompetition = useCallback(async (eventId: string, force = false, requestedVersion = "") => {
+    if (!force && competitionByEvent.has(eventId)) return;
+    setLoadingCompetitionId(eventId); setLoadError("");
+    try {
+      const payload = await requestCompetition(eventId, force, requestedVersion);
+      setCompetitionByEvent((current) => new Map(current).set(eventId, payload.event));
+      setSummaryByEvent((current) => new Map(current).set(eventId, { ...payload.event, matches: [] }));
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "比赛数据读取失败。");
+    } finally {
+      setLoadingCompetitionId((current) => current === eventId ? "" : current);
     }
   }, [competitionByEvent]);
+
+  const loadRankings = useCallback(async (eventId: string, force = false, requestedVersion = "") => {
+    if (!force && rankingsByEvent.has(eventId)) return;
+    setLoadingRankingsId(eventId); setLoadError("");
+    try {
+      const payload = await requestRankings(eventId, force, requestedVersion);
+      setRankingsByEvent((current) => new Map(current).set(eventId, payload.rankings));
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "排名数据读取失败。");
+    } finally {
+      setLoadingRankingsId((current) => current === eventId ? "" : current);
+    }
+  }, [rankingsByEvent]);
 
   useEffect(() => {
     if (document.getElementById("public-live-competition-v2-css")) return;
@@ -228,15 +343,12 @@ export default function PublicCompetitionLiveV2({
 
   useEffect(() => {
     if (!activeTab || !published) return;
-    const timer = window.setTimeout(() => { void loadEvent(station.eventId); }, 0);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, loadEvent, published, station.eventId]);
-
-  useEffect(() => {
-    if (activeTab || !contentState?.publishedModules.some((item) => item === "schedule" || item === "matches" || item === "rankings")) return;
-    const timer = window.setTimeout(() => { void loadEvent(station.eventId); }, 150);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, contentState?.publishedModules, loadEvent, station.eventId]);
+    const eventId = station.eventId;
+    if (activeTab === "rankings") { void loadRankings(eventId); return; }
+    if (activeTab === "matches") { void loadCompetition(eventId); return; }
+    void loadSummary(eventId);
+    void loadCompetition(eventId);
+  }, [activeTab, loadCompetition, loadRankings, loadSummary, published, station.eventId]);
 
   useEffect(() => {
     if (!activeTab || !published) return;
@@ -247,9 +359,17 @@ export default function PublicCompetitionLiveV2({
         const response = await fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition/version`, { cache: "no-store" });
         const payload = await response.json() as { data?: { version: string } };
         const nextVersion = payload.data?.version;
-        const currentVersion = versions.current.get(eventId);
-        if (nextVersion && currentVersion && nextVersion !== currentVersion) await loadEvent(eventId, true, nextVersion);
-        else if (nextVersion && !currentVersion) versions.current.set(eventId, nextVersion);
+        const currentVersion = competitionVersions.get(eventId);
+        if (!nextVersion || !currentVersion || nextVersion === currentVersion) {
+          if (nextVersion && !currentVersion) competitionVersions.set(eventId, nextVersion);
+          return;
+        }
+        if (activeTab === "rankings") await loadRankings(eventId, true, nextVersion);
+        else if (activeTab === "matches") await loadCompetition(eventId, true, nextVersion);
+        else {
+          await loadSummary(eventId, true, nextVersion);
+          if (competitionCache.has(eventId)) void loadCompetition(eventId, true, nextVersion);
+        }
       } catch {
         // Keep the last published snapshot visible when a lightweight version check fails.
       }
@@ -261,7 +381,7 @@ export default function PublicCompetitionLiveV2({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [activeTab, loadEvent, published, station.eventId]);
+  }, [activeTab, loadCompetition, loadRankings, loadSummary, published, station.eventId]);
 
   if (!activeTab) return null;
 
@@ -275,9 +395,29 @@ export default function PublicCompetitionLiveV2({
     return <section className="public-module-state" role="status"><div><span>{state.icon}</span><h2>{state.title}</h2><p>{state.description}<br />感谢关注，最新信息会在确认后及时更新。</p></div></section>;
   }
 
-  if (!competition || loadingEventId === station.eventId) {
-    return <section className="public-module-state" aria-busy={!loadError}><div><span>{loadError ? "!" : "…"}</span><h2>{loadError || "正在加载本站已发布数据"}</h2><p>{loadError ? "网络暂时没有响应，已发布内容不会受到影响。" : "数据量较大时可能需要几秒，请稍候。"}</p>{loadError && <button onClick={() => void loadEvent(station.eventId, true)}>重新加载</button>}</div></section>;
+  const retry = () => {
+    if (activeTab === "rankings") void loadRankings(station.eventId, true);
+    else if (activeTab === "matches") void loadCompetition(station.eventId, true);
+    else void loadSummary(station.eventId, true);
+  };
+
+  if (activeTab === "rankings") {
+    if (rankings === undefined || (loadingRankingsId === station.eventId && rankings === undefined)) {
+      return <section className="public-module-state" aria-busy={!loadError}><div><span>{loadError ? "!" : "…"}</span><h2>{loadError || "正在加载本站排名"}</h2><p>{loadError ? "网络暂时没有响应，已发布内容不会受到影响。" : "排名数据独立加载，不需要等待赛程和对阵。"}</p>{loadError && <button onClick={retry}>重新加载</button>}</div></section>;
+    }
+    return <PublicRankings station={station} rankings={rankings} />;
   }
 
-  return <CompetitionOverlay tab={activeTab} station={station} data={competition} rankings={rankingsByEvent.get(station.eventId) ?? []} />;
+  if (activeTab === "schedule") {
+    const scheduleData = competition ?? summary;
+    if (!scheduleData || (loadingSummaryId === station.eventId && !summary && !competition)) {
+      return <section className="public-module-state" aria-busy={!loadError}><div><span>{loadError ? "!" : "…"}</span><h2>{loadError || "正在加载赛程阶段"}</h2><p>{loadError ? "网络暂时没有响应，已发布内容不会受到影响。" : "先显示阶段摘要，详细赛程表会继续在后台预加载。"}</p>{loadError && <button onClick={retry}>重新加载</button>}</div></section>;
+    }
+    return <PublicSchedule station={station} data={competition ?? scheduleData} detailsReady={Boolean(competition)} ensureDetails={() => { void loadCompetition(station.eventId); }} />;
+  }
+
+  if (!competition || (loadingCompetitionId === station.eventId && !competition)) {
+    return <section className="public-module-state" aria-busy={!loadError}><div><span>{loadError ? "!" : "…"}</span><h2>{loadError || "正在加载本站对阵"}</h2><p>{loadError ? "网络暂时没有响应，已发布内容不会受到影响。" : "比赛核心数据正在读取，请稍候。"}</p>{loadError && <button onClick={retry}>重新加载</button>}</div></section>;
+  }
+  return <PublicMatches station={station} data={competition} />;
 }

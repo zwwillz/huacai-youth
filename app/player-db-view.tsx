@@ -17,6 +17,7 @@ let persistedPlayers: PublicPlayerSummary[] = [];
 let persistedCounts: PlayerCounts = { 全部: 0, 少年组: 0, 青年组: 0 };
 let persistedLoadedPage = 0;
 let persistedSearchIndex: PublicPlayerSummary[] = [];
+let initialPlayerRequest: Promise<boolean> | null = null;
 let searchIndexRequest: Promise<PublicPlayerSummary[]> | null = null;
 const persistedPageCache = new Map<number, PublicPlayerSummary[]>();
 const persistedDetailCache = new Map<string, PublicPlayerDetail>();
@@ -26,6 +27,28 @@ function mergePlayers(current: PublicPlayerSummary[], incoming: PublicPlayerSumm
   const byId = new Map(current.map((player) => [player.id, player]));
   incoming.forEach((player) => byId.set(player.id, player));
   return [...byId.values()].sort((a, b) => b.totalPoints - a.totalPoints || a.name.localeCompare(b.name, "zh-CN") || a.id.localeCompare(b.id));
+}
+
+export function preloadPlayerDb() {
+  if (persistedLoadedPage > 0 && persistedPlayers.length) return Promise.resolve(true);
+  if (initialPlayerRequest) return initialPlayerRequest;
+  initialPlayerRequest = fetch("/api/public/players")
+    .then(async (response) => {
+      const payload = await response.json() as PlayerPagePayload;
+      if (!response.ok || !payload.data) return false;
+      const fallbackCounts: PlayerCounts = {
+        全部: payload.data.length,
+        少年组: payload.data.filter((player) => player.group === "少年组").length,
+        青年组: payload.data.filter((player) => player.group === "青年组").length,
+      };
+      persistedPlayers = payload.data;
+      persistedCounts = payload.counts ?? fallbackCounts;
+      persistedLoadedPage = payload.page ?? 1;
+      return true;
+    })
+    .catch(() => false)
+    .finally(() => { initialPlayerRequest = null; });
+  return initialPlayerRequest;
 }
 
 function requestSearchIndex() {
@@ -62,7 +85,6 @@ function requestPlayerDetail(id: string) {
   if (cached) return Promise.resolve(cached);
   const pending = persistedDetailRequests.get(id);
   if (pending) return pending;
-
   const request = fetch(`/api/public/players/${encodeURIComponent(id)}`)
     .then(async (response) => {
       if (!response.ok) return null;
@@ -74,6 +96,14 @@ function requestPlayerDetail(id: string) {
     .finally(() => { persistedDetailRequests.delete(id); });
   persistedDetailRequests.set(id, request);
   return request;
+}
+
+function useBodyScrollLock() {
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, []);
 }
 
 function YearSwitch({years,value,onChange}:{years:number[];value:YearFilter;onChange:(value:YearFilter)=>void}) {
@@ -98,18 +128,41 @@ function aggregate(events: PublicPlayerEvent[]) {
   };
 }
 
+function DetailLoadingPanel({ summary, error, onClose, onRetry }: { summary: PublicPlayerSummary; error: string; onClose: () => void; onRetry: () => void }) {
+  useBodyScrollLock();
+  return <div className={styles.overlay}>
+    <aside className={styles.detailPanel} aria-busy={!error}>
+      <button className={styles.close} onClick={onClose} aria-label="关闭">×</button>
+      <header className={styles.detailHeader}>
+        <PlayerAvatar name={summary.name} large/>
+        <div className={styles.identity}>
+          <span className={styles.country}>球员档案</span>
+          <h2>{summary.displayName}</h2>
+          <div className={styles.identityMeta}><b>{summary.groupCode}</b><span>{summary.group}</span><span>{summary.stationCount}站</span></div>
+        </div>
+      </header>
+      <nav className={styles.detailTabs}><button className={styles.active}>数据</button><button disabled>赛事</button></nav>
+      <div className={styles.detailToolbar}><strong>{error ? "详情读取失败" : "球员数据正在补齐"}</strong></div>
+      {error ? <div className={styles.empty}>{error}<br/><button onClick={onRetry}>重新加载</button></div> : <>
+        <section className={styles.statsGrid}>
+          <article><strong>{summary.stationCount}</strong><span>参与赛事</span></article><article><strong>…</strong><span>场次</span></article>
+          <article><strong>…</strong><span>局数</span></article><article><strong>…</strong><span>胜局</span></article>
+          <article><strong>…</strong><span>冠军数量</span></article><article><strong>{summary.bestResult}</strong><span>最好成绩</span></article>
+          <article><strong>{formatPoints(summary.totalPoints)}</strong><span>最新总积分</span></article><article><strong>…</strong><span>总奖金</span></article>
+        </section>
+        <p className={styles.pointsNote}>页面已经响应点击；赛事、比分与奖金详情正在后台读取。</p>
+      </>}
+    </aside>
+  </div>;
+}
+
 function DetailPanel({detail,onClose}:{detail:PublicPlayerDetail;onClose:()=>void}) {
   const [tab,setTab]=useState<DetailTab>("data");
   const [year,setYear]=useState<YearFilter>("全部");
   const years=useMemo(()=>[...new Set(detail.events.map(item=>item.year))].sort((a,b)=>b-a),[detail.events]);
   const visibleEvents=useMemo(()=>year === "全部" ? detail.events : detail.events.filter(item=>item.year===year),[detail.events,year]);
   const stats=useMemo(()=>aggregate(visibleEvents),[visibleEvents]);
-
-  useEffect(()=>{
-    const previous=document.body.style.overflow;
-    document.body.style.overflow="hidden";
-    return ()=>{document.body.style.overflow=previous};
-  },[]);
+  useBodyScrollLock();
 
   return <div className={styles.overlay}>
     <aside className={styles.detailPanel}>
@@ -139,26 +192,15 @@ function DetailPanel({detail,onClose}:{detail:PublicPlayerDetail;onClose:()=>voi
   </div>;
 }
 
-function PlayerBrowser({
-  players,
-  counts,
-  searchIndex,
-  searchIndexLoading,
-  loadingMore,
-  loadNextPage,
-}:{
-  players:PublicPlayerSummary[];
-  counts:PlayerCounts;
-  searchIndex:PublicPlayerSummary[];
-  searchIndexLoading:boolean;
-  loadingMore:boolean;
-  loadNextPage:()=>Promise<void>;
-}) {
+function PlayerBrowser({ players, counts, searchIndex, searchIndexLoading, loadingMore, loadNextPage }: { players:PublicPlayerSummary[]; counts:PlayerCounts; searchIndex:PublicPlayerSummary[]; searchIndexLoading:boolean; loadingMore:boolean; loadNextPage:()=>Promise<void> }) {
   const [query,setQuery]=useState("");
   const [group,setGroup]=useState<FilterGroup>("全部");
   const [limit,setLimit]=useState(PAGE_SIZE);
   const [selected,setSelected]=useState<PublicPlayerDetail|null>(null);
+  const [selectedSummary,setSelectedSummary]=useState<PublicPlayerSummary|null>(null);
+  const [detailError,setDetailError]=useState("");
   const [loadingId,setLoadingId]=useState<string|null>(null);
+  const openSequence=useRef(0);
 
   const needle=query.trim().toLowerCase();
   const source=needle ? (searchIndex.length ? searchIndex : players) : players;
@@ -179,15 +221,18 @@ function PlayerBrowser({
   };
 
   const prefetchPlayer=(id:string)=>{if(!persistedDetailCache.has(id))void requestPlayerDetail(id)};
-  const openPlayer=async(id:string)=>{
-    const cached=persistedDetailCache.get(id);
-    if(cached){setSelected(cached);return}
-    setLoadingId(id);
-    try{
-      const detail=await requestPlayerDetail(id);
-      if(detail)setSelected(detail);
-    }finally{setLoadingId(null)}
+  const openPlayer=async(player:PublicPlayerSummary)=>{
+    const requestNo=++openSequence.current;
+    setSelectedSummary(player);setDetailError("");
+    const cached=persistedDetailCache.get(player.id);
+    if(cached){setSelected(cached);setLoadingId(null);return}
+    setSelected(null);setLoadingId(player.id);
+    const detail=await requestPlayerDetail(player.id);
+    if(requestNo!==openSequence.current)return;
+    if(detail)setSelected(detail);else setDetailError("球员详情暂时没有响应，请重试。");
+    setLoadingId(null);
   };
+  const closePlayer=()=>{openSequence.current+=1;setSelected(null);setSelectedSummary(null);setDetailError("");setLoadingId(null)};
 
   return <div className={styles.root}>
     <section className={styles.hero}><div><small>球员数据库</small><h1>球员数据</h1><p>查看华彩系列赛球员档案、参赛成绩与积分数据</p></div><label><span>⌕</span><input value={query} onChange={event=>{setQuery(event.target.value);setLimit(PAGE_SIZE)}} placeholder="搜索球员姓名"/></label></section>
@@ -197,11 +242,11 @@ function PlayerBrowser({
         <span>{needle&&searchIndexLoading?`已即时匹配 ${filtered.length} 人 · 正在补齐完整球员索引…`:`共 ${totalForView} 人`}</span>
         <small>{needle?"输入即筛选；完整索引到达后会自动补充结果":"按总积分从高到低排序 · 同名选手按身份 ID 区分"}</small>
       </div>
-      <div className={styles.playerGrid}>{visible.map(player=><button className={styles.playerCard} onClick={()=>openPlayer(player.id)} onPointerEnter={()=>prefetchPlayer(player.id)} onPointerDown={()=>prefetchPlayer(player.id)} onFocus={()=>prefetchPlayer(player.id)} key={player.id} title={`总积分 ${formatPoints(player.totalPoints)}`}><PlayerAvatar name={player.name}/><div className={styles.playerCopy}><strong>{player.displayName}</strong><small><b>{player.groupCode}</b>{player.group} · {player.stationCount}站 · 最好 {player.bestResult}</small></div><i>{loadingId===player.id?"…":"›"}</i></button>)}</div>
+      <div className={styles.playerGrid}>{visible.map(player=><button className={styles.playerCard} onClick={()=>void openPlayer(player)} onPointerEnter={()=>prefetchPlayer(player.id)} onPointerDown={()=>prefetchPlayer(player.id)} onFocus={()=>prefetchPlayer(player.id)} key={player.id} title={`总积分 ${formatPoints(player.totalPoints)}`}><PlayerAvatar name={player.name}/><div className={styles.playerCopy}><strong>{player.displayName}</strong><small><b>{player.groupCode}</b>{player.group} · {player.stationCount}站 · 最好 {player.bestResult}</small></div><i>{loadingId===player.id?"…":"›"}</i></button>)}</div>
       {canShowMore?<button className={styles.more} disabled={loadingMore} onClick={showMore}>{loadingMore?"正在读取更多球员…":`显示更多（还有 ${remaining} 人）`}</button>:null}
       {!filtered.length?<div className={styles.empty}>{needle&&searchIndexLoading?"当前已加载球员中暂未匹配，完整索引正在后台补充…":"没有找到符合条件的球员"}</div>:null}
     </section>
-    {selected?<DetailPanel detail={selected} onClose={()=>setSelected(null)}/>:null}
+    {selected ? <DetailPanel detail={selected} onClose={closePlayer}/> : selectedSummary ? <DetailLoadingPanel summary={selectedSummary} error={detailError} onClose={closePlayer} onRetry={()=>void openPlayer(selectedSummary)}/> : null}
   </div>;
 }
 
@@ -264,21 +309,18 @@ export default function PlayerDbView() {
     };
 
     if(loaded.current||loadingRef.current){
-      const timer=window.setTimeout(warmSearchIndex,120);
-      return()=>{cancelled=true;window.clearTimeout(timer)};
+      const searchTimer=window.setTimeout(warmSearchIndex,120);
+      const pageTimer=window.setTimeout(()=>{void prefetchPage(persistedLoadedPage+1)},160);
+      return()=>{cancelled=true;window.clearTimeout(searchTimer);window.clearTimeout(pageTimer)};
     }
 
     const load=async()=>{
       loadingRef.current=true;setLoading(true);setError("");
       try{
-        const response=await fetch("/api/public/players");
-        const payload=await response.json() as PlayerPagePayload;
-        if(!response.ok||!payload.data)throw new Error(payload.error||"球员数据读取失败。");
-        const fallbackCounts:PlayerCounts={全部:payload.data.length,少年组:payload.data.filter(player=>player.group==="少年组").length,青年组:payload.data.filter(player=>player.group==="青年组").length};
-        const nextCounts=payload.counts??fallbackCounts;
-        persistedPlayers=payload.data;persistedCounts=nextCounts;persistedLoadedPage=1;
+        const ok=await preloadPlayerDb();
+        if(!ok)throw new Error("球员数据读取失败。");
         loaded.current=true;
-        if(!cancelled){setPlayers(payload.data);setCounts(nextCounts);setLoadedPage(1)}
+        if(!cancelled){setPlayers(persistedPlayers);setCounts(persistedCounts);setLoadedPage(persistedLoadedPage)}
         window.setTimeout(()=>{void prefetchPage(2)},150);
         window.setTimeout(warmSearchIndex,260);
       }catch(reason){if(!cancelled)setError(reason instanceof Error?reason.message:"球员数据读取失败。")}

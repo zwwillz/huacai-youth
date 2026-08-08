@@ -14,17 +14,21 @@ type MainView = "event" | "players" | "me";
 type EventTab = "overview" | "rules" | "schedule" | "matches" | "rankings" | "guide";
 type GuideKind = "transport" | "clothing";
 type EventDetail = { station: Station; contentState: PublicContentState | null };
+type CompetitionWarmIntent = "entry" | PublicCompetitionTab;
 
 const PublicCompetitionLiveV2 = dynamic(() => import("./public-competition-live-v2"), { ssr: false });
 const PlayerDbView = dynamic(() => import("./player-db-view"), { ssr: false, loading: () => <PlayerLoadingShell /> });
 
 const eventDetailCache = new Map<string, { data: EventDetail; loadedAt: number }>();
 const eventDetailRequests = new Map<string, Promise<EventDetail | null>>();
-const competitionWarmRequests = new Map<string, Promise<void>>();
 const EVENT_DETAIL_TTL = 300_000;
 
 function preloadMainView(view: MainView) {
-  if (view === "players") void import("./player-db-view");
+  if (view === "players") {
+    void import("./player-db-view")
+      .then((module) => module.preloadPlayerDb())
+      .catch(() => undefined);
+  }
 }
 
 function requestEventDetail(eventId: string) {
@@ -46,18 +50,10 @@ function requestEventDetail(eventId: string) {
   return request;
 }
 
-function warmCompetition(eventId: string) {
-  const pending = competitionWarmRequests.get(eventId);
-  if (pending) return pending;
-  const request = import("./public-competition-live-v2")
-    .then(async () => {
-      const response = await fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition`);
-      if (response.ok) await response.json();
-    })
-    .catch(() => undefined)
-    .finally(() => { competitionWarmRequests.delete(eventId); });
-  competitionWarmRequests.set(eventId, request);
-  return request;
+function warmCompetition(eventId: string, intent: CompetitionWarmIntent = "entry") {
+  return import("./public-competition-live-v2")
+    .then((module) => module.preloadPublicCompetition(eventId, intent))
+    .catch(() => undefined);
 }
 
 function EventCenter({data,openEvent}:{data:EventData;openEvent:(id:string)=>void}) {
@@ -148,7 +144,7 @@ export default function EventApp({ data }: { data: EventData }) {
     const next = data.stations.find((item) => item.id === id);
     if (next) {
       hydrateEvent(next.eventId);
-      void warmCompetition(next.eventId);
+      void warmCompetition(next.eventId, "entry");
     }
     setSelectedId(id);
     setTab("overview");
@@ -157,8 +153,28 @@ export default function EventApp({ data }: { data: EventData }) {
   const back = () => { setSelectedId(null); setTab("overview"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const enter = (nextView: MainView) => { preloadMainView(nextView); setView(nextView); if (nextView === "event") setSelectedId(null); };
   const title = view === "players" ? "球员数据" : view === "me" ? "个人中心" : station?.city || "赛事中心";
-  const openGuide = (kind: GuideKind) => { setGuideKind(kind); setTab("guide"); if (station) void warmCompetition(station.eventId); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const changeTab = (nextTab: EventTab) => { if (station) void warmCompetition(station.eventId); setTab(nextTab); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const openGuide = (kind: GuideKind) => { setGuideKind(kind); setTab("guide"); if (station) void warmCompetition(station.eventId, "entry"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const changeTab = (nextTab: EventTab) => {
+    if (station) {
+      const intent: CompetitionWarmIntent = nextTab === "schedule" || nextTab === "matches" || nextTab === "rankings" ? nextTab : "entry";
+      void warmCompetition(station.eventId, intent);
+    }
+    setTab(nextTab);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (connection?.saveData || connection?.effectiveType === "slow-2g" || connection?.effectiveType === "2g") return;
+    let timer = 0;
+    const warmPlayers = () => { timer = window.setTimeout(() => preloadMainView("players"), 650); };
+    if (document.readyState === "complete") warmPlayers();
+    else window.addEventListener("load", warmPlayers, { once: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("load", warmPlayers);
+    };
+  }, []);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("huacai:navigation", { detail: { view, stationId: selectedId ?? "", tab } }));
@@ -176,7 +192,7 @@ export default function EventApp({ data }: { data: EventData }) {
           {tab === "overview" && <StationOverview station={station} contentState={contentState} openRules={() => changeTab("rules")} openSchedule={() => changeTab("schedule")} openGuide={openGuide} />}
           {tab === "guide" && <ParticipantGuide kind={guideKind} onBack={() => changeTab("overview")} />}
           {tab === "rules" && (!contentState ? <PublicModuleEmpty icon="…" title="正在读取竞赛规程" description="赛事页面已经打开，详细规程正在后台补齐。" /> : contentState.publishedModules.includes("regulation") ? <CompetitionRules station={station} contentState={contentState} /> : <PublicModuleEmpty icon="规" title="本站竞赛规程正在完善中" description="待组委会确认后，将在这里发布正式规程、参赛要求和相关文件。" />)}
-          {requestedCompetitionTab && !contentState ? <PublicModuleEmpty icon="…" title="正在准备本站比赛数据" description="赛程、对阵和排名已在后台预加载，详细发布状态正在补齐。" /> : null}
+          {requestedCompetitionTab && !contentState ? <PublicModuleEmpty icon="…" title="正在准备本站比赛数据" description="页面框架已打开，本站公开数据正在后台按优先级补齐。" /> : null}
           <PublicCompetitionLiveV2 station={station} contentState={contentState} activeTab={activeCompetitionTab} />
         </>}
         {view === "players" && <PlayerDbView />}
