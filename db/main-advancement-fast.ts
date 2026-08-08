@@ -57,10 +57,21 @@ export async function prepareMain32AdvancementFast(eventId: string, groupId: str
   }));
   const timestamp = new Date().toISOString();
   const id = newId("adv");
-  await sql`
-    insert into public.competition_main_advancement_batches
-      (id,event_id,group_id,source_draw_session_id,status,winner_side_count,loser_side_count,roster_json,created_at,updated_at)
-    values (${id},${eventId},${groupId},${sessionId},'draft',16,16,${JSON.stringify(roster)}::jsonb,${timestamp},${timestamp})
+  const batches = await sql<Array<{ id: string; status: string }>>`
+    with inserted as (
+      insert into public.competition_main_advancement_batches
+        (id,event_id,group_id,source_draw_session_id,status,winner_side_count,loser_side_count,roster_json,created_at,updated_at)
+      values (${id},${eventId},${groupId},${sessionId},'draft',16,16,${JSON.stringify(roster)}::jsonb,${timestamp},${timestamp})
+      on conflict (source_draw_session_id) do nothing
+      returning id,status
+    )
+    select id,status from inserted
+    union all
+    select b.id,b.status from public.competition_main_advancement_batches b
+    where b.source_draw_session_id=${sessionId} and not exists(select 1 from inserted)
+    limit 1
   `;
-  return { ready: true, count: 32, batchId: id, status: "draft" };
+  const batch = batches[0];
+  if (!batch) throw new Error("32强晋级批次创建失败，请重试。");
+  return { ready: true, count: 32, batchId: batch.id, status: batch.status };
 }
