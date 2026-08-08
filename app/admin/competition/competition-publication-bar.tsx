@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { CompetitionPublicationModule } from "@/db/competition-context";
 import { useAdminActionDialog } from "../admin-action-dialog";
 
@@ -14,17 +14,19 @@ type Props = {
   hint: string;
   onChanged?: (status: string, hasUnpublishedChanges: boolean) => void;
 };
+type LocalPublicationState = { sourceKey: string; status: string; dirty: boolean };
+type LocalMessage = { sourceKey: string; text: string; tone: "success" | "error" };
 
 export default function CompetitionPublicationBar({ eventId, moduleType, title, status, hasUnpublishedChanges = false, viewerRole, hint, onChanged }: Props) {
+  const sourceKey = `${eventId}:${moduleType}:${status}:${hasUnpublishedChanges ? "1" : "0"}`;
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ text: string; tone: "success" | "error" } | null>(null);
-  const [currentStatus, setCurrentStatus] = useState(status);
-  const [dirty, setDirty] = useState(hasUnpublishedChanges);
+  const [message, setMessage] = useState<LocalMessage | null>(null);
+  const [localState, setLocalState] = useState<LocalPublicationState | null>(null);
   const { ask, dialog } = useAdminActionDialog();
 
-  useEffect(() => { setCurrentStatus(status); }, [status, eventId, moduleType]);
-  useEffect(() => { setDirty(hasUnpublishedChanges); }, [hasUnpublishedChanges, eventId, moduleType]);
-
+  const currentStatus = localState?.sourceKey === sourceKey ? localState.status : status;
+  const dirty = localState?.sourceKey === sourceKey ? localState.dirty : hasUnpublishedChanges;
+  const visibleMessage = message?.sourceKey === sourceKey ? message : null;
   const canWrite = viewerRole === "system_admin" || viewerRole === "committee";
   const published = currentStatus === "published";
   const needsPublish = !published || dirty;
@@ -50,18 +52,17 @@ export default function CompetitionPublicationBar({ eventId, moduleType, title, 
       const next = result.data?.publications?.[moduleType];
       const nextState = next?.status || nextStatus;
       const nextDirty = next?.hasUnpublishedChanges ?? false;
-      setCurrentStatus(nextState);
-      setDirty(nextDirty);
+      setLocalState({ sourceKey, status: nextState, dirty: nextDirty });
       onChanged?.(nextState, nextDirty);
-      setMessage({ text: nextStatus === "published" ? "新版本已经发布，用户端已切换到本次正式快照。" : "已从用户端撤回，后台数据仍完整保留。", tone: "success" });
-    } catch (error) { setMessage({ text: error instanceof Error ? error.message : "发布状态更新失败。", tone: "error" }); }
+      setMessage({ sourceKey, text: nextStatus === "published" ? "新版本已经发布，用户端已切换到本次正式快照。" : "已从用户端撤回，后台数据仍完整保留。", tone: "success" });
+    } catch (error) { setMessage({ sourceKey, text: error instanceof Error ? error.message : "发布状态更新失败。", tone: "error" }); }
     finally { setBusy(false); }
   }
 
   return <><section className="competition-publication-bar">
     <div className="competition-publication-copy">
       <span className={`competition-publication-status ${published && !dirty ? "published" : "draft"}`}>{stateLabel}</span>
-      <div><strong>{title}</strong><p className={message?.tone}>{message?.text || hint}</p><small className="competition-publication-flow">后台保存 → 组委会复核 → 发布用户端</small></div>
+      <div><strong>{title}</strong><p className={visibleMessage?.tone}>{visibleMessage?.text || hint}</p><small className="competition-publication-flow">后台保存 → 组委会复核 → 发布用户端</small></div>
     </div>
     {canWrite && <div className="competition-publication-actions">
       {needsPublish && <button type="button" disabled={busy} onClick={() => change("published")}>{busy ? "发布中…" : published ? "发布更新" : "发布到用户端"}</button>}
