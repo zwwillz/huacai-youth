@@ -205,80 +205,87 @@ export async function getPublicPlayerSummaries(): Promise<PublicPlayerSummary[]>
 export async function getPublicPlayerDetail(playerId: string): Promise<PublicPlayerDetail | null> {
   const sql = getSqlClient();
 
-  const playerResult = await sql`
-    with latest_reg as (
-      select r.player_id, eg.name as group_name, eg.code as group_code
+  const [playerResult, eventResult, matchResult] = await Promise.all([
+    sql`
+      with latest_reg as (
+        select r.player_id, eg.name as group_name, eg.code as group_code
+        from registrations r
+        join events e on e.id = r.event_id
+        join event_groups eg on eg.id = r.group_id
+        where r.player_id = ${playerId}
+          and r.status <> 'withdrawn'
+          and e.publish_status = 'published'
+        order by e.start_date desc, r.event_id desc
+        limit 1
+      ),
+      name_count as (
+        select count(*)::int as count
+        from players same_name
+        join players target on target.id = ${playerId}
+        where same_name.full_name = target.full_name
+          and same_name.merged_into_player_id is null
+      )
+      select p.id, p.full_name,
+             case
+               when nc.count > 1 and nullif(p.identity_no_masked, '') is not null
+                 then p.full_name || ' ' || upper(right(p.identity_no_masked, 4))
+               else p.full_name
+             end as display_name,
+             p.nationality_code, p.gender, p.avatar_key,
+             lr.group_name, lr.group_code
+      from players p
+      join latest_reg lr on lr.player_id = p.id
+      cross join name_count nc
+      where p.id = ${playerId} and p.merged_into_player_id is null
+      limit 1
+    `,
+    sql`
+      select r.event_id, e.year, e.short_title as title, e.city,
+             eg.name as group_name, eg.code as group_code,
+             eg.registration_fee_cents,
+             er.display_order, er.placement_label, er.prize_amount_cents
       from registrations r
       join events e on e.id = r.event_id
       join event_groups eg on eg.id = r.group_id
+      left join event_rankings er
+        on er.event_id = r.event_id
+       and er.group_id = r.group_id
+       and er.player_id = r.player_id
+       and er.status = 'published'
       where r.player_id = ${playerId}
         and r.status <> 'withdrawn'
         and e.publish_status = 'published'
-      order by e.start_date desc, r.event_id desc
-      limit 1
-    ),
-    name_count as (
-      select count(*)::int as count
-      from players same_name
-      join players target on target.id = ${playerId}
-      where same_name.full_name = target.full_name
-        and same_name.merged_into_player_id is null
-    )
-    select p.id, p.full_name,
-           case
-             when nc.count > 1 and nullif(p.identity_no_masked, '') is not null
-               then p.full_name || ' ' || upper(right(p.identity_no_masked, 4))
-             else p.full_name
-           end as display_name,
-           p.nationality_code, p.gender, p.avatar_key,
-           lr.group_name, lr.group_code
-    from players p
-    join latest_reg lr on lr.player_id = p.id
-    cross join name_count nc
-    where p.id = ${playerId} and p.merged_into_player_id is null
-    limit 1
-  `;
+      order by e.year desc, e.start_date desc, r.event_id desc
+    `,
+    sql`
+      select m.event_id, m.player_a_id, m.player_b_id, m.score_a, m.score_b
+      from matches m
+      join events e on e.id = m.event_id
+      where (m.player_a_id = ${playerId} or m.player_b_id = ${playerId})
+        and e.publish_status = 'published'
+      order by m.match_date asc, m.match_time asc, m.order_no asc, m.id asc
+    `,
+  ]);
+
   const player = (playerResult as unknown as PlayerRow[])[0];
   if (!player) return null;
 
-  const eventResult = await sql`
-    select r.event_id, e.year, e.short_title as title, e.city,
-           eg.name as group_name, eg.code as group_code,
-           eg.registration_fee_cents,
-           er.display_order, er.placement_label, er.prize_amount_cents
-    from registrations r
-    join events e on e.id = r.event_id
-    join event_groups eg on eg.id = r.group_id
-    left join event_rankings er
-      on er.event_id = r.event_id
-     and er.group_id = r.group_id
-     and er.player_id = r.player_id
-     and er.status = 'published'
-    where r.player_id = ${playerId}
-      and r.status <> 'withdrawn'
-      and e.publish_status = 'published'
-    order by e.year desc, e.start_date desc, r.event_id desc
-  `;
-
-  const matchResult = await sql`
-    select m.event_id, m.player_a_id, m.player_b_id, m.score_a, m.score_b
-    from matches m
-    join events e on e.id = m.event_id
-    where (m.player_a_id = ${playerId} or m.player_b_id = ${playerId})
-      and e.publish_status = 'published'
-    order by m.match_date asc, m.match_time asc, m.order_no asc, m.id asc
-  `;
-
   const eventRows = eventResult as unknown as EventRow[];
   const matchRows = matchResult as unknown as MatchRow[];
+  const matchesByEvent = new Map<string, MatchRow[]>();
+  for (const match of matchRows) {
+    const rows = matchesByEvent.get(match.event_id);
+    if (rows) rows.push(match);
+    else matchesByEvent.set(match.event_id, [match]);
+  }
 
   const events: PublicPlayerEvent[] = eventRows.map((row) => {
-    const matches = matchRows.filter((match) => match.event_id === row.event_id);
+    const eventMatches = matchesByEvent.get(row.event_id) ?? [];
     let racks = 0;
     let wonRacks = 0;
     let scoredMatchCount = 0;
 
-    for (const match of matches) {
+    for (const match of eventMatches) {
       const scoreA = scoreForStats(match.score_a);
       const scoreB = scoreForStats(match.score_b);
       if (scoreA == null || scoreB == null) continue;
@@ -300,7 +307,7 @@ export async function getPublicPlayerDetail(playerId: string): Promise<PublicPla
       groupCode: asGroupCode(row.group_code),
       bestResult: row.placement_label || CURRENT_QUALIFIER_FALLBACK,
       resultRank: placementOrder ?? 999,
-      matchCount: matches.length,
+      matchCount: eventMatches.length,
       scoredMatchCount,
       racks,
       wonRacks,
