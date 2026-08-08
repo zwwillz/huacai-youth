@@ -4,7 +4,7 @@ import { getAdminViewer } from "../../admin-viewer";
 import { getAdminNavigationEvents } from "@/db/admin-ui";
 import { getContentManagementData } from "@/db/content-management";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
-import ContentManagementClient from "../content-management-client";
+import ContentEventWorkspaceClient from "../content-event-workspace-client";
 import { captureAdminLoad } from "../../capture-admin-load";
 import "../content-management.css";
 import "../content-extensions.css";
@@ -38,7 +38,8 @@ export default async function ContentManagementPage({ params }: { params: Promis
       pageHint="赛事运营 · 静态内容"
       currentEventId={eventId}
       eventScoped
+      eventSwitchMode="local"
     >
-      <ContentManagementClient initialData={data} />
+      <ContentEventWorkspaceClient initialData={data} />
   </AdminWorkspaceShell>;
 }
