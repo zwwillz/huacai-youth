@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import type { ContentManagementData } from "@/db/content-management";
 import ContentManagementClient from "./content-management-client";
 
-const CACHE_TTL = 60_000;
 const cache = new Map<string, { data: ContentManagementData; at: number }>();
 
 function replaceUrl(eventId: string) {
@@ -27,12 +26,11 @@ export default function ContentEventWorkspaceClient({ initialData }: { initialDa
       const previousEventId = detail.previousEventId || data.event.id;
       const currentRequest = ++requestId.current;
       const cached = cache.get(eventId);
+      const restoredFromCache = Boolean(cached);
       setError("");
-      if (cached && Date.now() - cached.at < CACHE_TTL) {
+      if (cached) {
         setData(cached.data);
         replaceUrl(eventId);
-        setLoading(false);
-        return;
       }
       setLoading(true);
       void fetch(`/api/admin/content-management?eventId=${encodeURIComponent(eventId)}`, { cache: "no-store" })
@@ -47,7 +45,7 @@ export default function ContentEventWorkspaceClient({ initialData }: { initialDa
         .catch((failure) => {
           if (currentRequest !== requestId.current) return;
           setError(failure instanceof Error ? failure.message : "内容读取失败。");
-          window.dispatchEvent(new CustomEvent("admin:event-switch-revert", { detail: { eventId: previousEventId } }));
+          if (!restoredFromCache) window.dispatchEvent(new CustomEvent("admin:event-switch-revert", { detail: { eventId: previousEventId } }));
         })
         .finally(() => { if (currentRequest === requestId.current) setLoading(false); });
     };
@@ -56,8 +54,8 @@ export default function ContentEventWorkspaceClient({ initialData }: { initialDa
   }, [data.event.id]);
 
   return <div className={loading ? "admin-local-workspace is-refreshing" : "admin-local-workspace"}>
-    {loading && <div className="admin-local-refresh"><i />正在切换赛事内容…</div>}
-    {error && <div className="admin-local-error">{error}</div>}
+    {loading && <div className="admin-local-refresh"><i />正在同步赛事内容…</div>}
+    {error && <div className="admin-local-error">{error}{cache.has(data.event.id) ? " 当前显示上一次读取的数据。" : ""}</div>}
     <ContentManagementClient key={data.event.id} initialData={data} />
   </div>;
 }
