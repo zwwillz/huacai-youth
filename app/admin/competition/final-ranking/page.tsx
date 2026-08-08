@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
-import { getAdminNavigationEvents } from "@/db/admin-ui";
-import { getFinalRankingWorkspaceData } from "@/db/final-ranking-engine";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
+import { getFinalRankingWorkspaceDataFast } from "@/db/final-ranking-fast";
 import { getCompetitionContextData } from "@/db/competition-context";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import CompetitionContextBar from "../competition-context-bar";
@@ -16,12 +16,12 @@ export default async function FinalRankingPage({ searchParams }: { searchParams:
   const viewer = await getAdminViewer();
   if (!viewer) redirect("/admin/login");
   const query = await searchParams;
-  const events = await getAdminNavigationEvents(viewer.username);
+  const events = await getAdminNavigationEventsForPrincipal(viewer);
   const eventId = events.some((event) => event.id === query.event) ? String(query.event) : events[0]?.id;
   if (!eventId) redirect("/admin/competition");
   const result = await captureAdminLoad(Promise.all([
-    getFinalRankingWorkspaceData(viewer.username, eventId),
-    getCompetitionContextData(viewer.username, eventId),
+    getFinalRankingWorkspaceDataFast(viewer, eventId),
+    getCompetitionContextData(viewer, eventId),
   ]));
   if (!result.data) {
     return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="最终排名" pageHint="竞赛执行 · 排名确认与发布" currentEventId={eventId} eventScoped competitionTool="ranking">
@@ -29,10 +29,10 @@ export default async function FinalRankingPage({ searchParams }: { searchParams:
     </AdminWorkspaceShell>;
   }
   const [data, context] = result.data;
-    const selectedGroupId = context.groups.some((group) => group.id === query.group) ? String(query.group) : context.groups[0]?.id || "";
-    const selected = data.groups.find((group) => group.groupId === selectedGroupId);
-    const filtered = { ...data, groups: selected ? [selected] : [] };
-    return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="最终排名" pageHint="竞赛执行 · 自动生成 / 人工调整 / 确认 / 发布" currentEventId={eventId} eventScoped competitionTool="ranking">
+  const selectedGroupId = context.groups.some((group) => group.id === query.group) ? String(query.group) : context.groups[0]?.id || "";
+  const selected = data.groups.find((group) => group.groupId === selectedGroupId);
+  const filtered = { ...data, groups: selected ? [selected] : [] };
+  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="最终排名" pageHint="竞赛执行 · 自动生成 / 人工调整 / 确认 / 发布" currentEventId={eventId} eventScoped competitionTool="ranking">
       <CompetitionContextBar eventId={eventId} eventTitle={context.event.shortTitle} groups={context.groups} selectedGroupId={selectedGroupId} basePath="/admin/competition/final-ranking" eyebrow="最终排名" title={`${context.groups.find((group) => group.id === selectedGroupId)?.name || "当前组别"} · 本站最终成绩`} description="系统根据正式赛果自动生成64人排名。组委会可以在草稿阶段触发人工调整；确认后锁定，发布后用户端才显示正式排名。" />
       <FinalRankingClient initialData={filtered} />
   </AdminWorkspaceShell>;

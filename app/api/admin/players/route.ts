@@ -1,4 +1,4 @@
-import { getPlayerAdminPage } from "@/db/player-admin-v2";
+import { getPlayerAdminPageFast } from "@/db/player-admin-fast";
 import { getAdminViewer } from "@/app/admin/admin-viewer";
 
 export const dynamic = "force-dynamic";
@@ -6,7 +6,6 @@ export const dynamic = "force-dynamic";
 function group(value: string | null) {
   return value === "少年组" || value === "青年组" ? value : "all";
 }
-
 function pageNumber(value: string | null) {
   const parsed = Number.parseInt(value || "1", 10);
   return Number.isFinite(parsed) ? Math.max(1, parsed) : 1;
@@ -20,7 +19,7 @@ export async function GET(request: Request) {
 
   try {
     const url = new URL(request.url);
-    const data = await getPlayerAdminPage(viewer.username, {
+    const data = await getPlayerAdminPageFast(viewer, {
       eventId: url.searchParams.get("event"),
       scope: url.searchParams.get("scope") || undefined,
       group: group(url.searchParams.get("group")),
@@ -28,12 +27,7 @@ export async function GET(request: Request) {
       page: pageNumber(url.searchParams.get("page")),
       pageSize: 40,
     });
-    return Response.json({ data }, {
-      headers: {
-        "Cache-Control": "private, no-store",
-        "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}`,
-      },
-    });
+    return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "球员列表读取失败。" }, { status: 500 });
   }

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { getAdminNavigationEvents } from "@/db/admin-ui";
-import { getPlayerAdminPage } from "@/db/player-admin-v2";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
+import { getPlayerAdminPageFast } from "@/db/player-admin-fast";
 import AdminWorkspaceShell from "../admin-workspace-shell";
 import { getAdminViewer } from "../admin-viewer";
 import { PlayerManagementWorkspace } from "./player-management-client";
@@ -15,7 +15,6 @@ type QueryState = { event: string; scope: "event" | "all"; group: "all" | "少�
 function asGroup(value?: string): QueryState["group"] {
   return value === "少年组" || value === "青年组" ? value : "all";
 }
-
 function pageNumber(value?: string) {
   const parsed = Number.parseInt(value || "1", 10);
   return Number.isFinite(parsed) ? Math.max(1, parsed) : 1;
@@ -27,7 +26,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
   if (viewer.role === "referee") redirect("/admin");
 
   const query = await searchParams;
-  const events = await getAdminNavigationEvents(viewer.username);
+  const events = await getAdminNavigationEventsForPrincipal(viewer);
   const requestedEvent = events.find((event) => event.id === query.event);
   const overview = viewer.role === "system_admin" && !requestedEvent && (query.scope === "all" || !query.event);
   const state: QueryState = {
@@ -38,14 +37,14 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     page: pageNumber(query.page),
   };
 
-  const pageData = await getPlayerAdminPage(viewer.username, {
+  const pageData = await getPlayerAdminPageFast(viewer, {
     eventId: state.event || null,
     scope: state.scope,
     group: state.group,
     query: state.q,
     page: state.page,
     pageSize: 40,
-  });
+  }, events);
 
   const eventOptions = events.map((event) => ({
     id: event.id,

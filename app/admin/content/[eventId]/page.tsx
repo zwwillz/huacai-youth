@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getAdminViewer } from "../../admin-viewer";
-import { getAdminNavigationEvents } from "@/db/admin-ui";
-import { getContentManagementData } from "@/db/content-management";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
+import { getContentManagementDataFast } from "@/db/content-management-fast";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import ContentEventWorkspaceClient from "../content-event-workspace-client";
 import { captureAdminLoad } from "../../capture-admin-load";
@@ -17,8 +17,8 @@ export default async function ContentManagementPage({ params }: { params: Promis
   const { eventId } = await params;
 
   const result = await captureAdminLoad(Promise.all([
-    getContentManagementData(viewer.username, eventId),
-    getAdminNavigationEvents(viewer.username),
+    getContentManagementDataFast(viewer, eventId),
+    getAdminNavigationEventsForPrincipal(viewer),
   ]));
   if (!result.data) {
     return <main className="backend-state backend-denied">

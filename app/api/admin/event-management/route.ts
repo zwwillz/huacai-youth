@@ -1,17 +1,20 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
-import { getEventManagementData, saveEventManagementData, type EventManagementInput } from "@/db/event-management";
+import { saveEventManagementData, type EventManagementInput } from "@/db/event-management";
+import { getEventManagementDataFast } from "@/db/event-management-fast";
 import { syncEventOverviewPublication } from "@/db/event-publication-sync";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const startedAt = performance.now();
   const viewer = await getAdminViewer();
   if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
   const eventId = new URL(request.url).searchParams.get("eventId")?.trim();
   if (!eventId) return Response.json({ error: "缺少赛事ID。" }, { status: 400 });
   try {
-    return Response.json({ data: await getEventManagementData(viewer.username, eventId) });
+    const data = await getEventManagementDataFast(viewer, eventId);
+    return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "赛事资料读取失败。" }, { status: 400 });
   }

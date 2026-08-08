@@ -1,5 +1,5 @@
 import { getSqlClient } from "./index";
-import { requireEventAccess } from "./permissions";
+import { requireEventAccess, type AdminPrincipalInput } from "./permissions";
 import { competitionPhaseLabel } from "./competition-labels";
 
 export type CompetitionBracketIndexItem = {
@@ -19,15 +19,11 @@ export type CompetitionBracketIndexItem = {
   scheduledCount: number;
 };
 
-async function requireViewer(username: string, eventId: string) {
-  return requireEventAccess(username, eventId, {
+export async function getCompetitionBracketIndex(input: AdminPrincipalInput, eventId: string, filters: { groupId?: string; phaseCode?: string } = {}) {
+  await requireEventAccess(input, eventId, {
     allowedRoles: ["system_admin", "committee", "referee"],
     deniedMessage: "当前账号没有竞赛执行权限。",
   });
-}
-
-export async function getCompetitionBracketIndex(username: string, eventId: string, filters: { groupId?: string; phaseCode?: string } = {}) {
-  await requireViewer(username, eventId);
   const sql = getSqlClient();
   const rows = await sql<CompetitionBracketIndexItem[]>`
     select ds.id as "drawSessionId",b.id as "bracketId",b.event_id as "eventId",b.group_id as "groupId",eg.name as "groupName",
