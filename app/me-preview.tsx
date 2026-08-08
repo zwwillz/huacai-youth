@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import type { PublicPlayerDetail, PublicPlayerEvent } from "@/db/player-data";
+import { PersonalCenterLoadingShell } from "./public-view-loading";
 import styles from "./me-preview.module.css";
 
 type PreviewMatch = {
@@ -83,13 +83,6 @@ function PlayerPersonalCenter({ player, matches }: Props) {
   </div>;
 }
 
-function PersonalCenterLoadingShell() {
-  return <div className={styles.root}>
-    <section className={styles.profileHero}><div className={styles.avatar}>…</div><div className={styles.profileCopy}><span className={styles.previewTag}>个人中心</span><h1>正在读取个人数据</h1><div className={styles.identityLine}><b>球员</b><span>页面框架已就绪</span></div></div><div className={styles.heroMark}>华</div></section>
-    <section className={styles.primaryGrid}><article className={styles.featureCard}><header><div><small>我的报名</small><h2>最近报名</h2></div></header><div className={styles.cardEmpty}>正在读取报名记录…</div></article><article className={styles.featureCard}><header><div><small>最近比赛</small><h2>比赛成绩</h2></div></header><div className={styles.cardEmpty}>正在读取比赛数据…</div></article></section>
-  </div>;
-}
-
 async function requestPreview() {
   if (persistedPreview) return persistedPreview;
   if (!previewRequest) {
@@ -106,39 +99,32 @@ async function requestPreview() {
 }
 
 export default function MePreview() {
-  const [target, setTarget] = useState<HTMLElement | null>(null);
   const [data, setData] = useState<Props>(() => persistedPreview ?? { player: null, matches: [] });
   const [loading, setLoading] = useState(() => !persistedPreview);
   const loaded = useRef(Boolean(persistedPreview));
   const loadingRef = useRef(false);
 
   useEffect(() => {
-    let original: HTMLElement | null = null;
-    let host: HTMLElement | null = null;
+    if (loaded.current || loadingRef.current) return;
+    let cancelled = false;
     const load = async () => {
-      if (loaded.current || loadingRef.current) return;
-      loadingRef.current = true; setLoading(true);
+      loadingRef.current = true;
+      setLoading(true);
       try {
         const next = await requestPreview();
-        if (next) { setData(next); loaded.current = true; }
-      } finally { loadingRef.current = false; setLoading(false); }
+        if (next) {
+          loaded.current = true;
+          if (!cancelled) setData(next);
+        }
+      } finally {
+        loadingRef.current = false;
+        if (!cancelled) setLoading(false);
+      }
     };
-    const sync = () => {
-      const root = document.querySelector<HTMLElement>("main[data-huacai-view]");
-      const active = root?.dataset.huacaiView === "me";
-      const profile = active ? document.querySelector<HTMLElement>(".profile") : null;
-      const stack = profile?.closest<HTMLElement>(".stack") ?? null;
-      if (!stack) { if (original) original.style.display = ""; original = null; if (host) { host.remove(); host = null; } setTarget((current) => current === null ? current : null); return; }
-      if (original !== stack) { if (original) original.style.display = ""; original = stack; }
-      stack.style.display = "none";
-      if (!host || !host.isConnected) { host = document.createElement("div"); host.dataset.mePreviewHost = "true"; stack.insertAdjacentElement("afterend", host); }
-      setTarget((current) => current === host ? current : host); void load();
-    };
-    window.addEventListener("huacai:navigation", sync); sync();
-    return () => { window.removeEventListener("huacai:navigation", sync); if (original) original.style.display = ""; if (host) host.remove(); };
+    void load();
+    return () => { cancelled = true; };
   }, []);
 
-  if (!target) return null;
-  if (loading && !data.player) return createPortal(<PersonalCenterLoadingShell />, target);
-  return createPortal(<PlayerPersonalCenter {...data} />, target);
+  if (loading && !data.player) return <PersonalCenterLoadingShell />;
+  return <PlayerPersonalCenter {...data} />;
 }
