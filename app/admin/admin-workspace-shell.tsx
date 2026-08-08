@@ -33,7 +33,6 @@ export default function AdminWorkspaceShell({ viewer, events, active, pageTitle,
   const [menuOpen, setMenuOpen] = useState(false);
   const [localEventId, setLocalEventId] = useState(currentEventId || "");
 
-  useEffect(() => { setLocalEventId(currentEventId || ""); }, [currentEventId]);
   useEffect(() => {
     const revert = (event: Event) => {
       const detail = (event as CustomEvent<{ eventId?: string }>).detail;
@@ -43,7 +42,7 @@ export default function AdminWorkspaceShell({ viewer, events, active, pageTitle,
     return () => window.removeEventListener("admin:event-switch-revert", revert);
   }, []);
 
-  const effectiveEventId = localEventId || currentEventId || "";
+  const effectiveEventId = eventSwitchMode === "local" ? (localEventId || currentEventId || "") : (currentEventId || "");
   const currentEvent = events.find((event) => event.id === effectiveEventId);
   const visibleGroups = navGroups.map((group) => ({ ...group, items: group.items.filter((item) => { if (viewer.role === "system_admin") return true; if (viewer.role === "committee") return !["accounts", "logs"].includes(item.id); return ["dashboard", "competition"].includes(item.id); }) })).filter((group) => group.items.length > 0);
   const switchEvent = (eventId: string) => {
