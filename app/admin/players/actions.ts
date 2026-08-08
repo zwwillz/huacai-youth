@@ -29,8 +29,11 @@ function redirectTarget(formData: FormData, messageType: "success" | "error", me
 export async function createPlayerAction(formData: FormData) {
   const viewer = await getAdminViewer();
   if (!viewer) redirect("/admin/login");
+
+  let playerId = "";
+  let errorMessage = "";
   try {
-    const playerId = await createAdminPlayer(viewer.username, {
+    playerId = await createAdminPlayer(viewer.username, {
       fullName: text(formData, "fullName"),
       gender: text(formData, "gender"),
       birthDate: text(formData, "birthDate"),
@@ -44,17 +47,21 @@ export async function createPlayerAction(formData: FormData) {
       identityType: text(formData, "identityType") || "id_card",
       identityNo: text(formData, "identityNo"),
     });
-    revalidatePath("/admin/players");
-    redirect(redirectTarget(formData, "success", "球员档案已创建。", playerId));
   } catch (error) {
-    redirect(redirectTarget(formData, "error", error instanceof Error ? error.message : "新增球员失败。"));
+    errorMessage = error instanceof Error ? error.message : "新增球员失败。";
   }
+
+  if (errorMessage) redirect(redirectTarget(formData, "error", errorMessage));
+  revalidatePath("/admin/players");
+  redirect(redirectTarget(formData, "success", "球员档案已创建。", playerId));
 }
 
 export async function updatePlayerAction(formData: FormData) {
   const viewer = await getAdminViewer();
   if (!viewer) redirect("/admin/login");
   const playerId = text(formData, "playerId");
+
+  let errorMessage = "";
   try {
     await updateAdminPlayer(viewer.username, {
       playerId,
@@ -73,9 +80,11 @@ export async function updatePlayerAction(formData: FormData) {
       identityType: text(formData, "identityType") || "id_card",
       identityNo: text(formData, "identityNo"),
     });
-    revalidatePath("/admin/players");
-    redirect(redirectTarget(formData, "success", "球员档案已更新。", playerId));
   } catch (error) {
-    redirect(redirectTarget(formData, "error", error instanceof Error ? error.message : "更新球员失败。", playerId));
+    errorMessage = error instanceof Error ? error.message : "更新球员失败。";
   }
+
+  if (errorMessage) redirect(redirectTarget(formData, "error", errorMessage, playerId));
+  revalidatePath("/admin/players");
+  redirect(redirectTarget(formData, "success", "球员档案已更新。", playerId));
 }
