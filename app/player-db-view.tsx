@@ -198,13 +198,15 @@ export default function PlayerDbView() {
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
   const loaded=useRef(false);
+  const loadingRef=useRef(false);
 
   useEffect(()=>{
     let original:HTMLElement|null=null;
     let host:HTMLElement|null=null;
 
     const load=async()=>{
-      if(loaded.current||loading)return;
+      if(loaded.current||loadingRef.current)return;
+      loadingRef.current=true;
       setLoading(true);setError("");
       try{
         const response=await fetch("/api/public/players");
@@ -212,7 +214,7 @@ export default function PlayerDbView() {
         if(!response.ok||!payload.data)throw new Error(payload.error||"球员数据读取失败。");
         setPlayers(payload.data);loaded.current=true;
       }catch(reason){setError(reason instanceof Error?reason.message:"球员数据读取失败。")}
-      finally{setLoading(false)}
+      finally{loadingRef.current=false;setLoading(false)}
     };
 
     const sync=()=>{
@@ -236,9 +238,8 @@ export default function PlayerDbView() {
 
     window.addEventListener("huacai:navigation",sync);
     sync();
-    const preloadHandle=window.setTimeout(()=>{void load()},250);
-    return()=>{window.removeEventListener("huacai:navigation",sync);window.clearTimeout(preloadHandle);if(original)original.style.display="";if(host)host.remove()};
-  },[loading]);
+    return()=>{window.removeEventListener("huacai:navigation",sync);if(original)original.style.display="";if(host)host.remove()};
+  },[]);
 
   if(!target)return null;
   if(loading&&!players.length)return createPortal(<div className={styles.empty}>正在读取球员数据…</div>,target);
