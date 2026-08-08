@@ -141,6 +141,20 @@ export default function EventApp({ data, contentStates }: { data: EventData; con
     window.dispatchEvent(new CustomEvent("huacai:navigation", { detail: { view, stationId: selectedId ?? "", tab } }));
   }, [view, selectedId, tab]);
 
+  useEffect(() => {
+    const windowWithIdle = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    const preloadCompetition = () => { void import("./public-competition-live-v2"); };
+    if (windowWithIdle.requestIdleCallback) {
+      const handle = windowWithIdle.requestIdleCallback(preloadCompetition, { timeout: 1_500 });
+      return () => windowWithIdle.cancelIdleCallback?.(handle);
+    }
+    const handle = window.setTimeout(preloadCompetition, 500);
+    return () => window.clearTimeout(handle);
+  }, []);
+
   return <main data-huacai-view={view} data-huacai-station={selectedId ?? ""} data-huacai-tab={tab}>
     <header className="top"><button className="brand" onClick={() => { setView("event"); back(); }}><span>华</span><strong>华彩赛事</strong></button><h3>{title}</h3><a className="admin" href="/admin">组委会入口</a></header>
     <div className="layout">
