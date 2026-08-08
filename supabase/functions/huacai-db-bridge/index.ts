@@ -15,6 +15,18 @@ type TransactionMessage = QueryMessage | ControlMessage;
 const MAX_QUERY_LENGTH = 250_000;
 const MAX_PARAMS = 2_000;
 
+function isServiceRoleRequest(request: Request) {
+  const expected = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const authorization = request.headers.get("authorization") || "";
+  const supplied = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  if (!expected || supplied.length !== expected.length) return false;
+  let difference = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    difference |= expected.charCodeAt(index) ^ supplied.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
 function json(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), {
     status,
@@ -171,6 +183,7 @@ function handleTransaction(request: Request) {
 }
 
 Deno.serve((request: Request) => {
+  if (!isServiceRoleRequest(request)) return json({ ok: false, error: { message: "仅允许受信任的后台服务调用。" } }, 403);
   if (request.headers.get("upgrade")?.toLowerCase() === "websocket") return handleTransaction(request);
   if (request.method !== "POST") return json({ ok: false, error: { message: "仅支持 POST 请求。" } }, 405);
   return handleQuery(request);
