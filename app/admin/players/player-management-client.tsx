@@ -311,12 +311,13 @@ export function PlayerManagementWorkspace({ viewerRole, events, initialState, in
   const loadDetail = async (playerId: string, summary: PlayerAdminListItem | null, force = false) => {
     if (!playerId) return;
     const requestId = ++detailRequestId.current;
+    const detailKey = `${state.scope}:${state.event}:${playerId}`;
     setSelectedId(playerId);
     setSelectedSummary(summary);
     setDetailError("");
     replaceUrl(state, playerId);
 
-    const cached = detailCache.get(playerId);
+    const cached = detailCache.get(detailKey);
     if (cached) {
       setSelectedDetail(cached.data);
       if (!force && Date.now() - cached.at < DETAIL_CACHE_TTL) {
@@ -329,7 +330,7 @@ export function PlayerManagementWorkspace({ viewerRole, events, initialState, in
 
     setDetailLoading(true);
     try {
-      let request = !force ? detailRequests.get(playerId) : undefined;
+      let request = !force ? detailRequests.get(detailKey) : undefined;
       if (!request) {
         const params = new URLSearchParams();
         if (state.scope === "event" && state.event) params.set("event", state.event);
@@ -338,17 +339,17 @@ export function PlayerManagementWorkspace({ viewerRole, events, initialState, in
           if (!response.ok || !payload.data) throw new Error(payload.error || "球员详情读取失败。");
           return payload.data;
         });
-        if (!force) detailRequests.set(playerId, request);
+        if (!force) detailRequests.set(detailKey, request);
       }
       const detail = await request;
-      detailCache.set(playerId, { data: detail, at: Date.now() });
+      detailCache.set(detailKey, { data: detail, at: Date.now() });
       if (requestId !== detailRequestId.current) return;
       setSelectedDetail(detail);
     } catch (requestError) {
       if (requestId !== detailRequestId.current) return;
       setDetailError(requestError instanceof Error ? requestError.message : "球员详情读取失败。");
     } finally {
-      detailRequests.delete(playerId);
+      detailRequests.delete(detailKey);
       if (requestId === detailRequestId.current) setDetailLoading(false);
     }
   };
@@ -410,7 +411,7 @@ export function PlayerManagementWorkspace({ viewerRole, events, initialState, in
       <div className="player-table-wrap"><table className="player-table">
         <thead><tr><th>球员编号</th><th>球员姓名</th><th>性别</th><th>组别</th><th>手机号码</th><th>证件号码</th><th>状态</th><th>查看</th></tr></thead>
         <tbody>{pageData.items.map((player) => <tr key={player.id}>
-          <td><b className="player-code">{player.playerCode}</b></td><td><strong>{player.displayName}</strong></td><td>{value(player.gender)}</td><td>{value(player.groupName)}</td><td>{value(player.phone)}</td><td>{player.identityDisplay}</td><td><span className={`player-badge profile-${player.profileStatus}`}>{profileStatusLabel(player.profileStatus)}</span></td><td><button type="button" className="player-open" onClick={() => { void loadDetail(player.id, player); }}>查看</button></td>
+          <td><b className="player-code">{player.playerCode}</b></td><td><strong>{player.displayName}</strong></td><td>{value(player.gender)}</td><td>{value(player.groupName)}</td><td>{value(player.phone)}</td><td>{player.identityDisplay}</td><td><span className={`player-badge profile-${player.profileStatus}`}>{profileStatusLabel(player.profileStatus)}</span></td><td><button type="button" className="player-open" disabled={listLoading} onClick={() => { void loadDetail(player.id, player); }}>查看</button></td>
         </tr>)}{!pageData.items.length && <tr><td colSpan={8}><div className="player-empty">没有找到符合当前条件的球员。</div></td></tr>}</tbody>
       </table></div>
       {totalPages > 1 && <nav className="player-pagination" aria-label="球员分页"><button type="button" disabled={state.page <= 1} onClick={() => { void fetchList({ ...state, page: Math.max(1, state.page - 1) }); }}>上一页</button><span>第 {Math.min(state.page, totalPages)} / {totalPages} 页</span><button type="button" disabled={state.page >= totalPages} onClick={() => { void fetchList({ ...state, page: Math.min(totalPages, state.page + 1) }); }}>下一页</button></nav>}
