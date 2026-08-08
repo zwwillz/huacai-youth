@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
-import { getAdminNavigationEvents } from "@/db/admin-ui";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
 import { getCompetitionBracketIndex } from "@/db/competition-tool-index";
 import { getCompetitionContextData } from "@/db/competition-context";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
@@ -17,12 +17,12 @@ export default async function CompetitionSchedulesPage({ searchParams }: { searc
   const viewer = await getAdminViewer();
   if (!viewer) redirect("/admin/login");
   const query = await searchParams;
-  const events = await getAdminNavigationEvents(viewer.username);
+  const events = await getAdminNavigationEventsForPrincipal(viewer);
   const eventId = events.some((event) => event.id === query.event) ? String(query.event) : events[0]?.id;
   if (!eventId) redirect("/admin/competition");
   const [context, allItems] = await Promise.all([
-    getCompetitionContextData(viewer.username, eventId),
-    getCompetitionBracketIndex(viewer.username, eventId),
+    getCompetitionContextData(viewer, eventId),
+    getCompetitionBracketIndex(viewer, eventId),
   ]);
   const selectedGroupId = context.groups.some((group) => group.id === query.group) ? String(query.group) : context.groups[0]?.id || "";
   const availablePhases = [...new Set(allItems.filter((item) => item.groupId === selectedGroupId).map((item) => item.phaseCode))];
