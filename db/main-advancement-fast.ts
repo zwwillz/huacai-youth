@@ -61,10 +61,6 @@ export async function prepareMain32AdvancementFast(eventId: string, groupId: str
     insert into public.competition_main_advancement_batches
       (id,event_id,group_id,source_draw_session_id,status,winner_side_count,loser_side_count,roster_json,created_at,updated_at)
     values (${id},${eventId},${groupId},${sessionId},'draft',16,16,${JSON.stringify(roster)}::jsonb,${timestamp},${timestamp})
-    on conflict (source_draw_session_id) do nothing
   `;
-  const existing = await sql<Array<{ id: string; status: string }>>`
-    select id,status from public.competition_main_advancement_batches where source_draw_session_id=${sessionId} limit 1
-  `;
-  return { ready: true, count: 32, batchId: existing[0]?.id ?? id, status: existing[0]?.status ?? "draft" };
+  return { ready: true, count: 32, batchId: id, status: "draft" };
 }
