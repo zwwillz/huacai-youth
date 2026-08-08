@@ -4,7 +4,7 @@ import { getAdminViewer } from "../../admin-viewer";
 import { getAdminNavigationEvents } from "@/db/admin-ui";
 import { getEventManagementData } from "@/db/event-management";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
-import EventManagementClient from "../event-management-client";
+import EventEventWorkspaceClient from "../event-event-workspace-client";
 import { captureAdminLoad } from "../../capture-admin-load";
 import "../event-management.css";
 
@@ -36,7 +36,9 @@ export default async function EventManagementPage({ params }: { params: Promise<
       pageTitle="赛事设置"
       pageHint="赛事管理 · 分站主数据"
       currentEventId={eventId}
+      eventScoped
+      eventSwitchMode="local"
     >
-      <EventManagementClient initialData={data} />
+      <EventEventWorkspaceClient initialData={data} />
   </AdminWorkspaceShell>;
 }
