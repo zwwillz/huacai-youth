@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getAdminViewer } from "../../admin-viewer";
-import { getAdminNavigationEvents } from "@/db/admin-ui";
-import { getEventManagementData } from "@/db/event-management";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
+import { getEventManagementDataFast } from "@/db/event-management-fast";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import EventEventWorkspaceClient from "../event-event-workspace-client";
 import { captureAdminLoad } from "../../capture-admin-load";
@@ -16,8 +16,8 @@ export default async function EventManagementPage({ params }: { params: Promise<
   const { eventId } = await params;
 
   const result = await captureAdminLoad(Promise.all([
-    getEventManagementData(viewer.username, eventId),
-    getAdminNavigationEvents(viewer.username),
+    getEventManagementDataFast(viewer, eventId),
+    getAdminNavigationEventsForPrincipal(viewer),
   ]));
   if (!result.data) {
     return <main className="backend-state backend-denied">
