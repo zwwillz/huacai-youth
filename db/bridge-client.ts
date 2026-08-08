@@ -25,10 +25,25 @@ type BridgeReply = {
   error?: BridgeError;
 };
 
+type BatchBridgeReply = BridgeReply & {
+  results?: BridgeReply[];
+};
+
+type QueuedHttpQuery = {
+  query: string;
+  params: unknown[];
+  mode: QueryMode;
+  resolve: (rows: unknown[]) => void;
+  reject: (error: Error) => void;
+};
+
 type QueryExecutor = (query: string, params: unknown[], mode: QueryMode) => Promise<unknown[]>;
 
 const QUERY_TIMEOUT_MS = 12_000;
 const TRANSACTION_TIMEOUT_MS = 25_000;
+const MAX_BATCH_QUERIES = 50;
+let queuedHttpQueries: QueuedHttpQuery[] = [];
+let httpFlushScheduled = false;
 
 function bridgeConfig() {
   const url = process.env.SUPABASE_URL?.replace(/\/$/, "");
@@ -76,7 +91,7 @@ function bridgeError(error?: BridgeError) {
   return result;
 }
 
-async function executeHttp(query: string, params: unknown[], mode: QueryMode) {
+async function sendHttpBatch(batch: QueuedHttpQuery[]) {
   const { httpUrl, serviceRoleKey } = bridgeConfig();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), QUERY_TIMEOUT_MS);
@@ -88,19 +103,49 @@ async function executeHttp(query: string, params: unknown[], mode: QueryMode) {
         apikey: serviceRoleKey,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ type: "query", query, params: params.map(encode), mode }),
+      body: JSON.stringify({
+        type: "batch",
+        queries: batch.map(({ query, params, mode }) => ({ type: "query", query, params: params.map(encode), mode })),
+      }),
       cache: "no-store",
       signal: controller.signal,
     });
-    const body = await response.json() as BridgeReply;
+    const body = await response.json() as BatchBridgeReply;
     if (!response.ok || !body.ok) throw bridgeError(body.error || { message: `数据库桥接返回 HTTP ${response.status}。` });
-    return (body.rows ?? []).map(decode);
+    if (!Array.isArray(body.results) || body.results.length !== batch.length) {
+      throw new Error("数据库桥接返回的批量结果数量不正确。");
+    }
+    body.results.forEach((reply, index) => {
+      if (reply.ok) batch[index].resolve((reply.rows ?? []).map(decode));
+      else batch[index].reject(bridgeError(reply.error));
+    });
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") throw new Error("数据库 HTTPS 请求超时，请稍后重试。");
-    throw error;
+    const result = error instanceof Error && error.name === "AbortError"
+      ? new Error("数据库 HTTPS 请求超时，请稍后重试。")
+      : error instanceof Error ? error : new Error("数据库 HTTPS 请求失败。");
+    batch.forEach(({ reject }) => reject(result));
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function flushHttpQueries() {
+  const queued = queuedHttpQueries;
+  queuedHttpQueries = [];
+  httpFlushScheduled = false;
+  for (let index = 0; index < queued.length; index += MAX_BATCH_QUERIES) {
+    await sendHttpBatch(queued.slice(index, index + MAX_BATCH_QUERIES));
+  }
+}
+
+function executeHttp(query: string, params: unknown[], mode: QueryMode) {
+  return new Promise<unknown[]>((resolve, reject) => {
+    queuedHttpQueries.push({ query, params, mode, resolve, reject });
+    if (!httpFlushScheduled) {
+      httpFlushScheduled = true;
+      queueMicrotask(() => { void flushHttpQueries(); });
+    }
+  });
 }
 
 class PendingBridgeQuery<T> implements PromiseLike<T> {
