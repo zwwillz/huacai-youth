@@ -33,6 +33,7 @@ type SubmitMatchRow = {
 };
 
 type ConfirmMatchRow = SubmitMatchRow & {
+  bracketId: string;
   groupId: string;
   phaseCode: string;
   winnerPlayerId: string | null;
@@ -85,7 +86,7 @@ export async function confirmMatchResultFast(inputPrincipal: AdminPrincipalInput
   assertAdminRole(viewer, ["system_admin", "committee"], "赛果确认需要系统管理员或组委会权限。");
   const sql = getSqlClient();
   const rows = await sql<ConfirmMatchRow[]>`
-    select bm.id as "bracketMatchId",bm.event_id as "eventId",bm.group_id as "groupId",bm.phase_code as "phaseCode",
+    select bm.id as "bracketMatchId",bm.bracket_id as "bracketId",bm.event_id as "eventId",bm.group_id as "groupId",bm.phase_code as "phaseCode",
       bm.result_status as "resultStatus",bm.winner_player_id as "winnerPlayerId",bm.winner_player_name as "winnerPlayerName",
       bm.player_a_id as "playerAId",bm.player_a_name as "playerAName",bm.player_b_id as "playerBId",bm.player_b_name as "playerBName",
       ms.referee_user_id as "refereeUserId"
@@ -126,7 +127,7 @@ export async function confirmMatchResultFast(inputPrincipal: AdminPrincipalInput
           max(case when target_side='A' then source_result end) as source_a,
           max(case when target_side='B' then source_result end) as source_b
         from public.competition_match_links
-        where source_match_id=${match.bracketMatchId} and source_result in ('winner','loser')
+        where bracket_id=${match.bracketId} and source_match_id=${match.bracketMatchId} and source_result in ('winner','loser')
         group by target_match_id
       ) links
       where links.target_match_id=target.id
