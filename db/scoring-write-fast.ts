@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
 import { assertAdminRole, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 import { prepareMain32AdvancementFast } from "./main-advancement-fast";
-import { prepareFinalRankingDraft } from "./final-ranking-engine";
+import { prepareFinalRankingDraftIfReadyFast } from "./final-ranking-trigger-fast";
 import { markCompetitionModuleDirty } from "./competition-context";
 
 function now() { return new Date().toISOString(); }
@@ -138,7 +138,7 @@ export async function confirmMatchResultFast(inputPrincipal: AdminPrincipalInput
       values (${newId("log")},${viewer.id},${match.eventId},'competition','match_result',${match.bracketMatchId},'confirm_match_result',${JSON.stringify({ winner: match.winnerPlayerName, loser: loser.name, propagatedTo: propagatedCount })},${changedAt})`;
   });
   if (match.phaseCode === "main-one") await prepareMain32AdvancementFast(match.eventId, match.groupId);
-  if (match.phaseCode === "main-two") await prepareFinalRankingDraft(match.eventId, match.groupId);
+  if (match.phaseCode === "main-two") await prepareFinalRankingDraftIfReadyFast(match.eventId, match.groupId);
   await markCompetitionModuleDirty(match.eventId, "matches");
   return { ok: true, eventId: match.eventId };
 }
