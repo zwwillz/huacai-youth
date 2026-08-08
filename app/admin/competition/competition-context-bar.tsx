@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { CompetitionContextGroup } from "@/db/competition-context";
 
@@ -15,6 +17,8 @@ type Props = {
   eyebrow?: string;
   title?: string;
   description?: string;
+  onGroupChange?: (groupId: string) => void;
+  onPhaseChange?: (phaseCode: string) => void;
 };
 
 function href(path: string, eventId: string, groupId: string, phase: string | undefined, extra?: Record<string, string | undefined>) {
@@ -26,17 +30,21 @@ function href(path: string, eventId: string, groupId: string, phase: string | un
   return `${path}?${params.toString()}`;
 }
 
-export default function CompetitionContextBar({ eventId, eventTitle, groups, selectedGroupId, basePath, phases = [], selectedPhase, extraQuery, eyebrow = "竞赛执行", title, description }: Props) {
+export default function CompetitionContextBar({ eventId, eventTitle, groups, selectedGroupId, basePath, phases = [], selectedPhase, extraQuery, eyebrow = "竞赛执行", title, description, onGroupChange, onPhaseChange }: Props) {
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0];
   return <section className="competition-context-bar">
     <div className="competition-context-top">
       <div className="competition-context-copy"><small>{eyebrow}</small><h2>{title || eventTitle}</h2>{description && <p>{description}</p>}</div>
       <div className="competition-group-toggle" aria-label="选择比赛组别">
-        {groups.map((group) => <Link key={group.id} className={group.id === selectedGroup?.id ? "active" : ""} aria-current={group.id === selectedGroup?.id ? "true" : undefined} href={href(basePath, eventId, group.id, selectedPhase, extraQuery)}><b>{group.code}</b><span>{group.name}</span></Link>)}
+        {groups.map((group) => onGroupChange
+          ? <button type="button" key={group.id} className={group.id === selectedGroup?.id ? "active" : ""} aria-pressed={group.id === selectedGroup?.id} onClick={() => onGroupChange(group.id)}><b>{group.code}</b><span>{group.name}</span></button>
+          : <Link key={group.id} className={group.id === selectedGroup?.id ? "active" : ""} aria-current={group.id === selectedGroup?.id ? "true" : undefined} href={href(basePath, eventId, group.id, selectedPhase, extraQuery)}><b>{group.code}</b><span>{group.name}</span></Link>)}
       </div>
     </div>
     {phases.length > 0 && <nav className="competition-phase-toggle" aria-label="选择比赛阶段">
-      {phases.map((phase) => phase.disabled ? <span key={phase.code} className="disabled"><strong>{phase.title}</strong>{phase.hint && <small>{phase.hint}</small>}</span> : <Link key={phase.code} className={phase.code === selectedPhase ? "active" : ""} aria-current={phase.code === selectedPhase ? "step" : undefined} href={href(basePath, eventId, selectedGroup?.id || selectedGroupId, phase.code, extraQuery)}><strong>{phase.title}</strong>{phase.hint && <small>{phase.hint}</small>}</Link>)}
+      {phases.map((phase) => phase.disabled ? <span key={phase.code} className="disabled"><strong>{phase.title}</strong>{phase.hint && <small>{phase.hint}</small>}</span>
+        : onPhaseChange ? <button type="button" key={phase.code} className={phase.code === selectedPhase ? "active" : ""} aria-pressed={phase.code === selectedPhase} onClick={() => onPhaseChange(phase.code)}><strong>{phase.title}</strong>{phase.hint && <small>{phase.hint}</small>}</button>
+        : <Link key={phase.code} className={phase.code === selectedPhase ? "active" : ""} aria-current={phase.code === selectedPhase ? "step" : undefined} href={href(basePath, eventId, selectedGroup?.id || selectedGroupId, phase.code, extraQuery)}><strong>{phase.title}</strong>{phase.hint && <small>{phase.hint}</small>}</Link>)}
     </nav>}
   </section>;
 }
