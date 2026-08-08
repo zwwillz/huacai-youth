@@ -1,17 +1,19 @@
 import { unstable_cache } from "next/cache";
 import EventApp from "./event-app";
-import { getPublicSiteData } from "@/db/public";
-import { getPublicContentState } from "@/db/public-content";
+import { getPublicHomeData } from "@/db/public-home";
 
 export const runtime = "nodejs";
-// The public homepage is identical for every visitor. Let EdgeOne serve the
-// generated page from ISR instead of starting an SSR function for each visit.
-export const revalidate = 300;
+// The homepage only carries lightweight event-list data. Detailed event
+// content is loaded after the visitor enters a station.
+export const revalidate = 1800;
 
-const getCachedPublicSiteData = unstable_cache(getPublicSiteData, ["public-site-data-v2"], { revalidate: 60, tags: ["public-site"] });
-const getCachedPublicContentState = unstable_cache(getPublicContentState, ["public-content-state-v2"], { revalidate: 60, tags: ["public-content"] });
+const getCachedPublicHomeData = unstable_cache(
+  getPublicHomeData,
+  ["public-home-data-v1"],
+  { revalidate: 1800, tags: ["public-site"] },
+);
 
-function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>["stations"]) {
+function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicHomeData>>["stations"]) {
   return stations.map((station) => {
     if (station.coverImage) {
       const image = JSON.stringify(station.coverImage);
@@ -34,17 +36,11 @@ function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>[
 }
 
 export default async function Home() {
-  // GitHub Actions intentionally has no production database secrets. It only
-  // needs to verify that the static route can compile; EdgeOne's production
-  // build has the secrets and generates the real initial ISR snapshot.
   const useCiBuildFallback = process.env.GITHUB_ACTIONS === "true"
     && (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY);
-  const data: Awaited<ReturnType<typeof getPublicSiteData>> = useCiBuildFallback
+  const data: Awaited<ReturnType<typeof getPublicHomeData>> = useCiBuildFallback
     ? { stations: [], matches: [], players: [] }
-    : await getCachedPublicSiteData();
-  const contentStates = useCiBuildFallback
-    ? []
-    : await getCachedPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title })));
+    : await getCachedPublicHomeData();
   const visualCss = eventVisualCss(data.stations);
 
   return <>
@@ -54,6 +50,6 @@ export default async function Home() {
       .tabs.public-five-tabs button,.tabs.public-unified-tabs button{min-width:0!important;padding:8px 14px!important;font-size:11px!important}
       @media(max-width:900px){.tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;width:max-content!important}.tabs.public-five-tabs button,.tabs.public-unified-tabs button{padding:8px 14px!important;font-size:11px!important}}
     `}</style>
-    <EventApp data={data} contentStates={contentStates} />
+    <EventApp data={data} />
   </>;
 }

@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PublicPlayerDetail, PublicPlayerEvent, PublicPlayerSummary } from "@/db/player-data";
@@ -11,12 +10,14 @@ type DetailTab = "data" | "events";
 type YearFilter = "全部" | number;
 type PlayerCounts = Record<FilterGroup, number>;
 type PlayerPagePayload = { data?: PublicPlayerSummary[]; counts?: PlayerCounts; page?: number; hasMore?: boolean; error?: string };
-type SearchPayload = { data?: PublicPlayerSummary[]; total?: number; page?: number; hasMore?: boolean; error?: string };
+type PlayerIndexPayload = { data?: PublicPlayerSummary[]; error?: string };
 
 const PAGE_SIZE = 120;
 let persistedPlayers: PublicPlayerSummary[] = [];
 let persistedCounts: PlayerCounts = { 全部: 0, 少年组: 0, 青年组: 0 };
 let persistedLoadedPage = 0;
+let persistedSearchIndex: PublicPlayerSummary[] = [];
+let searchIndexRequest: Promise<PublicPlayerSummary[]> | null = null;
 const persistedPageCache = new Map<number, PublicPlayerSummary[]>();
 const persistedDetailCache = new Map<string, PublicPlayerDetail>();
 const persistedDetailRequests = new Map<string, Promise<PublicPlayerDetail | null>>();
@@ -25,6 +26,22 @@ function mergePlayers(current: PublicPlayerSummary[], incoming: PublicPlayerSumm
   const byId = new Map(current.map((player) => [player.id, player]));
   incoming.forEach((player) => byId.set(player.id, player));
   return [...byId.values()].sort((a, b) => b.totalPoints - a.totalPoints || a.name.localeCompare(b.name, "zh-CN") || a.id.localeCompare(b.id));
+}
+
+function requestSearchIndex() {
+  if (persistedSearchIndex.length) return Promise.resolve(persistedSearchIndex);
+  if (searchIndexRequest) return searchIndexRequest;
+  searchIndexRequest = fetch("/api/public/players/all")
+    .then(async (response) => {
+      if (!response.ok) return [];
+      const payload = await response.json() as PlayerIndexPayload;
+      if (!payload.data) return [];
+      persistedSearchIndex = payload.data;
+      return payload.data;
+    })
+    .catch(() => [])
+    .finally(() => { searchIndexRequest = null; });
+  return searchIndexRequest;
 }
 
 function flag(code: string) { return code.toUpperCase() === "CN" ? "🇨🇳" : "🌐"; }
@@ -122,63 +139,41 @@ function DetailPanel({detail,onClose}:{detail:PublicPlayerDetail;onClose:()=>voi
   </div>;
 }
 
-function PlayerBrowser({players,counts,loadingMore,loadNextPage}:{players:PublicPlayerSummary[];counts:PlayerCounts;loadingMore:boolean;loadNextPage:()=>Promise<void>}) {
+function PlayerBrowser({
+  players,
+  counts,
+  searchIndex,
+  searchIndexLoading,
+  loadingMore,
+  loadNextPage,
+}:{
+  players:PublicPlayerSummary[];
+  counts:PlayerCounts;
+  searchIndex:PublicPlayerSummary[];
+  searchIndexLoading:boolean;
+  loadingMore:boolean;
+  loadNextPage:()=>Promise<void>;
+}) {
   const [query,setQuery]=useState("");
   const [group,setGroup]=useState<FilterGroup>("全部");
   const [limit,setLimit]=useState(PAGE_SIZE);
   const [selected,setSelected]=useState<PublicPlayerDetail|null>(null);
   const [loadingId,setLoadingId]=useState<string|null>(null);
-  const [searchRows,setSearchRows]=useState<PublicPlayerSummary[]>([]);
-  const [searchTotal,setSearchTotal]=useState(0);
-  const [searchPage,setSearchPage]=useState(0);
-  const [searchHasMore,setSearchHasMore]=useState(false);
-  const [searching,setSearching]=useState(false);
-  const searchRequest=useRef(0);
 
-  useEffect(()=>{
-    const needle=query.trim();
-    if(!needle){setSearchRows([]);setSearchTotal(0);setSearchPage(0);setSearchHasMore(false);setSearching(false);return}
-    const requestId=++searchRequest.current;
-    setSearching(true);setLimit(PAGE_SIZE);
-    const timer=window.setTimeout(async()=>{
-      try{
-        const params=new URLSearchParams({q:needle,group,page:"1"});
-        const response=await fetch(`/api/public/players/search?${params.toString()}`);
-        const payload=await response.json() as SearchPayload;
-        if(requestId!==searchRequest.current)return;
-        if(!response.ok||!payload.data)throw new Error(payload.error||"球员搜索失败。");
-        setSearchRows(payload.data);setSearchTotal(payload.total??payload.data.length);setSearchPage(payload.page??1);setSearchHasMore(Boolean(payload.hasMore));
-      }catch{if(requestId===searchRequest.current){setSearchRows([]);setSearchTotal(0);setSearchPage(0);setSearchHasMore(false)}}
-      finally{if(requestId===searchRequest.current)setSearching(false)}
-    },250);
-    return()=>window.clearTimeout(timer);
-  },[query,group]);
-
-  const filtered=useMemo(()=>query.trim()?searchRows:players.filter(player=>group==="全部"||player.group===group),[players,query,group,searchRows]);
+  const needle=query.trim().toLowerCase();
+  const source=needle ? (searchIndex.length ? searchIndex : players) : players;
+  const filtered=useMemo(()=>source.filter(player=>{
+    if(group!=="全部"&&player.group!==group)return false;
+    if(!needle)return true;
+    return player.name.toLowerCase().includes(needle)||player.displayName.toLowerCase().includes(needle);
+  }),[source,group,needle]);
   const visible=filtered.slice(0,limit);
-  const totalForView=query.trim()?searchTotal:counts[group];
+  const totalForView=needle ? filtered.length : counts[group];
   const remaining=Math.max(totalForView-visible.length,0);
-  const canShowMore=query.trim()?searchHasMore||visible.length<filtered.length:visible.length<filtered.length||filtered.length<counts[group];
-
-  const loadMoreSearch=async()=>{
-    if(!query.trim()||!searchHasMore||searching)return;
-    setSearching(true);
-    try{
-      const nextPage=searchPage+1;
-      const params=new URLSearchParams({q:query.trim(),group,page:String(nextPage)});
-      const response=await fetch(`/api/public/players/search?${params.toString()}`);
-      const payload=await response.json() as SearchPayload;
-      if(!response.ok||!payload.data)throw new Error(payload.error||"更多搜索结果读取失败。");
-      setSearchRows(current=>mergePlayers(current,payload.data!));setSearchPage(payload.page??nextPage);setSearchHasMore(Boolean(payload.hasMore));setSearchTotal(payload.total??searchTotal);
-    }finally{setSearching(false)}
-  };
+  const canShowMore=needle ? visible.length<filtered.length : visible.length<filtered.length||filtered.length<counts[group];
 
   const showMore=async()=>{
-    if(query.trim()){
-      if(visible.length>=filtered.length&&searchHasMore)await loadMoreSearch();
-      setLimit(value=>value+PAGE_SIZE);
-      return;
-    }
+    if(needle){setLimit(value=>value+PAGE_SIZE);return}
     if(visible.length>=filtered.length&&filtered.length<counts[group])await loadNextPage();
     setLimit(value=>value+PAGE_SIZE);
   };
@@ -198,10 +193,13 @@ function PlayerBrowser({players,counts,loadingMore,loadNextPage}:{players:Public
     <section className={styles.hero}><div><small>球员数据库</small><h1>球员数据</h1><p>查看华彩系列赛球员档案、参赛成绩与积分数据</p></div><label><span>⌕</span><input value={query} onChange={event=>{setQuery(event.target.value);setLimit(PAGE_SIZE)}} placeholder="搜索球员姓名"/></label></section>
     <section className={styles.listCard}>
       <header className={styles.listHead}><div><small>公开球员</small><h2>{query?`“${query}”的结果`:"全部球员"}</h2></div><div className={styles.groupFilters}>{(["全部","少年组","青年组"] as FilterGroup[]).map(item=><button className={group===item?styles.active:""} onClick={()=>{setGroup(item);setLimit(PAGE_SIZE)}} key={item}>{item}</button>)}</div></header>
-      <div className={styles.countLine}><span>{searching&&query.trim()?"正在搜索全部球员…":`共 ${totalForView} 人`}</span><small>按总积分从高到低排序 · 同名选手按身份 ID 区分</small></div>
+      <div className={styles.countLine}>
+        <span>{needle&&searchIndexLoading?`已即时匹配 ${filtered.length} 人 · 正在补齐完整球员索引…`:`共 ${totalForView} 人`}</span>
+        <small>{needle?"输入即筛选；完整索引到达后会自动补充结果":"按总积分从高到低排序 · 同名选手按身份 ID 区分"}</small>
+      </div>
       <div className={styles.playerGrid}>{visible.map(player=><button className={styles.playerCard} onClick={()=>openPlayer(player.id)} onPointerEnter={()=>prefetchPlayer(player.id)} onPointerDown={()=>prefetchPlayer(player.id)} onFocus={()=>prefetchPlayer(player.id)} key={player.id} title={`总积分 ${formatPoints(player.totalPoints)}`}><PlayerAvatar name={player.name}/><div className={styles.playerCopy}><strong>{player.displayName}</strong><small><b>{player.groupCode}</b>{player.group} · {player.stationCount}站 · 最好 {player.bestResult}</small></div><i>{loadingId===player.id?"…":"›"}</i></button>)}</div>
-      {canShowMore?<button className={styles.more} disabled={loadingMore||searching} onClick={showMore}>{loadingMore||searching?"正在读取更多球员…":`显示更多（还有 ${remaining} 人）`}</button>:null}
-      {!searching&&!filtered.length?<div className={styles.empty}>没有找到符合条件的球员</div>:null}
+      {canShowMore?<button className={styles.more} disabled={loadingMore} onClick={showMore}>{loadingMore?"正在读取更多球员…":`显示更多（还有 ${remaining} 人）`}</button>:null}
+      {!filtered.length?<div className={styles.empty}>{needle&&searchIndexLoading?"当前已加载球员中暂未匹配，完整索引正在后台补充…":"没有找到符合条件的球员"}</div>:null}
     </section>
     {selected?<DetailPanel detail={selected} onClose={()=>setSelected(null)}/>:null}
   </div>;
@@ -211,6 +209,8 @@ export default function PlayerDbView() {
   const [players,setPlayers]=useState<PublicPlayerSummary[]>(()=>persistedPlayers);
   const [counts,setCounts]=useState<PlayerCounts>(()=>persistedCounts);
   const [loadedPage,setLoadedPage]=useState(()=>persistedLoadedPage);
+  const [searchIndex,setSearchIndex]=useState<PublicPlayerSummary[]>(()=>persistedSearchIndex);
+  const [searchIndexLoading,setSearchIndexLoading]=useState(()=>!persistedSearchIndex.length);
   const [loading,setLoading]=useState(()=>persistedLoadedPage===0);
   const [loadingMore,setLoadingMore]=useState(false);
   const [error,setError]=useState("");
@@ -250,8 +250,24 @@ export default function PlayerDbView() {
   };
 
   useEffect(()=>{
-    if(loaded.current||loadingRef.current)return;
     let cancelled=false;
+    const warmSearchIndex=()=>{
+      if(persistedSearchIndex.length){
+        setSearchIndex(persistedSearchIndex);setSearchIndexLoading(false);return;
+      }
+      setSearchIndexLoading(true);
+      void requestSearchIndex().then((rows)=>{
+        if(cancelled)return;
+        if(rows.length)setSearchIndex(rows);
+        setSearchIndexLoading(false);
+      });
+    };
+
+    if(loaded.current||loadingRef.current){
+      const timer=window.setTimeout(warmSearchIndex,120);
+      return()=>{cancelled=true;window.clearTimeout(timer)};
+    }
+
     const load=async()=>{
       loadingRef.current=true;setLoading(true);setError("");
       try{
@@ -264,6 +280,7 @@ export default function PlayerDbView() {
         loaded.current=true;
         if(!cancelled){setPlayers(payload.data);setCounts(nextCounts);setLoadedPage(1)}
         window.setTimeout(()=>{void prefetchPage(2)},150);
+        window.setTimeout(warmSearchIndex,260);
       }catch(reason){if(!cancelled)setError(reason instanceof Error?reason.message:"球员数据读取失败。")}
       finally{loadingRef.current=false;if(!cancelled)setLoading(false)}
     };
@@ -273,5 +290,5 @@ export default function PlayerDbView() {
 
   if(loading&&!players.length)return <PlayerLoadingShell/>;
   if(error&&!players.length)return <div className={styles.root}><section className={styles.listCard}><div className={styles.empty}>{error}</div></section></div>;
-  return <PlayerBrowser players={players} counts={counts} loadingMore={loadingMore} loadNextPage={loadNextPage}/>;
+  return <PlayerBrowser players={players} counts={counts} searchIndex={searchIndex} searchIndexLoading={searchIndexLoading} loadingMore={loadingMore} loadNextPage={loadNextPage}/>;
 }
