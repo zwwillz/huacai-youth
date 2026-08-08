@@ -4,6 +4,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
+import { PersonalCenterLoadingShell, PlayerLoadingShell } from "./public-view-loading";
 import type { PublicCompetitionTab } from "./public-competition-live-v2";
 import type { EventData, Group, Station } from "./public-types";
 import type { PublicContentState } from "@/db/public-content";
@@ -13,8 +14,13 @@ type EventTab = "overview" | "rules" | "schedule" | "matches" | "rankings" | "gu
 type GuideKind = "transport" | "clothing";
 
 const PublicCompetitionLiveV2 = dynamic(() => import("./public-competition-live-v2"), { ssr: false });
-const PlayerDbView = dynamic(() => import("./player-db-view"), { ssr: false });
-const MePreview = dynamic(() => import("./me-preview"), { ssr: false });
+const PlayerDbView = dynamic(() => import("./player-db-view"), { ssr: false, loading: () => <PlayerLoadingShell /> });
+const MePreview = dynamic(() => import("./me-preview"), { ssr: false, loading: () => <PersonalCenterLoadingShell /> });
+
+function preloadMainView(view: MainView) {
+  if (view === "players") void import("./player-db-view");
+  if (view === "me") void import("./me-preview");
+}
 
 function EventCenter({data,openEvent}:{data:EventData;openEvent:(id:string)=>void}) {
   const [year,setYear]=useState(2026);
@@ -115,9 +121,6 @@ function PublicModuleEmpty({ icon, title, description }: { icon: string; title: 
   return <section className="public-module-state" role="status"><div><span>{icon}</span><h2>{title}</h2><p>{description}<br />感谢关注，最新信息会在确认后及时更新。</p></div></section>;
 }
 
-function Players(){return <div className="stack"><section className="player-hero"><h1>球员数据</h1><p>正在载入公开球员档案、参赛成绩与积分数据。</p></section><section className="public-module-state" aria-busy="true"><div><span>…</span><h2>正在读取球员数据</h2><p>首次打开后会保存在浏览器缓存中。</p></div></section></div>}
-function Me(){return <div className="stack"><section className="profile"><div>选</div><span><h1>个人中心</h1><p>登录后查看报名、赛程、成绩与积分。</p></span></section><section className="quick">{[["报名","我的报名","审核及缴费状态"],["赛程","我的比赛","检录、时间和球台"],["成绩","参赛记录","排名与赛事积分"],["家长","选手管理","绑定青少年选手"]].map(item=><article key={item[0]}><span>{item[0]}</span><strong>{item[1]}</strong><small>{item[2]}</small></article>)}</section><section className="card signin"><div><small>后续功能</small><h2>账户功能下一阶段接入</h2><p>当前阶段先完善公开赛事、竞赛规程、赛程和对阵图；报名、裁判及组委会操作将在下一阶段接入。</p></div><button>体验登录流程</button></section></div>}
-
 function ParticipantGuide({kind,onBack}:{kind:GuideKind;onBack:()=>void}){
   const isClothing=kind==="clothing";
   return <div className="guide-page stack"><button className="draw-back" onClick={onBack}>‹ 返回赛事概览</button><section className="guide-hero"><span>{isClothing?"装":"行"}</span><div><small>参赛友好提示</small><h1>{isClothing?"服装要求":"交通住宿攻略"}</h1><p>2026中国华彩十六球青少年系列赛廊坊站</p></div></section><section className="card guide-placeholder"><span>待</span><h2>待组委会更新</h2><p>{isClothing?"参赛服装、鞋履及现场着装要求将在组委会确认后更新。":"场馆交通路线、停车信息及周边住宿建议将在组委会确认后更新。"}</p></section></div>;
@@ -133,15 +136,13 @@ export default function EventApp({ data, contentStates }: { data: EventData; con
   const activeCompetitionTab = tab === "schedule" || tab === "matches" || tab === "rankings" ? tab as PublicCompetitionTab : null;
 
   const openEvent = (id: string) => {
-    // This is user-initiated work: start loading the competition UI only after
-    // an event is opened instead of competing with homepage hydration.
     void import("./public-competition-live-v2");
     setSelectedId(id);
     setTab("overview");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const back = () => { setSelectedId(null); setTab("overview"); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const enter = (nextView: MainView) => { setView(nextView); if (nextView === "event") setSelectedId(null); };
+  const enter = (nextView: MainView) => { preloadMainView(nextView); setView(nextView); if (nextView === "event") setSelectedId(null); };
   const title = view === "players" ? "球员数据" : view === "me" ? "个人中心" : station?.city || "赛事中心";
   const openGuide = (kind: GuideKind) => { setGuideKind(kind); setTab("guide"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const changeTab = (nextTab: EventTab) => { setTab(nextTab); window.scrollTo({ top: 0, behavior: "smooth" }); };
@@ -153,7 +154,10 @@ export default function EventApp({ data, contentStates }: { data: EventData; con
   return <main data-huacai-view={view} data-huacai-station={selectedId ?? ""} data-huacai-tab={tab}>
     <header className="top"><button className="brand" onClick={() => { setView("event"); back(); }}><span>华</span><strong>华彩赛事</strong></button><h3>{title}</h3><a className="admin" href="/admin">组委会入口</a></header>
     <div className="layout">
-      <aside className="side">{[["event", "赛", "赛事", "官方赛事与赛程"], ["players", "员", "球员", "球员档案与数据"], ["me", "我", "我的", "报名、比赛与积分"]].map((item) => <button className={view === item[0] ? "active" : ""} onClick={() => enter(item[0] as MainView)} key={item[0]}><span>{item[1]}</span><div><strong>{item[2]}</strong><small>{item[3]}</small></div></button>)}</aside>
+      <aside className="side">{[["event", "赛", "赛事", "官方赛事与赛程"], ["players", "员", "球员", "球员档案与数据"], ["me", "我", "我的", "报名、比赛与积分"]].map((item) => {
+        const nextView=item[0] as MainView;
+        return <button className={view === item[0] ? "active" : ""} onPointerEnter={() => preloadMainView(nextView)} onPointerDown={() => preloadMainView(nextView)} onFocus={() => preloadMainView(nextView)} onClick={() => enter(nextView)} key={item[0]}><span>{item[1]}</span><div><strong>{item[2]}</strong><small>{item[3]}</small></div></button>;
+      })}</aside>
       <div className="content">
         {view === "event" && !station && <EventCenter data={data} openEvent={openEvent} />}
         {view === "event" && station && <>
@@ -166,10 +170,13 @@ export default function EventApp({ data, contentStates }: { data: EventData; con
           {tab === "rules" && (contentState?.publishedModules.includes("regulation") ? <CompetitionRules station={station} contentState={contentState} /> : <PublicModuleEmpty icon="规" title="本站竞赛规程正在完善中" description="待组委会确认后，将在这里发布正式规程、参赛要求和相关文件。" />)}
           <PublicCompetitionLiveV2 station={station} contentState={contentState} activeTab={activeCompetitionTab} />
         </>}
-        {view === "players" && <><Players /><PlayerDbView /></>}
-        {view === "me" && <><Me /><MePreview /></>}
+        {view === "players" && <PlayerDbView />}
+        {view === "me" && <MePreview />}
       </div>
     </div>
-    <nav className="bottom">{[["event", "赛", "赛事"], ["players", "员", "球员"], ["me", "我", "我的"]].map((item) => <button className={view === item[0] ? "active" : ""} onClick={() => enter(item[0] as MainView)} key={item[0]}><span>{item[1]}</span><strong>{item[2]}</strong></button>)}</nav>
+    <nav className="bottom">{[["event", "赛", "赛事"], ["players", "员", "球员"], ["me", "我", "我的"]].map((item) => {
+      const nextView=item[0] as MainView;
+      return <button className={view === item[0] ? "active" : ""} onPointerEnter={() => preloadMainView(nextView)} onPointerDown={() => preloadMainView(nextView)} onFocus={() => preloadMainView(nextView)} onClick={() => enter(nextView)} key={item[0]}><span>{item[1]}</span><strong>{item[2]}</strong></button>;
+    })}</nav>
   </main>;
 }
