@@ -13,6 +13,8 @@ type EventTab = "overview" | "rules" | "schedule" | "matches" | "rankings" | "gu
 type GuideKind = "transport" | "clothing";
 
 const PublicCompetitionLiveV2 = dynamic(() => import("./public-competition-live-v2"), { ssr: false });
+const PlayerDbView = dynamic(() => import("./player-db-view"), { ssr: false });
+const MePreview = dynamic(() => import("./me-preview"), { ssr: false });
 
 function EventCenter({data,openEvent}:{data:EventData;openEvent:(id:string)=>void}) {
   const [year,setYear]=useState(2026);
@@ -130,7 +132,14 @@ export default function EventApp({ data, contentStates }: { data: EventData; con
   const contentState = station ? contentStates.find((item) => item.eventId === station.eventId) : undefined;
   const activeCompetitionTab = tab === "schedule" || tab === "matches" || tab === "rankings" ? tab as PublicCompetitionTab : null;
 
-  const openEvent = (id: string) => { setSelectedId(id); setTab("overview"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const openEvent = (id: string) => {
+    // This is user-initiated work: start loading the competition UI only after
+    // an event is opened instead of competing with homepage hydration.
+    void import("./public-competition-live-v2");
+    setSelectedId(id);
+    setTab("overview");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const back = () => { setSelectedId(null); setTab("overview"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const enter = (nextView: MainView) => { setView(nextView); if (nextView === "event") setSelectedId(null); };
   const title = view === "players" ? "球员数据" : view === "me" ? "个人中心" : station?.city || "赛事中心";
@@ -140,20 +149,6 @@ export default function EventApp({ data, contentStates }: { data: EventData; con
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("huacai:navigation", { detail: { view, stationId: selectedId ?? "", tab } }));
   }, [view, selectedId, tab]);
-
-  useEffect(() => {
-    const windowWithIdle = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-      cancelIdleCallback?: (handle: number) => void;
-    };
-    const preloadCompetition = () => { void import("./public-competition-live-v2"); };
-    if (windowWithIdle.requestIdleCallback) {
-      const handle = windowWithIdle.requestIdleCallback(preloadCompetition, { timeout: 1_500 });
-      return () => windowWithIdle.cancelIdleCallback?.(handle);
-    }
-    const handle = window.setTimeout(preloadCompetition, 500);
-    return () => window.clearTimeout(handle);
-  }, []);
 
   return <main data-huacai-view={view} data-huacai-station={selectedId ?? ""} data-huacai-tab={tab}>
     <header className="top"><button className="brand" onClick={() => { setView("event"); back(); }}><span>华</span><strong>华彩赛事</strong></button><h3>{title}</h3><a className="admin" href="/admin">组委会入口</a></header>
@@ -171,8 +166,8 @@ export default function EventApp({ data, contentStates }: { data: EventData; con
           {tab === "rules" && (contentState?.publishedModules.includes("regulation") ? <CompetitionRules station={station} contentState={contentState} /> : <PublicModuleEmpty icon="规" title="本站竞赛规程正在完善中" description="待组委会确认后，将在这里发布正式规程、参赛要求和相关文件。" />)}
           <PublicCompetitionLiveV2 station={station} contentState={contentState} activeTab={activeCompetitionTab} />
         </>}
-        {view === "players" && <Players />}
-        {view === "me" && <Me />}
+        {view === "players" && <><Players /><PlayerDbView /></>}
+        {view === "me" && <><Me /><MePreview /></>}
       </div>
     </div>
     <nav className="bottom">{[["event", "赛", "赛事"], ["players", "员", "球员"], ["me", "我", "我的"]].map((item) => <button className={view === item[0] ? "active" : ""} onClick={() => enter(item[0] as MainView)} key={item[0]}><span>{item[1]}</span><strong>{item[2]}</strong></button>)}</nav>
