@@ -8,30 +8,38 @@ export type AdminPrincipal = {
   role: BackendRole;
   displayName: string;
 };
-export type AdminPrincipalInput = string | AdminPrincipal;
+export type AdminPrincipalLike = {
+  id: string;
+  username: string;
+  role: string;
+  displayName: string;
+};
+export type AdminPrincipalInput = string | AdminPrincipalLike;
 export type EventAccessViewer = AdminPrincipal & {
   eventMemberRole: string | null;
 };
 
 type LoadedEventAccessViewer = EventAccessViewer & { hasEventAccess: boolean };
 
-export function isAdminPrincipal(value: AdminPrincipalInput): value is AdminPrincipal {
-  return typeof value !== "string";
+function asBackendRole(value: string): BackendRole {
+  if (value === "system_admin" || value === "committee" || value === "referee") return value;
+  throw new Error("当前账号角色无效或尚未获得后台权限。");
 }
 
 const loadActivePrincipal = cache(async (username: string): Promise<AdminPrincipal | null> => {
   const sql = getSqlClient();
-  const rows = await sql<AdminPrincipal[]>`
+  const rows = await sql<Array<AdminPrincipalLike>>`
     select id,username,role,display_name as "displayName"
     from public.users
     where username=${username} and status='active'
     limit 1
   `;
-  return rows[0] ?? null;
+  const row = rows[0];
+  return row ? { ...row, role: asBackendRole(row.role) } : null;
 });
 
 export async function resolveAdminPrincipal(input: AdminPrincipalInput): Promise<AdminPrincipal> {
-  if (isAdminPrincipal(input)) return input;
+  if (typeof input !== "string") return { id: input.id, username: input.username, displayName: input.displayName, role: asBackendRole(input.role) };
   const principal = await loadActivePrincipal(input);
   if (!principal) throw new Error("当前账号尚未获得后台权限。");
   return principal;
@@ -39,7 +47,7 @@ export async function resolveAdminPrincipal(input: AdminPrincipalInput): Promise
 
 const loadEventAccessViewer = cache(async (username: string, eventId: string) => {
   const sql = getSqlClient();
-  const rows = await sql<LoadedEventAccessViewer[]>`
+  const rows = await sql<Array<AdminPrincipalLike & { eventMemberRole: string | null; hasEventAccess: boolean }>>`
     select u.id,u.username,u.role,u.display_name as "displayName",
       em.role as "eventMemberRole",(em.id is not null) as "hasEventAccess"
     from public.users u
@@ -48,7 +56,8 @@ const loadEventAccessViewer = cache(async (username: string, eventId: string) =>
     where u.username=${username} and u.status='active'
     limit 1
   `;
-  return rows[0] ?? null;
+  const row = rows[0];
+  return row ? { ...row, role: asBackendRole(row.role) } as LoadedEventAccessViewer : null;
 });
 
 const loadPrincipalEventMembership = cache(async (userId: string, eventId: string) => {
@@ -99,9 +108,10 @@ export async function requireEventAccess(
     };
   }
 
-  assertAdminRole(input, allowedRoles, deniedMessage);
-  if (input.role === "system_admin") return { ...input, eventMemberRole: null };
-  const membership = await loadPrincipalEventMembership(input.id, eventId);
+  const principal = await resolveAdminPrincipal(input);
+  assertAdminRole(principal, allowedRoles, deniedMessage);
+  if (principal.role === "system_admin") return { ...principal, eventMemberRole: null };
+  const membership = await loadPrincipalEventMembership(principal.id, eventId);
   if (!membership) throw new Error("当前账号未被分配到这场赛事，不能读取或修改本站数据。");
-  return { ...input, eventMemberRole: membership.role };
+  return { ...principal, eventMemberRole: membership.role };
 }
