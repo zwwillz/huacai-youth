@@ -46,12 +46,13 @@ export default function CompetitionOverviewClient({ initialData }: { initialData
       const currentRequest = ++requestId.current;
       const cached = cache.get(eventId);
       setError("");
-      if (cached) {
+      if (cached && Date.now() - cached.at < CACHE_TTL) {
         setData(cached.data);
         const groupId = cached.data.groups[0]?.id || "";
         setSelectedGroupId(groupId);
         replaceUrl(eventId, groupId);
-        if (Date.now() - cached.at < CACHE_TTL) { setLoading(false); return; }
+        setLoading(false);
+        return;
       }
       setLoading(true);
       void fetch(`/api/admin/competition/overview?eventId=${encodeURIComponent(eventId)}`, { cache: "no-store" })
