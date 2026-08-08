@@ -1,6 +1,6 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
-import { getCompetitionContextData } from "@/db/competition-context";
-import { confirmMatchResult, getScoringWorkspaceData, submitMatchResult } from "@/db/scoring-engine";
+import { getScoringWorkspaceBundleFast } from "@/db/scoring-fast";
+import { confirmMatchResult, submitMatchResult } from "@/db/scoring-engine";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,20 +13,14 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const eventId = url.searchParams.get("eventId") || "";
     if (!eventId) throw new Error("缺少赛事ID。");
-    const filters = {
+    const bundle = await getScoringWorkspaceBundleFast(viewer, eventId, {
       groupId: url.searchParams.get("group") || undefined,
       phaseCode: url.searchParams.get("phase") || undefined,
       date: url.searchParams.get("date") || undefined,
       showConfirmed: url.searchParams.get("view") === "all",
-    };
-    if (url.searchParams.get("context") === "1") {
-      const [data, context] = await Promise.all([
-        getScoringWorkspaceData(viewer.username, eventId, filters),
-        getCompetitionContextData(viewer.username, eventId),
-      ]);
-      return Response.json({ data, context }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
-    }
-    return Response.json({ data: await getScoringWorkspaceData(viewer.username, eventId, filters) }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
+    });
+    const payload = url.searchParams.get("context") === "1" ? bundle : { data: bundle.data };
+    return Response.json(payload, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "比分数据读取失败。" }, { status: 400 });
   }
