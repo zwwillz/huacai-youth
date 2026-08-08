@@ -1,0 +1,9 @@
+{
+  "nodeVersion": "22.17.1",
+  "cloudFunctions": {
+    "overseasRegions": ["ap-singapore"],
+    "nodejs": {
+      "maxDuration": 60
+    }
+  }
+}
