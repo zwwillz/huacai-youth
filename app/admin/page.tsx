@@ -8,10 +8,10 @@ import { eventStatusLabel } from "./admin-status";
 
 export const dynamic = "force-dynamic";
 
-type Section = "dashboard" | "registrations" | "players" | "rankings";
+type Section = "dashboard" | "registrations" | "rankings";
 
 function normalizeSection(value?: string): Section {
-  return (["registrations", "players", "rankings"] as Section[]).includes(value as Section) ? value as Section : "dashboard";
+  return (["registrations", "rankings"] as Section[]).includes(value as Section) ? value as Section : "dashboard";
 }
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ section?: string; event?: string }> }) {
@@ -21,21 +21,21 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   if (query.section === "events") redirect("/admin/events");
   if (query.section === "content") redirect("/admin/content");
   if (query.section === "competition") redirect("/admin/competition");
+  if (query.section === "players") redirect(`/admin/players${query.event ? `?event=${encodeURIComponent(query.event)}` : ""}`);
   if (query.section === "accounts") redirect("/admin/accounts");
   if (query.section === "logs") redirect("/admin/logs");
 
   const data = await getAdminHomeData(viewer.username);
   let section = normalizeSection(query.section);
-  if (viewer.role === "referee" && !["dashboard", "players"].includes(section)) section = "dashboard";
+  if (viewer.role === "referee" && section !== "dashboard") section = "dashboard";
 
   const events = data.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }));
   const currentEventId = data.events.some((event) => event.id === query.event) ? query.event : data.events[0]?.id;
   const currentEvent = data.events.find((event) => event.id === currentEventId);
-  const eventScoped = section === "registrations" || section === "players";
+  const eventScoped = section === "registrations";
   const titles = {
     dashboard: ["工作台", "全局总览与待办"],
     registrations: ["报名审核", "赛事运营 · 当前赛事"],
-    players: ["球员管理", "赛事运营 · 本站球员与球员总库"],
     rankings: ["排名积分", "全局 · 总积分与分站排名"],
   } as const;
   const [pageTitle, pageHint] = titles[section];
@@ -51,7 +51,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   >
     {section === "dashboard" && <Dashboard data={data} viewerRole={viewer.role} />}
     {section === "registrations" && <ScopedPlaceholder title="报名审核" eventTitle={currentEvent?.shortTitle} description="报名审核后续会在这里处理报名资料、组别、审核状态和缴费/确认状态。当前先统一到新的后台结构。" />}
-    {section === "players" && <ScopedPlaceholder title="球员管理" eventTitle={currentEvent?.shortTitle} description="这里将分为“本站参赛球员”和“球员总库”。当前先统一页面入口，下一阶段再接球员档案、监护人和重复球员合并等功能。" />}
     {section === "rankings" && <RankingsOverview events={data.events} />}
   </AdminWorkspaceShell>;
 }
