@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
   try {
     const eventId = new URL(request.url).searchParams.get("eventId") || undefined;
-    const data = await getCompetitionDashboardData(viewer.username, eventId);
+    const data = await getCompetitionDashboardData(viewer, eventId);
     return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "竞赛总览读取失败。" }, { status: 400 });
