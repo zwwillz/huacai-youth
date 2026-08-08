@@ -163,16 +163,7 @@ function DetailSkeleton() {
   </div>;
 }
 
-function PlayerDetailDrawer({
-  state,
-  summary,
-  player,
-  loading,
-  error,
-  isSystemAdmin,
-  onClose,
-  onRetry,
-}: {
+function PlayerDetailDrawer({ state, summary, player, loading, error, isSystemAdmin, onClose, onRetry }: {
   state: ReturnState;
   summary: PlayerAdminListItem | null;
   player: PlayerAdminDetail | null;
@@ -249,15 +240,7 @@ function PlayerDetailDrawer({
   </div>;
 }
 
-export function PlayerManagementWorkspace({
-  viewerRole,
-  events,
-  initialState,
-  initialPageData,
-  initialPlayerId = "",
-  initialSuccess = "",
-  initialError = "",
-}: {
+export function PlayerManagementWorkspace({ viewerRole, events, initialState, initialPageData, initialPlayerId = "", initialSuccess = "", initialError = "" }: {
   viewerRole: string;
   events: EventOption[];
   initialState: ReturnState;
@@ -266,9 +249,6 @@ export function PlayerManagementWorkspace({
   initialSuccess?: string;
   initialError?: string;
 }) {
-  const initialCacheKey = stateKey(initialState);
-  if (!pageCache.has(initialCacheKey)) pageCache.set(initialCacheKey, { data: initialPageData, at: Date.now() });
-
   const [state, setState] = useState(initialState);
   const [pageData, setPageData] = useState(initialPageData);
   const [queryInput, setQueryInput] = useState(initialState.q);
@@ -281,14 +261,20 @@ export function PlayerManagementWorkspace({
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
   const listRequestId = useRef(0);
+  const detailRequestId = useRef(0);
 
   const currentEvent = useMemo(() => events.find((event) => event.id === state.event), [events, state.event]);
   const totalPages = Math.max(1, Math.ceil(pageData.filteredTotal / pageData.pageSize));
+
+  useEffect(() => {
+    pageCache.set(stateKey(initialState), { data: initialPageData, at: Date.now() });
+  }, [initialPageData, initialState]);
 
   const fetchList = async (nextState: ReturnState, force = false) => {
     const key = stateKey(nextState);
     const cached = pageCache.get(key);
     const requestId = ++listRequestId.current;
+    detailRequestId.current += 1;
     setState(nextState);
     setQueryInput(nextState.q);
     setSelectedId("");
@@ -324,6 +310,7 @@ export function PlayerManagementWorkspace({
 
   const loadDetail = async (playerId: string, summary: PlayerAdminListItem | null, force = false) => {
     if (!playerId) return;
+    const requestId = ++detailRequestId.current;
     setSelectedId(playerId);
     setSelectedSummary(summary);
     setDetailError("");
@@ -355,13 +342,14 @@ export function PlayerManagementWorkspace({
       }
       const detail = await request;
       detailCache.set(playerId, { data: detail, at: Date.now() });
-      if (selectedId && selectedId !== playerId) return;
+      if (requestId !== detailRequestId.current) return;
       setSelectedDetail(detail);
     } catch (requestError) {
+      if (requestId !== detailRequestId.current) return;
       setDetailError(requestError instanceof Error ? requestError.message : "球员详情读取失败。");
     } finally {
       detailRequests.delete(playerId);
-      setDetailLoading(false);
+      if (requestId === detailRequestId.current) setDetailLoading(false);
     }
   };
 
@@ -370,7 +358,7 @@ export function PlayerManagementWorkspace({
     const summary = initialPageData.items.find((item) => item.id === initialPlayerId) || null;
     const timer = window.setTimeout(() => { void loadDetail(initialPlayerId, summary); }, 0);
     return () => window.clearTimeout(timer);
-    // The direct-link player id only needs to be hydrated once on first mount.
+    // Direct-link detail hydration only runs on the first mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -381,6 +369,7 @@ export function PlayerManagementWorkspace({
   };
 
   const closeDetail = () => {
+    detailRequestId.current += 1;
     setSelectedId("");
     setSelectedSummary(null);
     setSelectedDetail(null);
@@ -427,16 +416,6 @@ export function PlayerManagementWorkspace({
       {totalPages > 1 && <nav className="player-pagination" aria-label="球员分页"><button type="button" disabled={state.page <= 1} onClick={() => { void fetchList({ ...state, page: Math.max(1, state.page - 1) }); }}>上一页</button><span>第 {Math.min(state.page, totalPages)} / {totalPages} 页</span><button type="button" disabled={state.page >= totalPages} onClick={() => { void fetchList({ ...state, page: Math.min(totalPages, state.page + 1) }); }}>下一页</button></nav>}
     </section>
 
-    {selectedId && <PlayerDetailDrawer
-      key={selectedId}
-      state={state}
-      summary={selectedSummary}
-      player={selectedDetail}
-      loading={detailLoading}
-      error={detailError}
-      isSystemAdmin={viewerRole === "system_admin"}
-      onClose={closeDetail}
-      onRetry={() => { void loadDetail(selectedId, selectedSummary, true); }}
-    />}
+    {selectedId && <PlayerDetailDrawer key={selectedId} state={state} summary={selectedSummary} player={selectedDetail} loading={detailLoading} error={detailError} isSystemAdmin={viewerRole === "system_admin"} onClose={closeDetail} onRetry={() => { void loadDetail(selectedId, selectedSummary, true); }} />}
   </main>;
 }
