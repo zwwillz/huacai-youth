@@ -1,4 +1,4 @@
-import { getPlayerAdminDetail } from "@/db/player-admin-v2";
+import { getPlayerAdminDetailFast } from "@/db/player-admin-fast";
 import { getAdminViewer } from "@/app/admin/admin-viewer";
 
 export const dynamic = "force-dynamic";
@@ -12,14 +12,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ play
   try {
     const { playerId } = await params;
     const url = new URL(request.url);
-    const data = await getPlayerAdminDetail(viewer.username, playerId, url.searchParams.get("event"));
+    const data = await getPlayerAdminDetailFast(viewer, playerId, url.searchParams.get("event"));
     if (!data) return Response.json({ error: "没有找到球员档案，或当前账号没有查看权限。" }, { status: 404 });
-    return Response.json({ data }, {
-      headers: {
-        "Cache-Control": "private, no-store",
-        "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}`,
-      },
-    });
+    return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "球员详情读取失败。" }, { status: 500 });
   }
