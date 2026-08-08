@@ -9,11 +9,13 @@ type QueryMessage = {
   params?: unknown[];
   mode?: QueryMode;
 };
+type BatchQueryMessage = { type: "batch"; queries: QueryMessage[] };
 type ControlMessage = { id?: string; type: "commit" | "rollback" };
 type TransactionMessage = QueryMessage | ControlMessage;
 
 const MAX_QUERY_LENGTH = 250_000;
 const MAX_PARAMS = 2_000;
+const MAX_BATCH_QUERIES = 50;
 
 function decodeJwtPayload(token: string) {
   const parts = token.split(".");
@@ -117,18 +119,26 @@ function createDatabaseClient() {
   });
 }
 
-async function handleQuery(request: Request) {
-  let message: QueryMessage;
+async function handleHttpRequest(request: Request) {
+  let message: QueryMessage | BatchQueryMessage;
   try {
     message = await request.json();
   } catch {
     return json({ ok: false, error: { message: "请求内容不是有效 JSON。" } }, 400);
   }
-  if (message.type !== "query") return json({ ok: false, error: { message: "不支持的数据库操作。" } }, 400);
+  if (message.type !== "query" && message.type !== "batch") {
+    return json({ ok: false, error: { message: "不支持的数据库操作。" } }, 400);
+  }
+  const queries = message.type === "batch" ? message.queries : [message];
+  if (!Array.isArray(queries) || queries.length < 1 || queries.length > MAX_BATCH_QUERIES) {
+    return json({ ok: false, error: { message: "批量查询数量不正确。" } }, 400);
+  }
   const sql = createDatabaseClient();
   try {
-    const rows = await execute(sql, message);
-    return new Response(JSON.stringify({ ok: true, rows }, encode), {
+    const results = [];
+    for (const query of queries) results.push({ ok: true, rows: await execute(sql, query) });
+    const payload = message.type === "batch" ? { ok: true, results } : { ok: true, rows: results[0].rows };
+    return new Response(JSON.stringify(payload, encode), {
       headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
     });
   } catch (error) {
@@ -207,5 +217,5 @@ Deno.serve((request: Request) => {
   if (!isServiceRoleRequest(request)) return json({ ok: false, error: { message: "仅允许受信任的后台服务调用。" } }, 403);
   if (request.headers.get("upgrade")?.toLowerCase() === "websocket") return handleTransaction(request);
   if (request.method !== "POST") return json({ ok: false, error: { message: "仅支持 POST 请求。" } }, 405);
-  return handleQuery(request);
+  return handleHttpRequest(request);
 });
