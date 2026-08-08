@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { CompetitionPublicationModule } from "@/db/competition-context";
 import { useAdminActionDialog } from "../admin-action-dialog";
@@ -13,19 +12,27 @@ type Props = {
   hasUnpublishedChanges?: boolean;
   viewerRole: string;
   hint: string;
+  onChanged?: (status: string, hasUnpublishedChanges: boolean) => void;
 };
+type LocalPublicationState = { sourceKey: string; status: string; dirty: boolean };
+type LocalMessage = { sourceKey: string; text: string; tone: "success" | "error" };
 
-export default function CompetitionPublicationBar({ eventId, moduleType, title, status, hasUnpublishedChanges = false, viewerRole, hint }: Props) {
-  const router = useRouter();
+export default function CompetitionPublicationBar({ eventId, moduleType, title, status, hasUnpublishedChanges = false, viewerRole, hint, onChanged }: Props) {
+  const sourceKey = `${eventId}:${moduleType}:${status}:${hasUnpublishedChanges ? "1" : "0"}`;
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ text: string; tone: "success" | "error" } | null>(null);
+  const [message, setMessage] = useState<LocalMessage | null>(null);
+  const [localState, setLocalState] = useState<LocalPublicationState | null>(null);
   const { ask, dialog } = useAdminActionDialog();
+
+  const currentStatus = localState?.sourceKey === sourceKey ? localState.status : status;
+  const dirty = localState?.sourceKey === sourceKey ? localState.dirty : hasUnpublishedChanges;
+  const visibleMessage = message?.sourceKey === sourceKey ? message : null;
   const canWrite = viewerRole === "system_admin" || viewerRole === "committee";
-  const published = status === "published";
-  const needsPublish = !published || hasUnpublishedChanges;
+  const published = currentStatus === "published";
+  const needsPublish = !published || dirty;
   const stateLabel = published
-    ? hasUnpublishedChanges ? "用户端保持上一版 · 有更新待发布" : "用户端已发布"
-    : hasUnpublishedChanges ? "后台已保存 · 待首次发布" : "尚未发布";
+    ? dirty ? "用户端保持上一版 · 有更新待发布" : "用户端已发布"
+    : dirty ? "后台已保存 · 待首次发布" : "尚未发布";
 
   async function change(nextStatus: "draft" | "published") {
     const text = nextStatus === "published"
@@ -40,18 +47,22 @@ export default function CompetitionPublicationBar({ eventId, moduleType, title, 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ eventId, moduleType, status: nextStatus }),
       });
-      const result = await response.json();
+      const result = await response.json() as { data?: { publications?: Record<string, { status: string; hasUnpublishedChanges: boolean }> }; error?: string };
       if (!response.ok) throw new Error(result.error || "发布状态更新失败。");
-      setMessage({ text: nextStatus === "published" ? "新版本已经发布，用户端已切换到本次正式快照。" : "已从用户端撤回，后台数据仍完整保留。", tone: "success" });
-      router.refresh();
-    } catch (error) { setMessage({ text: error instanceof Error ? error.message : "发布状态更新失败。", tone: "error" }); }
+      const next = result.data?.publications?.[moduleType];
+      const nextState = next?.status || nextStatus;
+      const nextDirty = next?.hasUnpublishedChanges ?? false;
+      setLocalState({ sourceKey, status: nextState, dirty: nextDirty });
+      onChanged?.(nextState, nextDirty);
+      setMessage({ sourceKey, text: nextStatus === "published" ? "新版本已经发布，用户端已切换到本次正式快照。" : "已从用户端撤回，后台数据仍完整保留。", tone: "success" });
+    } catch (error) { setMessage({ sourceKey, text: error instanceof Error ? error.message : "发布状态更新失败。", tone: "error" }); }
     finally { setBusy(false); }
   }
 
   return <><section className="competition-publication-bar">
     <div className="competition-publication-copy">
-      <span className={`competition-publication-status ${published && !hasUnpublishedChanges ? "published" : "draft"}`}>{stateLabel}</span>
-      <div><strong>{title}</strong><p className={message?.tone}>{message?.text || hint}</p><small className="competition-publication-flow">后台保存 → 组委会复核 → 发布用户端</small></div>
+      <span className={`competition-publication-status ${published && !dirty ? "published" : "draft"}`}>{stateLabel}</span>
+      <div><strong>{title}</strong><p className={visibleMessage?.tone}>{visibleMessage?.text || hint}</p><small className="competition-publication-flow">后台保存 → 组委会复核 → 发布用户端</small></div>
     </div>
     {canWrite && <div className="competition-publication-actions">
       {needsPublish && <button type="button" disabled={busy} onClick={() => change("published")}>{busy ? "发布中…" : published ? "发布更新" : "发布到用户端"}</button>}

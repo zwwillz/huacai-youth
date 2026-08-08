@@ -1,6 +1,7 @@
 import "./admin.css";
 import "./admin-workspace-shell.css";
 import "./admin-recovery.css";
+import "./admin-local-workspace.css";
 import "./competition-controls.css";
 import "./events/event-management.css";
 import "./events/event-settings-index.css";
