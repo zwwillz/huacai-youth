@@ -15,16 +15,37 @@ type TransactionMessage = QueryMessage | ControlMessage;
 const MAX_QUERY_LENGTH = 250_000;
 const MAX_PARAMS = 2_000;
 
-function isServiceRoleRequest(request: Request) {
-  const expected = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  const authorization = request.headers.get("authorization") || "";
-  const supplied = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
-  if (!expected || supplied.length !== expected.length) return false;
-  let difference = 0;
-  for (let index = 0; index < expected.length; index += 1) {
-    difference |= expected.charCodeAt(index) ^ supplied.charCodeAt(index);
+function decodeJwtPayload(token: string) {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    return JSON.parse(atob(padded)) as { role?: unknown; ref?: unknown; exp?: unknown };
+  } catch {
+    return null;
   }
-  return difference === 0;
+}
+
+function isServiceRoleRequest(request: Request) {
+  // Supabase's verify_jwt gateway validates the signature before this handler
+  // runs. Check the verified legacy JWT's authorization claims instead of
+  // comparing it byte-for-byte with a runtime secret: legacy and modern keys
+  // may coexist and are not guaranteed to have identical string values.
+  const authorization = request.headers.get("authorization") || "";
+  const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+  const claims = decodeJwtPayload(token);
+  const projectUrl = Deno.env.get("SUPABASE_URL") || "";
+  let projectRef = "";
+  try {
+    projectRef = new URL(projectUrl).hostname.split(".")[0] || "";
+  } catch {
+    return false;
+  }
+  return claims?.role === "service_role"
+    && claims.ref === projectRef
+    && typeof claims.exp === "number"
+    && claims.exp > Math.floor(Date.now() / 1000);
 }
 
 function json(value: unknown, status = 200) {
