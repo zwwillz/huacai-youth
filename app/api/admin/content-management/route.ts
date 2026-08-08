@@ -1,10 +1,7 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
-import {
-  saveContentManagementData,
-  setContentPublicationStatus,
-  type ContentManagementInput,
-} from "@/db/content-management";
+import { saveContentManagementData, type ContentManagementInput } from "@/db/content-management";
 import { getContentManagementDataFast } from "@/db/content-management-fast";
+import { setContentPublicationStatusFast } from "@/db/content-publication-fast";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +20,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
   const viewer = await getAdminViewer();
   if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
   try {
@@ -31,9 +29,11 @@ export async function POST(request: Request) {
       | { action: "publication"; eventId: string; publicationId: string; status: "draft" | "published" };
 
     if (payload.action === "publication") {
-      return Response.json({ data: await setContentPublicationStatus(viewer.username, payload.eventId, payload.publicationId, payload.status) });
+      const data = await setContentPublicationStatusFast(viewer, payload.eventId, payload.publicationId, payload.status);
+      return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
     }
-    return Response.json({ data: await saveContentManagementData(viewer.username, payload.data) });
+    const data = await saveContentManagementData(viewer.username, payload.data);
+    return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "内容保存失败。" }, { status: 400 });
   }
