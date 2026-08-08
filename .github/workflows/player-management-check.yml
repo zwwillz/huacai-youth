@@ -1,6 +1,9 @@
 name: Player management check
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - agent/player-management-v1
