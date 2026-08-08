@@ -1,11 +1,22 @@
 import { unstable_cache } from "next/cache";
 import { getCompetitionPublicationVersion, getPublishedCompetitionEvents } from "@/db/public-competition-published";
+import { getPublishedEventIds } from "@/db/public";
 import { getPublicRankings } from "@/db/rankings";
 import type { PublicCompetitionEvent, PublicLiveMatch } from "@/db/public-competition-live";
 import { publicJson } from "../../../response";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
+export const dynamicParams = true;
+export const revalidate = 300;
 export const runtime = "nodejs";
+
+export async function generateStaticParams() {
+  const useCiBuildFallback = process.env.GITHUB_ACTIONS === "true"
+    && (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (useCiBuildFallback) return [];
+  const eventIds = await getPublishedEventIds();
+  return eventIds.map((eventId) => ({ eventId }));
+}
 
 type PublicDisplayMatch = Pick<PublicLiveMatch,
   "id" | "group" | "phaseId" | "divisionNo" | "roundNo" | "roundName" | "matchCode" |
@@ -55,11 +66,6 @@ export async function GET(request: Request, context: { params: Promise<{ eventId
   try {
     const { eventId } = await context.params;
     if (!eventId) return publicJson(request, { error: "缺少赛事ID。" }, { status: 400, cache: false });
-    const url = new URL(request.url);
-    if (url.searchParams.get("versionOnly") === "1") {
-      const version = await getCompetitionPublicationVersion(eventId);
-      return publicJson(request, { data: { version } }, { cache: false, durationMs: performance.now() - startedAt });
-    }
     const [version, payload] = await Promise.all([
       getCompetitionPublicationVersion(eventId),
       getCachedPayload(eventId),

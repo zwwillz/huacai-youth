@@ -96,6 +96,16 @@ function phaseId(value: string): PhaseId | null {
   return PHASE_IDS.includes(value as PhaseId) ? value as PhaseId : null;
 }
 
+export async function getPublishedEventIds(): Promise<string[]> {
+  const db = getDb();
+  const rows = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(eq(events.publishStatus, "published"))
+    .orderBy(desc(events.year), desc(events.stationNo));
+  return rows.map((row) => row.id);
+}
+
 export async function getPublicSiteData(): Promise<EventData> {
   const db = getDb();
   const sql = getSqlClient();
