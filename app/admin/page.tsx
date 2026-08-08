@@ -69,7 +69,7 @@ function Dashboard({ data, viewerRole }: { data: Awaited<ReturnType<typeof getAd
     : `/admin/competition?event=${encodeURIComponent(eventId)}`;
 
   return <main className="admin-home">
-    <section className="admin-home-hero"><div><small>HUACAI EVENT ADMIN</small><h2>华彩赛事管理后台</h2><p>{viewerRole === "referee" ? "这里只显示分配给你的赛事。进入比分录入后，默认只看当前需要处理的比赛。" : "先选择一场赛事，再按内容发布、抽签、赛程、比分、晋级和排名的顺序处理。"}</p></div><Link href={primary.href}>{primary.label}</Link></section>
+    <section className="admin-home-hero"><div><small>HUACAI EVENT ADMIN</small><h2>华彩赛事管理后台</h2><p>{viewerRole === "referee" ? "这里只显示分配给你的赛事。进入比分录入后，默认只看当前需要处理的比赛。" : "先选择一场赛事，再按内容发布、抽签、赛程、比分、晋级和排名的顺序处理。"}</p></div><Link prefetch={false} href={primary.href}>{primary.label}</Link></section>
     <section className="admin-home-metrics">
       <article><span>可管理赛事</span><strong>{data.metrics.eventCount}</strong><small>{viewerRole === "system_admin" ? "系统内全部赛事" : "已分配给当前账号"}</small></article>
       <article><span>进行中赛事</span><strong>{data.metrics.activeEventCount}</strong><small>报名中或比赛中</small></article>
@@ -77,14 +77,14 @@ function Dashboard({ data, viewerRole }: { data: Awaited<ReturnType<typeof getAd
       <article><span>待发布内容</span><strong>{data.metrics.draftPublicationCount}</strong><small>仍处于草稿状态</small></article>
     </section>
     <section className="admin-home-grid">
-      <article className="admin-home-panel"><header><div><small>MY EVENTS</small><h3>{viewerRole === "system_admin" ? "最近赛事" : "已分配赛事"}</h3></div>{viewerRole === "system_admin" && <Link href="/admin/events">查看全部赛事 →</Link>}</header>
-        {recentEvents.length ? recentEvents.map((event) => <div className="admin-home-event" key={event.id}><span>{event.stationNo}</span><div><strong>{event.shortTitle}</strong><small>{event.city} · {event.venueName || "场馆待设置"} · {event.startDate} — {event.endDate}</small></div><Link href={eventHref(event.id)}>{viewerRole === "referee" ? "录入比分" : "继续处理"}</Link></div>) : <div className="admin-simple-empty">{viewerRole === "system_admin" ? "尚未创建赛事。" : "当前账号尚未分配赛事，请联系系统管理员。"}</div>}
+      <article className="admin-home-panel"><header><div><small>MY EVENTS</small><h3>{viewerRole === "system_admin" ? "最近赛事" : "已分配赛事"}</h3></div>{viewerRole === "system_admin" && <Link prefetch={false} href="/admin/events">查看全部赛事 →</Link>}</header>
+        {recentEvents.length ? recentEvents.map((event) => <div className="admin-home-event" key={event.id}><span>{event.stationNo}</span><div><strong>{event.shortTitle}</strong><small>{event.city} · {event.venueName || "场馆待设置"} · {event.startDate} — {event.endDate}</small></div><Link prefetch={false} href={eventHref(event.id)}>{viewerRole === "referee" ? "录入比分" : "继续处理"}</Link></div>) : <div className="admin-simple-empty">{viewerRole === "system_admin" ? "尚未创建赛事。" : "当前账号尚未分配赛事，请联系系统管理员。"}</div>}
       </article>
       <article className="admin-home-panel"><header><div><small>NEXT ACTION</small><h3>常用入口</h3></div></header><div className="admin-home-links">
-        {viewerRole === "system_admin" && <Link href="/admin/events"><span>赛事管理</span><b>创建 / 设置 →</b></Link>}
-        {viewerRole !== "referee" && <Link href={currentEventId ? `/admin/content/${currentEventId}` : "/admin/content"}><span>内容发布</span><b>概览 / 规程 →</b></Link>}
-        <Link href={currentEventId ? `/admin/competition?event=${encodeURIComponent(currentEventId)}` : "/admin/competition"}><span>竞赛执行</span><b>查看当前待办 →</b></Link>
-        <Link href={currentEventId ? `/admin/competition/scoring?event=${encodeURIComponent(currentEventId)}` : "/admin/competition/scoring"}><span>比分录入</span><b>进入工作台 →</b></Link>
+        {viewerRole === "system_admin" && <Link prefetch={false} href="/admin/events"><span>赛事管理</span><b>创建 / 设置 →</b></Link>}
+        {viewerRole !== "referee" && <Link prefetch={false} href={currentEventId ? `/admin/content/${currentEventId}` : "/admin/content"}><span>内容发布</span><b>概览 / 规程 →</b></Link>}
+        <Link prefetch={false} href={currentEventId ? `/admin/competition?event=${encodeURIComponent(currentEventId)}` : "/admin/competition"}><span>竞赛执行</span><b>查看当前待办 →</b></Link>
+        <Link prefetch={false} href={currentEventId ? `/admin/competition/scoring?event=${encodeURIComponent(currentEventId)}` : "/admin/competition/scoring"}><span>比分录入</span><b>进入工作台 →</b></Link>
       </div></article>
     </section>
   </main>;
