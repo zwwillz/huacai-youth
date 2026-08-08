@@ -18,6 +18,10 @@ export function getSqlClient() {
     prepare: false,
     connect_timeout: 8,
     idle_timeout: 5,
+    // Rotate serverless connections promptly and avoid TCP keep-alive timers
+    // surviving beyond a short EdgeOne cloud-function invocation.
+    max_lifetime: 15,
+    keep_alive: null,
     connection: {
       application_name: "huacai-edgeone",
     },
