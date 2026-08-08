@@ -1,19 +1,15 @@
-import { asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { getDb } from "./index";
+import { asc, desc, eq, inArray } from "drizzle-orm";
+import { getDb, getSqlClient } from "./index";
 import {
   eventDetails,
   eventDocuments,
-  eventGroups,
   eventOrganizations,
   eventPhases,
   eventSponsors,
   events,
-  matches,
-  players,
-  registrations,
   venues,
 } from "./schema";
-import type { EventData, Group, Match, Phase, PhaseId, PrizeMap, Station } from "@/app/public-types";
+import type { EventData, Group, Phase, PhaseId, PrizeMap, Station } from "@/app/public-types";
 
 const GROUPS: Group[] = ["少年组", "青年组"];
 const PHASE_IDS: PhaseId[] = ["qualifier-one", "qualifier-two", "main-one", "main-two"];
@@ -73,11 +69,6 @@ function formatRange(start: string, end: string) {
   return sy === ey ? `${sy}.${sm}.${sd}—${em}.${ed}` : `${sy}.${sm}.${sd}—${ey}.${em}.${ed}`;
 }
 
-function noZeroDate(value: string) {
-  const [y, m, d] = value.split("-");
-  return y && m && d ? `${y}-${Number(m)}-${Number(d)}` : value;
-}
-
 function locationPrefix(parts: Array<string | null | undefined>) {
   const values = parts.map((item) => item?.trim()).filter((item): item is string => Boolean(item));
   return [...new Set(values)].join("");
@@ -107,6 +98,7 @@ function phaseId(value: string): PhaseId | null {
 
 export async function getPublicSiteData(): Promise<EventData> {
   const db = getDb();
+  const sql = getSqlClient();
 
   const eventRows = await db
     .select({
@@ -149,36 +141,24 @@ export async function getPublicSiteData(): Promise<EventData> {
   const eventIds = eventRows.map((row) => row.id);
   const legacyEventId = eventRows.find((row) => visualId(row.id) === "langfang")?.id ?? eventIds[0];
 
-  const [orgRows, sponsorRows, documentRows, phaseRows, groupRows, matchRows, registrationRows] = await Promise.all([
+  const [orgRows, sponsorRows, documentRows, phaseRows, [publicCounts]] = await Promise.all([
     db.select().from(eventOrganizations).where(inArray(eventOrganizations.eventId, eventIds)).orderBy(asc(eventOrganizations.sortOrder)),
     db.select().from(eventSponsors).where(inArray(eventSponsors.eventId, eventIds)).orderBy(asc(eventSponsors.sortOrder)),
     db.select().from(eventDocuments).where(inArray(eventDocuments.eventId, eventIds)),
     db.select().from(eventPhases).where(inArray(eventPhases.eventId, eventIds)).orderBy(asc(eventPhases.sortOrder)),
-    db.select().from(eventGroups).where(inArray(eventGroups.eventId, eventIds)),
-    db.select({
-      id: matches.id,
-      eventId: matches.eventId,
-      groupId: matches.groupId,
-      phaseId: sql<string | null>`"matches"."phase_id"`,
-      date: matches.matchDate,
-      time: matches.matchTime,
-      round: matches.roundName,
-      progress: matches.progress,
-      race: matches.raceTo,
-      order: matches.orderNo,
-      playerA: matches.playerAName,
-      playerB: matches.playerBName,
-      table: matches.tableName,
-      isTv: matches.isTv,
-      status: matches.status,
-    }).from(matches).where(eq(matches.eventId, legacyEventId)).orderBy(asc(matches.matchDate), asc(matches.matchTime), asc(matches.orderNo)),
-    db.select({ eventId: registrations.eventId, groupId: registrations.groupId, playerId: registrations.playerId, playerName: players.fullName })
-      .from(registrations)
-      .innerJoin(players, eq(registrations.playerId, players.id))
-      .where(eq(registrations.eventId, legacyEventId)),
+    sql<Array<{ playerCount: number; matchCount: number }>>`
+      select
+        (select count(distinct r.player_id)::int
+         from public.registrations r
+         join public.event_groups g on g.id = r.group_id
+         where r.event_id = ${legacyEventId} and g.name = '少年组' and r.status <> 'withdrawn') as "playerCount",
+        (select count(*)::int
+         from public.matches m
+         join public.event_groups g on g.id = m.group_id
+         where m.event_id = ${legacyEventId} and g.name = '少年组') as "matchCount"
+    `,
   ]);
 
-  const groupById = new Map(groupRows.map((row) => [row.id, row.name as Group]));
   const phasesByEvent = new Map<string, Phase[]>();
   for (const row of phaseRows) {
     const id = phaseId(row.code);
@@ -255,36 +235,13 @@ export async function getPublicSiteData(): Promise<EventData> {
       signup: row.signupNote || "报名信息待组委会发布。",
       prizes,
       phases: phasesByEvent.get(row.id) ?? [],
+      publicPlayerCount: id === "langfang" ? Number(publicCounts?.playerCount) || 0 : undefined,
+      publicMatchCount: id === "langfang" ? Number(publicCounts?.matchCount) || 0 : undefined,
     };
   });
 
-  const publicMatches: Match[] = matchRows.flatMap((row) => {
-    const group = groupById.get(row.groupId);
-    if (!group || !GROUPS.includes(group)) return [];
-    return [{
-      id: row.id,
-      eventId: row.eventId,
-      phaseId: row.phaseId ? phaseId(row.phaseId) : null,
-      group,
-      date: noZeroDate(row.date),
-      time: row.time ?? "",
-      round: row.round ?? "",
-      progress: row.progress ?? "",
-      race: row.race ?? "",
-      order: row.order ?? 0,
-      playerA: row.playerA,
-      playerB: row.playerB,
-      table: row.table ?? "",
-      isTv: row.isTv,
-      status: row.status,
-    }];
-  });
-
-  const langfang = stations.find((station) => station.id === "langfang") ?? stations.find((station) => publicMatches.some((match) => match.eventId === station.eventId));
-  const youthGroupId = langfang ? groupRows.find((group) => group.eventId === langfang.eventId && group.name === "少年组")?.id : undefined;
-  const youthPlayers = youthGroupId
-    ? [...new Set(registrationRows.filter((row) => row.eventId === langfang?.eventId && row.groupId === youthGroupId).map((row) => row.playerName))].sort((a, b) => a.localeCompare(b, "zh-CN"))
-    : [];
-
-  return { stations, matches: publicMatches, players: youthPlayers };
+  // The full player and match collections are loaded from their dedicated,
+  // cacheable public endpoints. Keeping them out of the initial RSC payload
+  // prevents thousands of records from blocking first-page hydration.
+  return { stations, matches: [], players: [] };
 }

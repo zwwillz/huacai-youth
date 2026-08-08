@@ -153,7 +153,7 @@ function PlayerBrowser({players}:{players:PublicPlayerSummary[]}) {
     if(cached){setSelected(cached);return}
     setLoadingId(id);
     try{
-      const response=await fetch(`/api/public/players/${encodeURIComponent(id)}`,{cache:"no-store"});
+      const response=await fetch(`/api/public/players/${encodeURIComponent(id)}`);
       if(!response.ok)return;
       const detail=await response.json() as PublicPlayerDetail;
       cache.current.set(id,detail);
@@ -207,7 +207,7 @@ export default function PlayerDbView() {
       if(loaded.current||loading)return;
       setLoading(true);setError("");
       try{
-        const response=await fetch("/api/public/players",{cache:"no-store"});
+        const response=await fetch("/api/public/players");
         const payload=await response.json() as {data?:PublicPlayerSummary[];error?:string};
         if(!response.ok||!payload.data)throw new Error(payload.error||"球员数据读取失败。");
         setPlayers(payload.data);loaded.current=true;
@@ -236,7 +236,10 @@ export default function PlayerDbView() {
 
     window.addEventListener("huacai:navigation",sync);
     sync();
-    return()=>{window.removeEventListener("huacai:navigation",sync);if(original)original.style.display="";if(host)host.remove()};
+    const windowWithIdle=window as Window&{requestIdleCallback?:(callback:()=>void,options?:{timeout:number})=>number;cancelIdleCallback?:(handle:number)=>void};
+    const idleHandle=windowWithIdle.requestIdleCallback?.(()=>{void load()},{timeout:5_000});
+    const fallbackHandle=idleHandle==null?window.setTimeout(()=>{void load()},2_500):null;
+    return()=>{window.removeEventListener("huacai:navigation",sync);if(idleHandle!=null)windowWithIdle.cancelIdleCallback?.(idleHandle);if(fallbackHandle!=null)window.clearTimeout(fallbackHandle);if(original)original.style.display="";if(host)host.remove()};
   },[loading]);
 
   if(!target)return null;

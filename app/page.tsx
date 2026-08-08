@@ -1,7 +1,6 @@
 import { unstable_cache } from "next/cache";
 import EventApp from "./event-app";
-import PlayerDbView from "./player-db-view";
-import MePreview from "./me-preview";
+import DeferredEnhancers from "./deferred-enhancers";
 import { getPublicSiteData } from "@/db/public";
 import { getPublicContentState } from "@/db/public-content";
 
@@ -46,7 +45,6 @@ export default async function Home() {
       @media(max-width:900px){.tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;width:max-content!important}.tabs.public-five-tabs button,.tabs.public-unified-tabs button{padding:8px 14px!important;font-size:11px!important}}
     `}</style>
     <EventApp data={data} contentStates={contentStates} />
-    <PlayerDbView />
-    <MePreview />
+    <DeferredEnhancers />
   </>;
 }

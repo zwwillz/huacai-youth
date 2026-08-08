@@ -65,6 +65,8 @@ export type Station = {
   signup: string;
   prizes: PrizeMap;
   phases: Phase[];
+  publicPlayerCount?: number;
+  publicMatchCount?: number;
 };
 
 export type EventData = {
