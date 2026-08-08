@@ -1,0 +1,36 @@
+.admin-route-loading-message.slow {
+  align-items: flex-start;
+}
+
+.admin-route-loading-message.slow > b {
+  margin-top: 2px;
+  border-top-color: #d83f8e;
+}
+
+.admin-route-loading-message span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.admin-route-loading-message button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  color: #fff;
+  background: linear-gradient(135deg, #6f38ca, #d63d91);
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.admin-route-loading-message button.secondary {
+  color: #655a6c;
+  background: #f1edf3;
+}
+
+.admin-recovery-state p {
+  max-width: 560px;
+}
