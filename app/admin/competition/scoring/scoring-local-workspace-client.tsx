@@ -58,7 +58,7 @@ export default function ScoringLocalWorkspaceClient({ initialData, initialContex
   const [loadError, setLoadError] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState(initialData.filters.groupId);
   const [selectedPhase, setSelectedPhase] = useState(initialData.filters.phaseCode);
-  const [publicationDirty, setPublicationDirty] = useState(false);
+  const [dirtyEvents, setDirtyEvents] = useState<Set<string>>(() => new Set());
   const requestId = useRef(0);
   const { ask, dialog } = useAdminActionDialog();
 
@@ -126,36 +126,37 @@ export default function ScoringLocalWorkspaceClient({ initialData, initialContex
       const previousEventId = detail.previousEventId || data.event.id;
       const cached = eventCache.get(eventId);
       if (cached && Date.now() - cached.at < CACHE_TTL) {
-        setContext(cached.context); applyData(cached.data); setLoading(false); return;
+        setContext(cached.context);
+        applyData(cached.data);
+        setLoading(false);
+        return;
       }
-      setSelectedGroupId(""); setSelectedPhase("");
       void fetchWorkspace({ eventId, groupId: "", phase: "", date: "", showConfirmed: false, includeContext: true, force: true }).catch(() => {
         window.dispatchEvent(new CustomEvent("admin:event-switch-revert", { detail: { eventId: previousEventId } }));
       });
     };
     window.addEventListener("admin:event-switch", onSwitch);
     return () => window.removeEventListener("admin:event-switch", onSwitch);
-  });
+    // Event changes provide all scoring filters explicitly; rebind only when the displayed event changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.event.id]);
 
   const chooseGroup = (groupId: string) => {
     if (groupId === selectedGroupId || loading) return;
-    const previousGroup = selectedGroupId;
-    setSelectedGroupId(groupId);
-    void fetchWorkspace({ eventId: data.event.id, groupId, phase: selectedPhase, date: "", showConfirmed: data.filters.showConfirmed }).catch(() => setSelectedGroupId(previousGroup));
+    void fetchWorkspace({ eventId: data.event.id, groupId, phase: selectedPhase, date: "", showConfirmed: data.filters.showConfirmed }).catch(() => undefined);
   };
   const choosePhase = (phase: string) => {
     if (phase === selectedPhase || loading) return;
-    setSelectedPhase(phase);
     const stat = data.phases.find((item) => item.code === phase);
     if (!stat) {
       const waiting: ScoringWorkspaceData = { ...data, filters: { ...data.filters, phaseCode: phase, date: "" }, dates: [], matches: [], counts: { actionable: 0, submitted: 0, confirmed: 0, visible: 0 } };
       applyData(waiting);
       return;
     }
-    void fetchWorkspace({ eventId: data.event.id, groupId: selectedGroupId, phase, date: "", showConfirmed: data.filters.showConfirmed }).catch(() => setSelectedPhase(data.filters.phaseCode));
+    void fetchWorkspace({ eventId: data.event.id, groupId: selectedGroupId, phase, date: "", showConfirmed: data.filters.showConfirmed }).catch(() => undefined);
   };
-  const chooseDate = (date: string) => { if (date !== data.filters.date && !loading) void fetchWorkspace({ eventId: data.event.id, groupId: selectedGroupId, phase: selectedPhase, date, showConfirmed: data.filters.showConfirmed }); };
-  const toggleConfirmed = () => { if (!loading) void fetchWorkspace({ eventId: data.event.id, groupId: selectedGroupId, phase: selectedPhase, date: data.filters.date, showConfirmed: !data.filters.showConfirmed }); };
+  const chooseDate = (date: string) => { if (date !== data.filters.date && !loading) void fetchWorkspace({ eventId: data.event.id, groupId: selectedGroupId, phase: selectedPhase, date, showConfirmed: data.filters.showConfirmed }).catch(() => undefined); };
+  const toggleConfirmed = () => { if (!loading) void fetchWorkspace({ eventId: data.event.id, groupId: selectedGroupId, phase: selectedPhase, date: data.filters.date, showConfirmed: !data.filters.showConfirmed }).catch(() => undefined); };
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -170,7 +171,11 @@ export default function ScoringLocalWorkspaceClient({ initialData, initialContex
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || "操作失败。");
       clearEventCache(data.event.id);
-      setPublicationDirty(true);
+      setDirtyEvents((current) => {
+        const next = new Set(current);
+        next.add(data.event.id);
+        return next;
+      });
       await fetchWorkspace({ eventId: data.event.id, groupId: selectedGroupId, phase: selectedPhase, date: data.filters.date, showConfirmed: data.filters.showConfirmed, force: true });
       return true;
     } catch (error) { setMessage(error instanceof Error ? error.message : "操作失败。"); return false; }
@@ -198,12 +203,21 @@ export default function ScoringLocalWorkspaceClient({ initialData, initialContex
   });
   const selectedPhaseTitle = ALL_PHASES.find((phase) => phase.code === selectedPhase)?.title || "当前阶段";
   const canConfirm = data.viewer.role === "system_admin" || data.viewer.role === "committee";
+  const publicationDirty = dirtyEvents.has(data.event.id);
 
   return <div className={loading ? "admin-local-workspace is-refreshing" : "admin-local-workspace"}>
     {loading && <div className="admin-local-refresh"><i />正在更新比分工作区…</div>}
     {loadError && <div className="admin-local-error">{loadError}</div>}
-    <CompetitionContextBar eventId={data.event.id} eventTitle={data.event.shortTitle} groups={context.groups} selectedGroupId={selectedGroupId} basePath="/admin/competition/scoring" phases={phaseOptions} selectedPhase={selectedPhase} eyebrow="比分录入" title={`${context.groups.find((group) => group.id === selectedGroupId)?.name || "当前组别"} · ${selectedPhaseTitle}`} description="组别、阶段、日期和已确认视图都在当前工作区内切换；旧列表会保留到新数据返回。" onGroupChange={chooseGroup} onPhaseChange={choosePhase} />
-    <CompetitionPublicationBar eventId={data.event.id} moduleType="matches" title="对阵与比分" status={context.publications.matches.status} hasUnpublishedChanges={context.publications.matches.hasUnpublishedChanges || publicationDirty} viewerRole={data.viewer.role} hint="比分确认后先进入后台未发布更新。用户端仍保持上一版已发布比分；点击“发布更新”后才整体切换。" onChanged={(status, dirty) => { setPublicationDirty(false); setContext((current) => ({ ...current, publications: { ...current.publications, matches: { ...current.publications.matches, status, hasUnpublishedChanges: dirty } } })); }} />
+    <CompetitionContextBar eventId={data.event.id} eventTitle={data.event.shortTitle} groups={context.groups} selectedGroupId={selectedGroupId} basePath="/admin/competition/scoring" phases={phaseOptions} selectedPhase={selectedPhase} eyebrow="比分录入" title={`${context.groups.find((group) => group.id === selectedGroupId)?.name || "当前组别"} · ${selectedPhaseTitle}`} description="组别、阶段、日期和已确认视图都在当前工作区内切换；旧列表会保留到新数据返回，并保持原标签避免误读。" onGroupChange={chooseGroup} onPhaseChange={choosePhase} />
+    <CompetitionPublicationBar eventId={data.event.id} moduleType="matches" title="对阵与比分" status={context.publications.matches.status} hasUnpublishedChanges={context.publications.matches.hasUnpublishedChanges || publicationDirty} viewerRole={data.viewer.role} hint="比分确认后先进入后台未发布更新。用户端仍保持上一版已发布比分；点击“发布更新”后才整体切换。" onChanged={(status, dirty) => {
+      setDirtyEvents((current) => {
+        const next = new Set(current);
+        if (!dirty) next.delete(data.event.id);
+        else next.add(data.event.id);
+        return next;
+      });
+      setContext((current) => ({ ...current, publications: { ...current.publications, matches: { ...current.publications.matches, status, hasUnpublishedChanges: dirty } } }));
+    }} />
 
     <main className={loading ? "scoring-workbench admin-local-stale" : "scoring-workbench"}>
       <section className="scoring-taskbar">
