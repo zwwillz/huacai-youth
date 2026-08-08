@@ -2,8 +2,8 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import type { PublicPlayerDetail, PublicPlayerEvent, PublicPlayerSummary } from "@/db/player-data";
+import { PlayerLoadingShell } from "./public-view-loading";
 import styles from "./player-db.module.css";
 
 type FilterGroup = "全部" | "少年组" | "青年组";
@@ -19,6 +19,7 @@ let persistedCounts: PlayerCounts = { 全部: 0, 少年组: 0, 青年组: 0 };
 let persistedLoadedPage = 0;
 const persistedPageCache = new Map<number, PublicPlayerSummary[]>();
 const persistedDetailCache = new Map<string, PublicPlayerDetail>();
+const persistedDetailRequests = new Map<string, Promise<PublicPlayerDetail | null>>();
 
 function mergePlayers(current: PublicPlayerSummary[], incoming: PublicPlayerSummary[]) {
   const byId = new Map(current.map((player) => [player.id, player]));
@@ -38,6 +39,25 @@ function genderName(value: string | null) {
 function formatPoints(value: number) { return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value); }
 function formatMoney(value: number) { return `¥${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(value)}`; }
 function PlayerAvatar({name,large=false}:{name:string;large?:boolean}) { return <span className={large ? styles.detailAvatar : styles.listAvatar}>{name.slice(0,1)}</span>; }
+
+function requestPlayerDetail(id: string) {
+  const cached = persistedDetailCache.get(id);
+  if (cached) return Promise.resolve(cached);
+  const pending = persistedDetailRequests.get(id);
+  if (pending) return pending;
+
+  const request = fetch(`/api/public/players/${encodeURIComponent(id)}`)
+    .then(async (response) => {
+      if (!response.ok) return null;
+      const detail = await response.json() as PublicPlayerDetail;
+      persistedDetailCache.set(id, detail);
+      return detail;
+    })
+    .catch(() => null)
+    .finally(() => { persistedDetailRequests.delete(id); });
+  persistedDetailRequests.set(id, request);
+  return request;
+}
 
 function YearSwitch({years,value,onChange}:{years:number[];value:YearFilter;onChange:(value:YearFilter)=>void}) {
   return <nav className={styles.yearSwitch} aria-label="选择年份">
@@ -102,13 +122,6 @@ function DetailPanel({detail,onClose}:{detail:PublicPlayerDetail;onClose:()=>voi
   </div>;
 }
 
-function PlayerLoadingShell() {
-  return <div className={styles.root}>
-    <section className={styles.hero}><div><small>球员数据库</small><h1>球员数据</h1><p>查看华彩系列赛球员档案、参赛成绩与积分数据</p></div><label><span>⌕</span><input disabled placeholder="搜索球员姓名" /></label></section>
-    <section className={styles.listCard}><header className={styles.listHead}><div><small>公开球员</small><h2>全部球员</h2></div></header><div className={styles.countLine}><span>正在读取球员列表…</span><small>页面框架已就绪，数据加载完成后会自动显示</small></div><div className={styles.empty}>首次读取后，切换菜单不会重复加载整页数据。</div></section>
-  </div>;
-}
-
 function PlayerBrowser({players,counts,loadingMore,loadNextPage}:{players:PublicPlayerSummary[];counts:PlayerCounts;loadingMore:boolean;loadNextPage:()=>Promise<void>}) {
   const [query,setQuery]=useState("");
   const [group,setGroup]=useState<FilterGroup>("全部");
@@ -170,15 +183,14 @@ function PlayerBrowser({players,counts,loadingMore,loadNextPage}:{players:Public
     setLimit(value=>value+PAGE_SIZE);
   };
 
+  const prefetchPlayer=(id:string)=>{if(!persistedDetailCache.has(id))void requestPlayerDetail(id)};
   const openPlayer=async(id:string)=>{
     const cached=persistedDetailCache.get(id);
     if(cached){setSelected(cached);return}
     setLoadingId(id);
     try{
-      const response=await fetch(`/api/public/players/${encodeURIComponent(id)}`);
-      if(!response.ok)return;
-      const detail=await response.json() as PublicPlayerDetail;
-      persistedDetailCache.set(id,detail);setSelected(detail);
+      const detail=await requestPlayerDetail(id);
+      if(detail)setSelected(detail);
     }finally{setLoadingId(null)}
   };
 
@@ -187,7 +199,7 @@ function PlayerBrowser({players,counts,loadingMore,loadNextPage}:{players:Public
     <section className={styles.listCard}>
       <header className={styles.listHead}><div><small>公开球员</small><h2>{query?`“${query}”的结果`:"全部球员"}</h2></div><div className={styles.groupFilters}>{(["全部","少年组","青年组"] as FilterGroup[]).map(item=><button className={group===item?styles.active:""} onClick={()=>{setGroup(item);setLimit(PAGE_SIZE)}} key={item}>{item}</button>)}</div></header>
       <div className={styles.countLine}><span>{searching&&query.trim()?"正在搜索全部球员…":`共 ${totalForView} 人`}</span><small>按总积分从高到低排序 · 同名选手按身份 ID 区分</small></div>
-      <div className={styles.playerGrid}>{visible.map(player=><button className={styles.playerCard} onClick={()=>openPlayer(player.id)} key={player.id} title={`总积分 ${formatPoints(player.totalPoints)}`}><PlayerAvatar name={player.name}/><div className={styles.playerCopy}><strong>{player.displayName}</strong><small><b>{player.groupCode}</b>{player.group} · {player.stationCount}站 · 最好 {player.bestResult}</small></div><i>{loadingId===player.id?"…":"›"}</i></button>)}</div>
+      <div className={styles.playerGrid}>{visible.map(player=><button className={styles.playerCard} onClick={()=>openPlayer(player.id)} onPointerEnter={()=>prefetchPlayer(player.id)} onPointerDown={()=>prefetchPlayer(player.id)} onFocus={()=>prefetchPlayer(player.id)} key={player.id} title={`总积分 ${formatPoints(player.totalPoints)}`}><PlayerAvatar name={player.name}/><div className={styles.playerCopy}><strong>{player.displayName}</strong><small><b>{player.groupCode}</b>{player.group} · {player.stationCount}站 · 最好 {player.bestResult}</small></div><i>{loadingId===player.id?"…":"›"}</i></button>)}</div>
       {canShowMore?<button className={styles.more} disabled={loadingMore||searching} onClick={showMore}>{loadingMore||searching?"正在读取更多球员…":`显示更多（还有 ${remaining} 人）`}</button>:null}
       {!searching&&!filtered.length?<div className={styles.empty}>没有找到符合条件的球员</div>:null}
     </section>
@@ -196,7 +208,6 @@ function PlayerBrowser({players,counts,loadingMore,loadNextPage}:{players:Public
 }
 
 export default function PlayerDbView() {
-  const [target,setTarget]=useState<HTMLElement|null>(null);
   const [players,setPlayers]=useState<PublicPlayerSummary[]>(()=>persistedPlayers);
   const [counts,setCounts]=useState<PlayerCounts>(()=>persistedCounts);
   const [loadedPage,setLoadedPage]=useState(()=>persistedLoadedPage);
@@ -239,10 +250,9 @@ export default function PlayerDbView() {
   };
 
   useEffect(()=>{
-    let original:HTMLElement|null=null;
-    let host:HTMLElement|null=null;
+    if(loaded.current||loadingRef.current)return;
+    let cancelled=false;
     const load=async()=>{
-      if(loaded.current||loadingRef.current)return;
       loadingRef.current=true;setLoading(true);setError("");
       try{
         const response=await fetch("/api/public/players");
@@ -251,28 +261,17 @@ export default function PlayerDbView() {
         const fallbackCounts:PlayerCounts={全部:payload.data.length,少年组:payload.data.filter(player=>player.group==="少年组").length,青年组:payload.data.filter(player=>player.group==="青年组").length};
         const nextCounts=payload.counts??fallbackCounts;
         persistedPlayers=payload.data;persistedCounts=nextCounts;persistedLoadedPage=1;
-        setPlayers(payload.data);setCounts(nextCounts);setLoadedPage(1);loaded.current=true;
+        loaded.current=true;
+        if(!cancelled){setPlayers(payload.data);setCounts(nextCounts);setLoadedPage(1)}
         window.setTimeout(()=>{void prefetchPage(2)},150);
-      }catch(reason){setError(reason instanceof Error?reason.message:"球员数据读取失败。")}
-      finally{loadingRef.current=false;setLoading(false)}
+      }catch(reason){if(!cancelled)setError(reason instanceof Error?reason.message:"球员数据读取失败。")}
+      finally{loadingRef.current=false;if(!cancelled)setLoading(false)}
     };
-    const sync=()=>{
-      const root=document.querySelector<HTMLElement>("main[data-huacai-view]");
-      const active=root?.dataset.huacaiView==="players";
-      const hero=active?document.querySelector<HTMLElement>(".player-hero"):null;
-      const stack=hero?.closest<HTMLElement>(".stack")??null;
-      if(!stack){if(original)original.style.display="";original=null;if(host){host.remove();host=null}setTarget(current=>current===null?current:null);return}
-      if(original!==stack){if(original)original.style.display="";original=stack}
-      stack.style.display="none";
-      if(!host||!host.isConnected){host=document.createElement("div");host.dataset.playerDbHost="true";stack.insertAdjacentElement("afterend",host)}
-      setTarget(current=>current===host?current:host);void load();
-    };
-    window.addEventListener("huacai:navigation",sync);sync();
-    return()=>{window.removeEventListener("huacai:navigation",sync);if(original)original.style.display="";if(host)host.remove()};
+    void load();
+    return()=>{cancelled=true};
   },[]);
 
-  if(!target)return null;
-  if(loading&&!players.length)return createPortal(<PlayerLoadingShell/>,target);
-  if(error&&!players.length)return createPortal(<div className={styles.root}><section className={styles.listCard}><div className={styles.empty}>{error}</div></section></div>,target);
-  return createPortal(<PlayerBrowser players={players} counts={counts} loadingMore={loadingMore} loadNextPage={loadNextPage}/>,target);
+  if(loading&&!players.length)return <PlayerLoadingShell/>;
+  if(error&&!players.length)return <div className={styles.root}><section className={styles.listCard}><div className={styles.empty}>{error}</div></section></div>;
+  return <PlayerBrowser players={players} counts={counts} loadingMore={loadingMore} loadNextPage={loadNextPage}/>;
 }
