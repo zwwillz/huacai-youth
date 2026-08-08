@@ -59,9 +59,15 @@ async function ensureFinalRankingDraftsFast(principal: Awaited<ReturnType<typeof
     from groups g
   `;
   if (!readiness.length) {
-    const exists = await sql<Array<{ ok: number }>>`select 1 as ok from public.events where id=${eventId} limit 1`;
-    if (!exists[0]) throw new Error("没有找到这场赛事。");
-    if (principal.role !== "system_admin") throw new Error("当前账号未被分配到这场赛事，不能读取本站数据。");
+    const access = await sql<Array<{ ok: number }>>`
+      select 1 as ok from public.events e
+      where e.id=${eventId}
+        and (${principal.role}='system_admin' or exists (
+          select 1 from public.event_members em where em.event_id=e.id and em.user_id=${principal.id} and em.status='active'
+        ))
+      limit 1
+    `;
+    if (!access[0]) throw new Error("没有找到这场赛事，或当前账号未被分配到本站。");
   }
   for (const group of readiness) {
     if (group.hasBatch) continue;
