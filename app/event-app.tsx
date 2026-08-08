@@ -1,9 +1,10 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 
-import PublicCompetitionLiveV2, { type PublicCompetitionTab } from "./public-competition-live-v2";
+import type { PublicCompetitionTab } from "./public-competition-live-v2";
 import type { EventData, Group, Station } from "./public-types";
 import type { PublicContentState } from "@/db/public-content";
 
@@ -11,7 +12,7 @@ type MainView = "event" | "players" | "me";
 type EventTab = "overview" | "rules" | "schedule" | "matches" | "rankings" | "guide";
 type GuideKind = "transport" | "clothing";
 
-const shortDate = (value:string) => { const [,m,d]=value.split("-"); return `${Number(m)}月${Number(d)}日`; };
+const PublicCompetitionLiveV2 = dynamic(() => import("./public-competition-live-v2"), { ssr: false });
 
 function EventCenter({data,openEvent}:{data:EventData;openEvent:(id:string)=>void}) {
   const [year,setYear]=useState(2026);
@@ -34,22 +35,18 @@ function guideIcon(title: string, guideType: string) {
 
 function StationOverview({
   station,
-  data,
   contentState,
   openRules,
   openSchedule,
   openGuide,
 }: {
   station: Station;
-  data: EventData;
   contentState?: PublicContentState;
   openRules: () => void;
   openSchedule: () => void;
   openGuide: (kind: GuideKind) => void;
 }) {
   const isLangfang = station.id === "langfang";
-  const stationYouthMatches = data.matches.filter((match) => match.eventId === station.eventId && match.group === "少年组");
-  const stationYouthPlayers = isLangfang ? data.players : [];
   const guides = contentState?.guides ?? [];
 
   return <div className="stack">
@@ -57,8 +54,8 @@ function StationOverview({
     <section className="metrics">
       <article><strong>{station.totalPrize}</strong><span>本站总奖金</span></article>
       {isLangfang ? <>
-        <article><strong>{stationYouthPlayers.length}</strong><span>少年组已公布出场选手</span></article>
-        <article><strong>{stationYouthMatches.length}</strong><span>少年组已公布首轮对阵</span></article>
+        <article><strong>{station.publicPlayerCount ?? 0}</strong><span>少年组已公布出场选手</span></article>
+        <article><strong>{station.publicMatchCount ?? 0}</strong><span>少年组已公布首轮对阵</span></article>
       </> : <>
         <article><strong>2</strong><span>少年组与青年组</span></article>
         <article><strong>{station.mainSize}</strong><span>正赛规模</span></article>
@@ -116,7 +113,7 @@ function PublicModuleEmpty({ icon, title, description }: { icon: string; title: 
   return <section className="public-module-state" role="status"><div><span>{icon}</span><h2>{title}</h2><p>{description}<br />感谢关注，最新信息会在确认后及时更新。</p></div></section>;
 }
 
-function Players({data}:{data:EventData}){const [query,setQuery]=useState(""),[selected,setSelected]=useState("");const list=useMemo(()=>data.players.filter(name=>name.includes(query.trim())).slice(0,90),[data.players,query]);const related=selected?data.matches.filter(match=>match.playerA===selected||match.playerB===selected):[];return <div className="stack"><section className="player-hero"><h1>球员数据</h1><p>当前已录入河北廊坊站少年组资格赛第一场。</p><label><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="输入少年组选手姓名"/></label></section><section className="card"><header><div><small>河北廊坊站 · 少年组</small><h2>{query?`“${query}”的结果`:"已公布出场选手"}</h2></div><b>{data.players.length} 人</b></header><div className="players-grid">{list.map(name=>{const count=data.matches.filter(match=>match.playerA===name||match.playerB===name).length;return <button onClick={()=>setSelected(name)} key={name}><span>{name[0]}</span><div><strong>{name}</strong><small>{count} 场已公布赛程</small></div><b>›</b></button>})}</div></section>{selected&&<div className="overlay" onClick={()=>setSelected("")}><aside onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setSelected("")}>×</button><div className="avatar">{selected[0]}</div><span className="tag">少年组</span><h2>{selected}</h2><p>2026华彩十六球青少年系列赛 · 河北廊坊站</p><div className="player-stats"><div><strong>{related.length}</strong><span>已公布场次</span></div><div><strong>{related.filter(match=>match.isTv).length}</strong><span>转播台场次</span></div></div><h3>比赛安排</h3>{related.map(match=><article className="player-match" key={match.id}><div><strong>{shortDate(match.date)} {match.time}</strong><span>{match.progress} · {match.race}</span></div><b>{match.table}</b></article>)}</aside></div>}</div>}
+function Players(){return <div className="stack"><section className="player-hero"><h1>球员数据</h1><p>正在载入公开球员档案、参赛成绩与积分数据。</p></section><section className="public-module-state" aria-busy="true"><div><span>…</span><h2>正在读取球员数据</h2><p>首次打开后会保存在浏览器缓存中。</p></div></section></div>}
 function Me(){return <div className="stack"><section className="profile"><div>选</div><span><h1>个人中心</h1><p>登录后查看报名、赛程、成绩与积分。</p></span></section><section className="quick">{[["报名","我的报名","审核及缴费状态"],["赛程","我的比赛","检录、时间和球台"],["成绩","参赛记录","排名与赛事积分"],["家长","选手管理","绑定青少年选手"]].map(item=><article key={item[0]}><span>{item[0]}</span><strong>{item[1]}</strong><small>{item[2]}</small></article>)}</section><section className="card signin"><div><small>后续功能</small><h2>账户功能下一阶段接入</h2><p>当前阶段先完善公开赛事、竞赛规程、赛程和对阵图；报名、裁判及组委会操作将在下一阶段接入。</p></div><button>体验登录流程</button></section></div>}
 
 function ParticipantGuide({kind,onBack}:{kind:GuideKind;onBack:()=>void}){
@@ -155,12 +152,12 @@ export default function EventApp({ data, contentStates }: { data: EventData; con
           <nav className="tabs public-five-tabs public-unified-tabs" aria-label="赛事内容">
             {([["overview", "概览"], ["rules", "竞赛规程"], ["schedule", "赛程"], ["matches", "对阵"], ["rankings", "排名"]] as [EventTab, string][]).map(([id, label]) => <button className={tab === id || (tab === "guide" && id === "overview") ? "active" : ""} onClick={() => changeTab(id)} key={id}>{label}</button>)}
           </nav>
-          {tab === "overview" && <StationOverview station={station} data={data} contentState={contentState} openRules={() => changeTab("rules")} openSchedule={() => changeTab("schedule")} openGuide={openGuide} />}
+          {tab === "overview" && <StationOverview station={station} contentState={contentState} openRules={() => changeTab("rules")} openSchedule={() => changeTab("schedule")} openGuide={openGuide} />}
           {tab === "guide" && <ParticipantGuide kind={guideKind} onBack={() => changeTab("overview")} />}
           {tab === "rules" && (contentState?.publishedModules.includes("regulation") ? <CompetitionRules station={station} contentState={contentState} /> : <PublicModuleEmpty icon="规" title="本站竞赛规程正在完善中" description="待组委会确认后，将在这里发布正式规程、参赛要求和相关文件。" />)}
           <PublicCompetitionLiveV2 station={station} contentState={contentState} activeTab={activeCompetitionTab} />
         </>}
-        {view === "players" && <Players data={data} />}
+        {view === "players" && <Players />}
         {view === "me" && <Me />}
       </div>
     </div>
