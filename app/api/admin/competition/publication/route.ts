@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     if (!eventId) throw new Error("缺少赛事ID。");
     if (!["schedule","matches","rankings"].includes(moduleType)) throw new Error("不支持的竞赛发布模块。");
     if (!["draft","published"].includes(status)) throw new Error("发布状态不正确。");
-    const data = await setCompetitionPublicationStatus(viewer.username, eventId, moduleType, status);
+    const data = await setCompetitionPublicationStatus(viewer, eventId, moduleType, status);
     revalidateTag(`public-competition-${eventId}`, { expire: 0 });
     revalidatePath(`/api/public/events/${eventId}/competition`);
     return Response.json({ data });
