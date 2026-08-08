@@ -5,7 +5,9 @@ import { getPublicSiteData } from "@/db/public";
 import { getPublicContentState } from "@/db/public-content";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+// The public homepage is identical for every visitor. Let EdgeOne serve the
+// generated page from ISR instead of starting an SSR function for each visit.
+export const revalidate = 300;
 
 const getCachedPublicSiteData = unstable_cache(getPublicSiteData, ["public-site-data-v2"], { revalidate: 60, tags: ["public-site"] });
 const getCachedPublicContentState = unstable_cache(getPublicContentState, ["public-content-state-v2"], { revalidate: 60, tags: ["public-content"] });
@@ -33,8 +35,17 @@ function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicSiteData>>[
 }
 
 export default async function Home() {
-  const data = await getCachedPublicSiteData();
-  const contentStates = await getCachedPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title })));
+  // GitHub Actions intentionally has no production database secrets. It only
+  // needs to verify that the static route can compile; EdgeOne's production
+  // build has the secrets and generates the real initial ISR snapshot.
+  const useCiBuildFallback = process.env.GITHUB_ACTIONS === "true"
+    && (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const data: Awaited<ReturnType<typeof getPublicSiteData>> = useCiBuildFallback
+    ? { stations: [], matches: [], players: [] }
+    : await getCachedPublicSiteData();
+  const contentStates = useCiBuildFallback
+    ? []
+    : await getCachedPublicContentState(data.stations.map((station) => ({ id: station.id, eventId: station.eventId, title: station.title })));
   const visualCss = eventVisualCss(data.stations);
 
   return <>
