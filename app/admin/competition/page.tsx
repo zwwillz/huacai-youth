@@ -12,7 +12,7 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
   const viewer = await getAdminViewer();
   if (!viewer) redirect("/admin/login");
   const query = await searchParams;
-  const data = await getCompetitionDashboardData(viewer.username, query.event);
+  const data = await getCompetitionDashboardData(viewer, query.event);
   if (!data.selectedEventId) redirect("/admin");
   const initialGroupId = data.groups.some((group) => group.id === query.group) ? String(query.group) : data.groups[0]?.id || "";
 
