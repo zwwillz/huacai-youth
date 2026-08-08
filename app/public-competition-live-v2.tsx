@@ -9,6 +9,12 @@ import type { PublicRanking } from "@/db/rankings";
 export type PublicCompetitionTab = "schedule" | "matches" | "rankings";
 type LiveTab = PublicCompetitionTab;
 type StationMeta = Pick<Station, "id" | "eventId" | "title" | "city" | "phases" | "format" | "prizes">;
+type PublicDisplayMatch = Pick<PublicLiveMatch,
+  "id" | "group" | "phaseId" | "divisionNo" | "roundNo" | "roundName" | "matchCode" |
+  "playerA" | "playerB" | "scoreA" | "scoreB" | "resultStatus" | "status" |
+  "winnerPlayerName" | "date" | "time" | "table" | "isTv"
+>;
+type PublicCompetitionDisplayEvent = Omit<PublicCompetitionEvent, "matches"> & { matches: PublicDisplayMatch[] };
 
 const PHASE_ORDER: PhaseId[] = ["qualifier-one", "qualifier-two", "main-one", "main-two"];
 const PHASE_LABELS: Record<PhaseId, string> = {
@@ -47,12 +53,12 @@ function compactDate(value: string) { const [, month, day] = value.split("-"); r
 function weekday(value: string) { const labels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]; const date = new Date(`${value}T12:00:00+08:00`); return Number.isNaN(date.getTime()) ? "" : labels[date.getDay()]; }
 function currentChinaDate() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
 function latestAvailableDay(days: string[]) { const today = currentChinaDate(); return [...days].filter((day) => day <= today).at(-1) ?? days[0] ?? ""; }
-function scoreLabel(match: PublicLiveMatch) { if (match.status === "auto_advanced") return "轮空"; if (match.scoreA == null || match.scoreB == null) return "— : —"; return `${match.scoreA} : ${match.scoreB}`; }
-function matchStatus(match: PublicLiveMatch) { if (match.status === "auto_advanced") return "自动晋级"; if (match.resultStatus === "confirmed") return "已结束"; if (match.resultStatus === "submitted") return "待确认"; return "待开始"; }
+function scoreLabel(match: PublicDisplayMatch) { if (match.status === "auto_advanced") return "轮空"; if (match.scoreA == null || match.scoreB == null) return "— : —"; return `${match.scoreA} : ${match.scoreB}`; }
+function matchStatus(match: PublicDisplayMatch) { if (match.status === "auto_advanced") return "自动晋级"; if (match.resultStatus === "confirmed") return "已结束"; if (match.resultStatus === "submitted") return "待确认"; return "待开始"; }
 function displayName(value: string | null | undefined, fallback: string) { if (value === "BYE") return "轮空"; return value || fallback; }
 function phaseFor(station: StationMeta, id: PhaseId): Phase { return station.phases.find((item) => item.id === id) ?? { id, number: String(PHASE_ORDER.indexOf(id) + 1).padStart(2, "0"), title: PHASE_LABELS[id], date: "待公布", status: "待开始" }; }
-function phaseSummary(data: PublicCompetitionEvent, group: Group, phaseId: PhaseId) { return data.phaseSummaries.find((item) => item.group === group && item.phaseId === phaseId); }
-function phaseMatches(data: PublicCompetitionEvent, group: Group, phaseId: PhaseId) { return data.matches.filter((item) => item.group === group && item.phaseId === phaseId); }
+function phaseSummary(data: PublicCompetitionDisplayEvent, group: Group, phaseId: PhaseId) { return data.phaseSummaries.find((item) => item.group === group && item.phaseId === phaseId); }
+function phaseMatches(data: PublicCompetitionDisplayEvent, group: Group, phaseId: PhaseId) { return data.matches.filter((item) => item.group === group && item.phaseId === phaseId); }
 function raceLabel(group: Group, phase: PhaseId) { if (phase.startsWith("qualifier")) return group === "少年组" ? "9局5胜" : "13局7胜"; if (phase === "main-one") return group === "少年组" ? "13局7胜" : "17局9胜"; return group === "少年组" ? "17局9胜" : "21局11胜"; }
 function displayMatchCode(code: string | null | undefined, phase?: PhaseId) {
   if (!code) return "场次待定";
@@ -76,7 +82,7 @@ function PublicPlayerLine({ slot, name, score, hit }: { slot?: string; name: str
   return <div className={`stage-competitor ${slot ? "has-slot" : "no-slot"} ${hit ? "search-hit" : ""}`}>{slot && <em>{slot}</em>}<span title={name}>{name}</span><b>{score}</b></div>;
 }
 
-function PublicTreeMatch({ match, round, index, width, query, showSlots, slotStart, fallback = "待定", prefix = "" }: { match?: PublicLiveMatch; round: number; index: number; width: number; query: string; showSlots: boolean; slotStart: number; fallback?: string; prefix?: string }) {
+function PublicTreeMatch({ match, round, index, width, query, showSlots, slotStart, fallback = "待定", prefix = "" }: { match?: PublicDisplayMatch; round: number; index: number; width: number; query: string; showSlots: boolean; slotStart: number; fallback?: string; prefix?: string }) {
   const rawCode = match?.matchCode || `${prefix}${round + 1}-${index + 1}`;
   const visibleCode = match ? displayMatchCode(match.matchCode, match.phaseId) : "场次待定";
   const q = query.trim().toLowerCase(); const hit = Boolean(q) && [match?.playerA, match?.playerB, match?.table, rawCode, visibleCode].some((item) => (item ?? "").toLowerCase().includes(q));
@@ -89,10 +95,10 @@ function PublicTreeMatch({ match, round, index, width, query, showSlots, slotSta
 function TerminalPlayer({ label, name = "晋级者待定", accent = "green" }: { label: string; name?: string; accent?: "green" | "pink" }) { return <article className={`terminal-player terminal-${accent}`}><small>{label}</small><strong>{name}</strong></article>; }
 function RoutePath({ className = "", style }: { className?: string; style: CSSProperties }) { return <i className={`stage-path ${className}`} style={style} />; }
 
-function PublicKnockoutTree({ firstRoundCount, labels, matches, query, showSlots, slotStart, prefix, terminalLabel = "晋级" }: { firstRoundCount: number; labels: string[]; matches: PublicLiveMatch[]; query: string; showSlots: boolean; slotStart: number; prefix: string; terminalLabel?: string }) {
+function PublicKnockoutTree({ firstRoundCount, labels, matches, query, showSlots, slotStart, prefix, terminalLabel = "晋级" }: { firstRoundCount: number; labels: string[]; matches: PublicDisplayMatch[]; query: string; showSlots: boolean; slotStart: number; prefix: string; terminalLabel?: string }) {
   const columnGap = 48; const widths = labels.map((_, round) => round === 0 ? (showSlots ? 154 : 128) : 116); const lefts = widths.map((_, round) => widths.slice(0, round).reduce((sum, width) => sum + width, 0) + round * columnGap); const counts = labels.map((_, round) => Math.ceil(firstRoundCount / 2 ** round));
   const center = (round: number, index: number) => STAGE_TOP_PAD + ((2 ** round - 1) / 2) * STAGE_ROW_GAP + index * 2 ** round * STAGE_ROW_GAP; const terminalWidth = 108; const terminalLeft = lefts.at(-1)! + widths.at(-1)! + columnGap; const totalWidth = terminalLeft + terminalWidth; const height = STAGE_TOP_PAD * 2 + (firstRoundCount - 1) * STAGE_ROW_GAP + STAGE_MATCH_HEIGHT; const finalCenter = center(labels.length - 1, 0);
-  const rounds = new Map<number, PublicLiveMatch[]>(); for (let round = 1; round <= labels.length; round += 1) rounds.set(round, matches.filter((match) => match.roundNo === round)); const finalMatch = rounds.get(labels.length)?.[0]; const terminalName = finalMatch?.winnerPlayerName || (terminalLabel === "冠军" ? "冠军待定" : "晋级者待定");
+  const rounds = new Map<number, PublicDisplayMatch[]>(); for (let round = 1; round <= labels.length; round += 1) rounds.set(round, matches.filter((match) => match.roundNo === round)); const finalMatch = rounds.get(labels.length)?.[0]; const terminalName = finalMatch?.winnerPlayerName || (terminalLabel === "冠军" ? "冠军待定" : "晋级者待定");
   return <div className="stage-knockout-tree" style={{ width: totalWidth }}><header className="stage-knockout-head" style={{ width: totalWidth }}>{labels.map((label, round) => <span key={`${label}-${round}`} style={{ left: lefts[round], width: widths[round] }}>{label}</span>)}<span className="terminal-heading" style={{ left: terminalLeft, width: terminalWidth }}>{terminalLabel}</span></header><section className="stage-knockout-stage" style={{ width: totalWidth, height }}>
     {counts.map((count, round) => Array.from({ length: count }, (_, index) => { const top = center(round, index) - STAGE_MATCH_HEIGHT / 2; const match = rounds.get(round + 1)?.[index]; return <div className="stage-tree-match-wrap" style={{ left: lefts[round], top, width: widths[round], height: STAGE_MATCH_HEIGHT }} key={`${round}-${index}`}><PublicTreeMatch match={match} round={round} index={index} width={widths[round]} query={query} showSlots={showSlots && round === 0} slotStart={slotStart} prefix={prefix} /></div>; }))}
     {counts.slice(0, -1).map((count, round) => Array.from({ length: Math.floor(count / 2) }, (_, index) => { const y1 = center(round, index * 2), y2 = center(round, index * 2 + 1), mid = (y1 + y2) / 2; const left = lefts[round] + widths[round], nextLeft = lefts[round + 1], half = (nextLeft - left) / 2; return <span className="stage-tree-paths" key={`path-${round}-${index}`}><RoutePath className="horizontal" style={{ left, top: y1, width: half }} /><RoutePath className="horizontal" style={{ left, top: y2, width: half }} /><RoutePath className="vertical" style={{ left: left + half, top: y1, height: y2 - y1 }} /><RoutePath className="horizontal" style={{ left: left + half, top: mid, width: half }} /></span>; }))}
@@ -100,12 +106,12 @@ function PublicKnockoutTree({ firstRoundCount, labels, matches, query, showSlots
   </section></div>;
 }
 
-function PublicQualifierBoard({ summary, matches, query }: { summary?: PublicPhaseSummary; matches: PublicLiveMatch[]; query: string }) {
+function PublicQualifierBoard({ summary, matches, query }: { summary?: PublicPhaseSummary; matches: PublicDisplayMatch[]; query: string }) {
   const divisions = summary?.divisionCount ?? 16; const divisionSize = summary?.divisionSize ?? 32; const prelim = matches.filter((match) => match.roundNo === 0);
   return <div className="qualification-phase-board">{prelim.length > 0 && <section className="qualifier-zone public-prelim-zone"><h3><b>附加赛</b><span>{prelim.length}场 · 胜者进入标准签表</span></h3><div className="public-prelim-grid">{prelim.map((match, index) => <PublicTreeMatch key={match.id} match={match} round={0} index={index} width={154} query={query} showSlots={false} slotStart={1} prefix="附" />)}</div></section>}{Array.from({ length: divisions }, (_, divisionIndex) => { const divisionNo = divisionIndex + 1; const region = matches.filter((match) => match.divisionNo === divisionNo && match.roundNo > 0); return <section className="qualifier-zone" key={divisionNo} data-region={divisionNo}><h3><b>第{divisionNo}区</b><span>单败 · 产生1名直接晋级选手</span></h3><PublicKnockoutTree firstRoundCount={divisionSize / 2} labels={["32进16", "16进8", "8进4", "4进2", "分区决胜"]} matches={region} query={query} showSlots slotStart={divisionIndex * divisionSize + 1} prefix={`第${divisionNo}区-`} /></section>; })}</div>;
 }
 
-function PublicDoubleElimGroup({ groupNo, matches, query }: { groupNo: number; matches: PublicLiveMatch[]; query: string }) {
+function PublicDoubleElimGroup({ groupNo, matches, query }: { groupNo: number; matches: PublicDisplayMatch[]; query: string }) {
   const centerLeft = 500, centerWidth = 154, loserOneLeft = 324, loserTwoLeft = 152, loserTerminalLeft = 0, winnerLeft = 704, winnerTerminalLeft = 868; const routeWidth = 116, terminalWidth = 104; const centerY = [125, 295, 465, 635], routeY = [210, 550];
   const first = matches.filter((match) => match.roundName === "小组第一轮"); const loserOne = matches.filter((match) => match.roundName === "败部第一轮"); const winner = matches.filter((match) => match.roundName === "胜部晋级轮"); const loserTwo = matches.filter((match) => match.roundName === "败部晋级轮");
   const pairLines = (direction: "left" | "right", pair: number) => { const y1 = centerY[pair * 2], y2 = centerY[pair * 2 + 1], mid = (y1 + y2) / 2; if (direction === "right") { const start = centerLeft + centerWidth, end = winnerLeft, turn = (start + end) / 2; return <span className="double-path-set" key={`wr-${pair}`}><RoutePath className="horizontal" style={{ left: start, top: y1, width: turn - start }} /><RoutePath className="horizontal" style={{ left: start, top: y2, width: turn - start }} /><RoutePath className="vertical" style={{ left: turn, top: y1, height: y2 - y1 }} /><RoutePath className="horizontal" style={{ left: turn, top: mid, width: end - turn }} /></span>; } const start = centerLeft, end = loserOneLeft + routeWidth, turn = (start + end) / 2; return <span className="double-path-set" key={`lr-${pair}`}><RoutePath className="horizontal" style={{ left: turn, top: y1, width: start - turn }} /><RoutePath className="horizontal" style={{ left: turn, top: y2, width: start - turn }} /><RoutePath className="vertical" style={{ left: turn, top: y1, height: y2 - y1 }} /><RoutePath className="horizontal" style={{ left: end, top: mid, width: turn - end }} /></span>; };
@@ -126,27 +132,27 @@ function CompetitionTreeShell({ station, group, setGroup, phaseId, note, query, 
   return <div className="bracket-page stack public-live-stage-detail"><section className="bracket-title with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>{PHASE_LABELS[phaseId]}</h1><p>本阶段全部签位集中在一张赛程表</p></div><GroupSwitch group={group} setGroup={(value) => { setGroup(value); setQuery(""); pan.reset(); }} /></section><section className={`draw-shell unified-draw-shell ${fullscreen ? "draw-fullscreen" : ""}`}><div className="draw-toolbar"><div><small>{group} · 详细赛程表</small><h2>{PHASE_LABELS[phaseId]}</h2><p>{note}</p></div><label><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索球员、球台或场次" /></label><div className="board-controls"><button onClick={() => pan.setZoom((value) => Math.max(.45, value - .1))}>−</button><b>{Math.round(pan.zoom * 100)}%</b><button onClick={() => pan.setZoom((value) => Math.min(1.5, value + .1))}>＋</button><button onClick={pan.reset}>复位</button><button className="fullscreen-btn" onClick={() => { setFullscreen((value) => !value); pan.reset(); }}>{fullscreen ? "关闭全屏" : "全屏查看"}</button></div></div><section className="bracket-viewport upgraded unified-viewport" data-public-board={phaseId} onPointerDown={pan.down} onPointerMove={pan.move} onPointerUp={pan.up} onPointerCancel={pan.up}><div className="bracket-canvas corrected-canvas unified-canvas" style={{ transform: `translate(${pan.offset.x}px,${pan.offset.y}px) scale(${pan.zoom})` }}>{children}</div></section><p className="drag-tip">拖动查看整张签表；搜索命中后会自动定位并高亮。</p></section></div>;
 }
 
-function QualifierStageDetail({ station, data, group, setGroup, phaseId, onBack }: { station: StationMeta; data: PublicCompetitionEvent; group: Group; setGroup: (group: Group) => void; phaseId: PhaseId; onBack: () => void }) {
+function QualifierStageDetail({ station, data, group, setGroup, phaseId, onBack }: { station: StationMeta; data: PublicCompetitionDisplayEvent; group: Group; setGroup: (group: Group) => void; phaseId: PhaseId; onBack: () => void }) {
   const [query, setQuery] = useState(""); const summary = phaseSummary(data, group, phaseId); const matches = phaseMatches(data, group, phaseId);
   return <div className="stack public-competition-overlay"><button className="draw-back" onClick={onBack}>‹ 返回赛程阶段</button><CompetitionTreeShell station={station} group={group} setGroup={setGroup} phaseId={phaseId} query={query} setQuery={setQuery} note="16个区连续排列；每区签表末端标出直接晋级选手"><>{summary && <div className="public-stage-summary"><strong>{summary.entrantCount}人参赛</strong> · {summary.playoffMatchCount}场附加赛 · {summary.byeCount}个轮空 · {summary.divisionCount}个分区</div>}<PublicQualifierBoard summary={summary} matches={matches} query={query} /></></CompetitionTreeShell></div>;
 }
 
-function MainOneDetail({ station, data, group, setGroup, onBack }: { station: StationMeta; data: PublicCompetitionEvent; group: Group; setGroup: (group: Group) => void; onBack: () => void }) {
+function MainOneDetail({ station, data, group, setGroup, onBack }: { station: StationMeta; data: PublicCompetitionDisplayEvent; group: Group; setGroup: (group: Group) => void; onBack: () => void }) {
   const [query, setQuery] = useState(""); const matches = phaseMatches(data, group, "main-one");
   return <div className="stack public-competition-overlay"><button className="draw-back" onClick={onBack}>‹ 返回赛程阶段</button><CompetitionTreeShell station={station} group={group} setGroup={setGroup} phaseId="main-one" query={query} setQuery={setQuery} note="中间首轮对阵，右侧胜部、左侧败部；每组4人晋级"><>{!matches.length && <div className="public-main-empty-note"><strong>赛程表已开放：</strong>当前签位、球台和晋级关系尚未发布的部分统一显示“待定”。</div>}<div className="double-elim-phase-board">{Array.from({ length: 8 }, (_, index) => <PublicDoubleElimGroup key={index + 1} groupNo={index + 1} matches={matches.filter((match) => match.divisionNo === index + 1)} query={query} />)}</div></></CompetitionTreeShell></div>;
 }
 
-function MainTwoDetail({ station, data, group, setGroup, onBack }: { station: StationMeta; data: PublicCompetitionEvent; group: Group; setGroup: (group: Group) => void; onBack: () => void }) {
+function MainTwoDetail({ station, data, group, setGroup, onBack }: { station: StationMeta; data: PublicCompetitionDisplayEvent; group: Group; setGroup: (group: Group) => void; onBack: () => void }) {
   const [query, setQuery] = useState(""); const matches = phaseMatches(data, group, "main-two"); const bracket = matches.filter((match) => match.matchCode !== "M2-3RD"); const third = matches.find((match) => match.matchCode === "M2-3RD");
   return <div className="stack public-competition-overlay"><button className="draw-back" onClick={onBack}>‹ 返回赛程阶段</button><CompetitionTreeShell station={station} group={group} setGroup={setGroup} phaseId="main-two" query={query} setQuery={setQuery} note="32强重新抽签，单败淘汰至冠军；未产生的数据统一显示待定"><>{!matches.length && <div className="public-main-empty-note"><strong>赛程表已开放：</strong>等待正赛第一阶段产生32强后重新抽签，当前选手、时间、球台和晋级节点显示待定。</div>}<PublicKnockoutTree firstRoundCount={16} labels={["32进16", "16进8", "8进4", "半决赛", "决赛"]} matches={bracket} query={query} showSlots slotStart={1} prefix="正赛-" terminalLabel="冠军" />{third && <div className="public-third-place"><h3>三、四名决赛</h3><PublicTreeMatch match={third} round={4} index={0} width={154} query={query} showSlots={false} slotStart={1} prefix="季军赛" /></div>}</></CompetitionTreeShell></div>;
 }
 
-function MainRosterDetail({ station, data, group, setGroup, onBack }: { station: StationMeta; data: PublicCompetitionEvent; group: Group; setGroup: (group: Group) => void; onBack: () => void }) {
+function MainRosterDetail({ station, data, group, setGroup, onBack }: { station: StationMeta; data: PublicCompetitionDisplayEvent; group: Group; setGroup: (group: Group) => void; onBack: () => void }) {
   const roster = data.mainRoster.filter((item) => item.group === group).sort((a, b) => a.sortOrder - b.sortOrder); const q1 = roster.filter((item) => item.sourceType === "qualifier_one_qualified"); const q2 = roster.filter((item) => item.sourceType === "qualifier_two_qualified"); const seeds = roster.filter((item) => item.sourceType === "seed");
   return <div className="bracket-page stack public-live-stage-detail"><button className="draw-back" onClick={onBack}>‹ 返回赛程阶段</button><section className="bracket-title with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>正赛64人名单</h1><p>资格赛晋级48人 + 种子16人</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="public-roster-intro"><small>正赛 · 64人</small><h2><strong>{roster.length}/64</strong> 正赛名单已就绪</h2><p>两场资格赛各晋级24人，共48人；另有16名种子选手进入正赛。</p></section><section className="public-roster-groups">{[["资格赛第一场晋级", q1], ["资格赛第二场晋级", q2], ["种子选手", seeds]].map(([title, values]) => <article className="public-roster-group" key={String(title)}><header><h3>{String(title)}</h3><span>{(values as typeof roster).length}人</span></header><div className="public-roster-grid">{(values as typeof roster).map((player, index) => <div key={player.playerId}><span>{String(index + 1).padStart(2, "0")}</span><strong>{player.playerName}</strong></div>)}</div></article>)}</section></div>;
 }
 
-function PublicSchedule({ station, data }: { station: StationMeta; data: PublicCompetitionEvent }) {
+function PublicSchedule({ station, data }: { station: StationMeta; data: PublicCompetitionDisplayEvent }) {
   const [group, setGroup] = useState<Group>("少年组"); const [detail, setDetail] = useState<PhaseId | null>(null); const [showRoster, setShowRoster] = useState(false);
   if (showRoster) return <MainRosterDetail station={station} data={data} group={group} setGroup={setGroup} onBack={() => setShowRoster(false)} />;
   if (detail?.startsWith("qualifier")) return <QualifierStageDetail station={station} data={data} group={group} setGroup={setGroup} phaseId={detail} onBack={() => setDetail(null)} />;
@@ -155,7 +161,7 @@ function PublicSchedule({ station, data }: { station: StationMeta; data: PublicC
   return <div className="schedule-page stack public-competition-overlay"><section className="schedule-head with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>赛程</h1><p>按比赛阶段查看完整赛程表</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="phase-schedule compact-phases">{PHASE_ORDER.map((phaseId) => { const phase = phaseFor(station, phaseId); const summary = phaseSummary(data, group, phaseId); const phaseMs = phaseMatches(data, group, phaseId); const rosterCount = data.mainRoster.filter((item) => item.group === group).length; const qualifier = phaseId.startsWith("qualifier"); const progress = qualifier && summary ? `${summary.entrantCount}人 → 晋级24人` : phaseId === "main-one" ? `64进32 · 正赛名单 ${rosterCount}/64` : "32进1 · 单败淘汰"; const note = qualifier && summary ? `${summary.playoffMatchCount ? `附加赛${summary.playoffMatchCount}场 · ` : ""}${summary.byeCount ? `轮空${summary.byeCount}个 · ` : ""}${summary.divisionCount}个分区` : phaseId === "main-one" ? (phaseMs.length ? "8组双败签表与赛程已发布" : "正赛名单已就绪，签表待发布") : (phaseMs.length ? "32强签表与赛程已发布" : "等待32强产生后重新抽签"); return <article className="phase-card compact-phase" key={phaseId}><div className="phase-status-line"><b className={`phase-status status-${phase.status}`}>{phase.status}</b><time>{phase.date}</time></div><h2>{phase.title}</h2><h3>{progress}</h3><div className="phase-meta"><span>{qualifier ? "一次抽签到底 · 16区" : phaseId === "main-one" ? "8组双败" : "32强单败"}</span><span>{raceLabel(group, phaseId)}</span></div>{qualifier && <div className="qualify-rule"><strong>晋级24人</strong><span>16名分区冠军直接晋级</span><i>＋</i><span>决胜负者按局胜率取前8</span></div>}<footer><small>{note}</small><div className="public-phase-actions">{phaseId === "main-one" && rosterCount > 0 && <button className="roster" onClick={() => setShowRoster(true)}>查看正赛名单</button>}<button onClick={() => setDetail(phaseId)}>查看赛程表 <i>›</i></button></div></footer></article>; })}</section></div>;
 }
 
-function PublicMatches({ station, data }: { station: StationMeta; data: PublicCompetitionEvent }) {
+function PublicMatches({ station, data }: { station: StationMeta; data: PublicCompetitionDisplayEvent }) {
   const [group, setGroup] = useState<Group>("少年组"); const all = useMemo(() => data.matches.filter((match) => match.group === group && match.date), [data.matches, group]); const days = useMemo(() => [...new Set(all.map((match) => match.date!).filter(Boolean))].sort(), [all]); const defaultDay = latestAvailableDay(days); const [day, setDay] = useState(defaultDay); const selectedDay = days.includes(day) ? day : defaultDay; const [query, setQuery] = useState("");
   const matches = all.filter((match) => match.date === selectedDay && [match.playerA, match.playerB, match.table, match.roundName, match.matchCode].some((value) => (value ?? "").includes(query.trim())));
   return <div className="match-list-page stack public-competition-overlay"><section className="match-list-head with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>对阵</h1><p>默认显示最近一个已有比赛的日期，可切换查看其它比赛日</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="match-filter"><nav className="match-days">{days.map((value) => <button className={selectedDay === value ? "active" : ""} onClick={() => setDay(value)} key={value}><small>{weekday(value)}</small><b>{compactDate(value)}</b></button>)}</nav><label><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索球员、球台或场次" /></label></section><div className="match-count"><strong>{selectedDay ? compactDate(selectedDay) : "—"}</strong><span>{group} · {matches.length}场对阵</span></div>{matches.length ? <section className="versus-list">{matches.map((match) => <article className="versus-card" key={match.id}><header><b>{match.time || "待定"}</b><span>{PHASE_LABELS[match.phaseId]} · {match.roundName} · {displayMatchCode(match.matchCode, match.phaseId)}</span></header><section><div className="match-player"><i>{displayName(match.playerA, "待").slice(0, 1)}</i><strong>{displayName(match.playerA, "待定")}</strong></div><div className="match-center"><strong>{scoreLabel(match)}</strong><span className={matchStatus(match) === "已结束" ? "ended" : ""}>{matchStatus(match)}</span><b className={match.isTv ? "tv" : ""}>{match.table || "球台待定"}</b></div><div className="match-player"><i>{displayName(match.playerB, "待").slice(0, 1)}</i><strong>{displayName(match.playerB, "待定")}</strong></div></section></article>)}</section> : <section className="match-empty"><i>○</i><h2>当日对阵待公布</h2><p>该日期目前没有已发布的比赛，可切换其它日期查看。</p></section>}</div>;
@@ -174,7 +180,7 @@ function PublicRankings({ station, rankings }: { station: StationMeta; rankings:
   return <div className="stack public-competition-overlay"><section className="ranking-head"><div><small className="event-name-kicker">{station.title}</small><h1>比赛排名</h1><p>{finalRows.length ? "组委会已发布本站正赛最终排名" : "最终排名待组委会确认并发布"}</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="card ranking"><header><div><small>{group}</small><h2>{finalRows.length ? "本站赛事排名" : "奖金设置"}</h2></div></header>{finalRows.length ? <div className="public-final-ranking">{finalRows.map((row) => <div key={row.id}><span style={rankingNumberStyle(row.displayOrder)}>{row.displayOrder}</span><b>{row.placementLabel}</b><strong>{row.playerName}</strong><em>{row.prizeDisplay || "—"}</em></div>)}</div> : <><div className="ranking-wait"><i /><div><strong>比赛结果尚未全部完成</strong><p>排名仅统计正赛最终名次。待组委会确认并发布本站排名后，这里会自动切换为正式排名。</p></div></div><div className="prizes">{prizes.map(([rank, amount], index) => <div key={`${rank}-${index}`}><span>{index + 1}</span><strong>{rank}</strong><b>{amount}</b></div>)}</div></>}</section></div>;
 }
 
-function CompetitionOverlay({ tab, station, data, rankings }: { tab: LiveTab; station: StationMeta; data: PublicCompetitionEvent; rankings: PublicRanking[] }) { if (tab === "schedule") return <PublicSchedule station={station} data={data} />; if (tab === "matches") return <PublicMatches station={station} data={data} />; return <PublicRankings station={station} rankings={rankings} />; }
+function CompetitionOverlay({ tab, station, data, rankings }: { tab: LiveTab; station: StationMeta; data: PublicCompetitionDisplayEvent; rankings: PublicRanking[] }) { if (tab === "schedule") return <PublicSchedule station={station} data={data} />; if (tab === "matches") return <PublicMatches station={station} data={data} />; return <PublicRankings station={station} rankings={rankings} />; }
 
 export default function PublicCompetitionLiveV2({
   station,
@@ -185,7 +191,7 @@ export default function PublicCompetitionLiveV2({
   contentState?: PublicContentState;
   activeTab: PublicCompetitionTab | null;
 }) {
-  const [competitionByEvent, setCompetitionByEvent] = useState<Map<string, PublicCompetitionEvent>>(() => new Map());
+  const [competitionByEvent, setCompetitionByEvent] = useState<Map<string, PublicCompetitionDisplayEvent>>(() => new Map());
   const [rankingsByEvent, setRankingsByEvent] = useState<Map<string, PublicRanking[]>>(() => new Map());
   const [loadingEventId, setLoadingEventId] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -193,13 +199,14 @@ export default function PublicCompetitionLiveV2({
   const competition = competitionByEvent.get(station.eventId);
   const published = activeTab ? Boolean(contentState?.publishedModules.includes(activeTab)) : false;
 
-  const loadEvent = useCallback(async (eventId: string, force = false) => {
+  const loadEvent = useCallback(async (eventId: string, force = false, requestedVersion = "") => {
     if (!force && competitionByEvent.has(eventId)) return;
     setLoadingEventId(eventId);
     setLoadError("");
     try {
-      const response = await fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition`, { cache: "no-store" });
-      const payload = await response.json() as { data?: { version: string; event: PublicCompetitionEvent; rankings: PublicRanking[] }; error?: string };
+      const versionQuery = requestedVersion ? `?version=${encodeURIComponent(requestedVersion)}` : "";
+      const response = await fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition${versionQuery}`);
+      const payload = await response.json() as { data?: { version: string; event: PublicCompetitionDisplayEvent; rankings: PublicRanking[] }; error?: string };
       if (!response.ok || !payload.data) throw new Error(payload.error || "赛事数据读取失败。");
       versions.current.set(eventId, payload.data.version);
       setCompetitionByEvent((current) => new Map(current).set(eventId, payload.data!.event));
@@ -226,6 +233,12 @@ export default function PublicCompetitionLiveV2({
   }, [activeTab, loadEvent, published, station.eventId]);
 
   useEffect(() => {
+    if (activeTab || !contentState?.publishedModules.some((item) => item === "schedule" || item === "matches" || item === "rankings")) return;
+    const timer = window.setTimeout(() => { void loadEvent(station.eventId); }, 150);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, contentState?.publishedModules, loadEvent, station.eventId]);
+
+  useEffect(() => {
     if (!activeTab || !published) return;
     const eventId = station.eventId;
     const checkVersion = async () => {
@@ -235,7 +248,7 @@ export default function PublicCompetitionLiveV2({
         const payload = await response.json() as { data?: { version: string } };
         const nextVersion = payload.data?.version;
         const currentVersion = versions.current.get(eventId);
-        if (nextVersion && currentVersion && nextVersion !== currentVersion) await loadEvent(eventId, true);
+        if (nextVersion && currentVersion && nextVersion !== currentVersion) await loadEvent(eventId, true, nextVersion);
         else if (nextVersion && !currentVersion) versions.current.set(eventId, nextVersion);
       } catch {
         // Keep the last published snapshot visible when a lightweight version check fails.
