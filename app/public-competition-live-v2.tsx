@@ -200,7 +200,7 @@ function PublicKnockoutTree({ firstRoundCount, labels, matches, query, showSlots
   const rounds = new Map<number, PublicDisplayMatch[]>(); for (let round = 1; round <= labels.length; round += 1) rounds.set(round, matches.filter((match) => match.roundNo === round)); const finalMatch = rounds.get(labels.length)?.[0]; const terminalName = finalMatch?.winnerPlayerName || (terminalLabel === "冠军" ? "冠军待定" : "晋级者待定");
   return <div className="stage-knockout-tree" style={{ width: totalWidth }}><header className="stage-knockout-head" style={{ width: totalWidth }}>{labels.map((label, round) => <span key={`${label}-${round}`} style={{ left: lefts[round], width: widths[round] }}>{label}</span>)}<span className="terminal-heading" style={{ left: terminalLeft, width: terminalWidth }}>{terminalLabel}</span></header><section className="stage-knockout-stage" style={{ width: totalWidth, height }}>
     {counts.map((count, round) => Array.from({ length: count }, (_, index) => { const top = center(round, index) - STAGE_MATCH_HEIGHT / 2; const match = rounds.get(round + 1)?.[index]; return <div className="stage-tree-match-wrap" style={{ left: lefts[round], top, width: widths[round], height: STAGE_MATCH_HEIGHT }} key={`${round}-${index}`}><PublicTreeMatch match={match} round={round} index={index} width={widths[round]} query={query} showSlots={showSlots && round === 0} slotStart={slotStart} prefix={prefix} /></div>; }))}
-    {counts.slice(0, -1).map((count, round) => Array.from({ length: Math.floor(count / 2) }, (_, index) => { const y1 = center(round, index * 2), y2 = center(round, index * 2 + 1), mid = (y1 + y2) / 2; const left = lefts[round] + widths[round], nextLeft = lefts[round + 1], half = (nextLeft - left) / 2; return <span className="stage-tree-paths" key={`path-${round}-${index}`}><RoutePath className="horizontal" style={{ left, top: y1, width: half }} /><RoutePath className="horizontal" style={{ left, top: y2, width: half }} /><RoutePath className="vertical" style={{ left: left + half, top: y1, height: y2 - y1 }} /><RoutePath className="horizontal" style={{ left: left + half, top: mid, width: half }} /></span>; }))}
+    {counts.slice(0, -1).map((count, round) => Array.from({ length: Math.floor(count / 2) }, (_, index) => { const y1 = center(round, index * 2), y2 = center(round, index * 2 + 1), mid = (y1 + y2) / 2; const left = lefts[round] + widths[round], nextLeft = lefts[round + 1], half = (nextLeft - left) / 2; return <span className="stage-tree-paths" key={`path-${round}-${index}`}><RoutePath className="horizontal" style={{ left, top: y1, width: half }} /><RoutePath className="horizontal" style={{ left, top: y2, width: half }} /><RoutePath className="vertical" style={{ left: turn, top: y1, height: y2 - y1 }} /></span>; }))}
     <span className="stage-tree-paths"><RoutePath className="horizontal terminal-path" style={{ left: lefts.at(-1)! + widths.at(-1)!, top: finalCenter, width: columnGap }} /></span><div className="terminal-player-wrap" style={{ left: terminalLeft, top: finalCenter - 24, width: terminalWidth }}><TerminalPlayer label={terminalLabel} name={terminalName} accent={terminalLabel === "冠军" ? "pink" : "green"} /></div>
   </section></div>;
 }
@@ -344,10 +344,13 @@ export default function PublicCompetitionLiveV2({ station, contentState, activeT
   useEffect(() => {
     if (!activeTab || !published) return;
     const eventId = station.eventId;
-    if (activeTab === "rankings") { void loadRankings(eventId); return; }
-    if (activeTab === "matches") { void loadCompetition(eventId); return; }
-    void loadSummary(eventId);
-    void loadCompetition(eventId);
+    const timer = window.setTimeout(() => {
+      if (activeTab === "rankings") { void loadRankings(eventId); return; }
+      if (activeTab === "matches") { void loadCompetition(eventId); return; }
+      void loadSummary(eventId);
+      void loadCompetition(eventId);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [activeTab, loadCompetition, loadRankings, loadSummary, published, station.eventId]);
 
   useEffect(() => {
