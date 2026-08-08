@@ -207,7 +207,7 @@ function PublicKnockoutTree({ firstRoundCount, labels, matches, query, showSlots
 
 function PublicQualifierBoard({ summary, matches, query }: { summary?: PublicPhaseSummary; matches: PublicDisplayMatch[]; query: string }) {
   const divisions = summary?.divisionCount ?? 16; const divisionSize = summary?.divisionSize ?? 32; const prelim = matches.filter((match) => match.roundNo === 0);
-  return <div className="qualification-phase-board">{prelim.length > 0 && <section className="qualifier-zone public-prelim-zone"><h3><b>附加赛</b><span>{prelim.length}场 · 胜者进入标准签表</span></h3><div className="public-prelim-grid">{prelim.map((match, index) => <PublicTreeMatch key={match.id} match={match} round={0} index={index} width={154} query={query} showSlots={false} slotStart={1} prefix="附" />}</div></section>}{Array.from({ length: divisions }, (_, divisionIndex) => { const divisionNo = divisionIndex + 1; const region = matches.filter((match) => match.divisionNo === divisionNo && match.roundNo > 0); return <section className="qualifier-zone" key={divisionNo} data-region={divisionNo}><h3><b>第{divisionNo}区</b><span>单败 · 产生1名直接晋级选手</span></h3><PublicKnockoutTree firstRoundCount={divisionSize / 2} labels={["32进16", "16进8", "8进4", "4进2", "分区决胜"]} matches={region} query={query} showSlots slotStart={divisionIndex * divisionSize + 1} prefix={`第${divisionNo}区-`} /></section>; })}</div>;
+  return <div className="qualification-phase-board">{prelim.length > 0 && <section className="qualifier-zone public-prelim-zone"><h3><b>附加赛</b><span>{prelim.length}场 · 胜者进入标准签表</span></h3><div className="public-prelim-grid">{prelim.map((match, index) => <PublicTreeMatch key={match.id} match={match} round={0} index={index} width={154} query={query} showSlots={false} slotStart={1} prefix="附" />)}</div></section>}{Array.from({ length: divisions }, (_, divisionIndex) => { const divisionNo = divisionIndex + 1; const region = matches.filter((match) => match.divisionNo === divisionNo && match.roundNo > 0); return <section className="qualifier-zone" key={divisionNo} data-region={divisionNo}><h3><b>第{divisionNo}区</b><span>单败 · 产生1名直接晋级选手</span></h3><PublicKnockoutTree firstRoundCount={divisionSize / 2} labels={["32进16", "16进8", "8进4", "4进2", "分区决胜"]} matches={region} query={query} showSlots slotStart={divisionIndex * divisionSize + 1} prefix={`第${divisionNo}区-`} /></section>; })}</div>;
 }
 
 function PublicDoubleElimGroup({ groupNo, matches, query }: { groupNo: number; matches: PublicDisplayMatch[]; query: string }) {
@@ -344,13 +344,10 @@ export default function PublicCompetitionLiveV2({ station, contentState, activeT
   useEffect(() => {
     if (!activeTab || !published) return;
     const eventId = station.eventId;
-    const timer = window.setTimeout(() => {
-      if (activeTab === "rankings") { void loadRankings(eventId); return; }
-      if (activeTab === "matches") { void loadCompetition(eventId); return; }
-      void loadSummary(eventId);
-      void loadCompetition(eventId);
-    }, 0);
-    return () => window.clearTimeout(timer);
+    if (activeTab === "rankings") { void loadRankings(eventId); return; }
+    if (activeTab === "matches") { void loadCompetition(eventId); return; }
+    void loadSummary(eventId);
+    void loadCompetition(eventId);
   }, [activeTab, loadCompetition, loadRankings, loadSummary, published, station.eventId]);
 
   useEffect(() => {
