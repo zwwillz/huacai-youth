@@ -2,7 +2,8 @@ import { unstable_cache } from "next/cache";
 import { getCompetitionMatches } from "@/db/competition-matches";
 import { getPublicPlayerDetail, getPublicPlayerSummaries } from "@/db/player-data";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
+export const revalidate = 300;
 export const runtime = "nodejs";
 
 const getCachedPreview = unstable_cache(async () => {
@@ -16,9 +17,21 @@ const getCachedPreview = unstable_cache(async () => {
 }, ["public-player-preview-v2"], { revalidate: 300, tags: ["public-players"] });
 
 export async function GET() {
+  const startedAt = performance.now();
   try {
-    return Response.json({ data: await getCachedPreview() }, { headers: { "cache-control": "no-store" } });
+    const useCiBuildFallback = process.env.GITHUB_ACTIONS === "true"
+      && (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const data = useCiBuildFallback ? { player: null, matches: [] } : await getCachedPreview();
+    return Response.json({ data }, {
+      headers: {
+        "cache-control": "public, max-age=60, s-maxage=300, stale-while-revalidate=86400",
+        "server-timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}`,
+      },
+    });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "球员模式预览读取失败。" }, { status: 500 });
+    return Response.json(
+      { error: error instanceof Error ? error.message : "球员模式预览读取失败。" },
+      { status: 500, headers: { "cache-control": "no-store" } },
+    );
   }
 }
