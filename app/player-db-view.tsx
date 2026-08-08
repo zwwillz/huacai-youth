@@ -8,6 +8,7 @@ import styles from "./player-db.module.css";
 type FilterGroup = "全部" | "少年组" | "青年组";
 type DetailTab = "data" | "events";
 type YearFilter = "全部" | number;
+type PlayerCounts = Record<FilterGroup, number>;
 
 function flag(code: string) {
   return code.toUpperCase() === "CN" ? "🇨🇳" : "🌐";
@@ -130,7 +131,19 @@ function DetailPanel({detail,onClose}:{detail:PublicPlayerDetail;onClose:()=>voi
   </div>;
 }
 
-function PlayerBrowser({players}:{players:PublicPlayerSummary[]}) {
+function PlayerBrowser({
+  players,
+  counts,
+  allLoaded,
+  loadingAll,
+  loadAll,
+}: {
+  players: PublicPlayerSummary[];
+  counts: PlayerCounts;
+  allLoaded: boolean;
+  loadingAll: boolean;
+  loadAll: () => Promise<void>;
+}) {
   const [query,setQuery]=useState("");
   const [group,setGroup]=useState<FilterGroup>("全部");
   const [limit,setLimit]=useState(120);
@@ -144,9 +157,15 @@ function PlayerBrowser({players}:{players:PublicPlayerSummary[]}) {
     return player.name.includes(needle)||player.displayName.includes(needle);
   }),[players,query,group]);
   const visible=filtered.slice(0,limit);
+  const totalForView=query.trim() ? (allLoaded ? filtered.length : counts[group]) : counts[group];
+  const remaining=Math.max(totalForView-visible.length,0);
+  const canShowMore=!allLoaded||visible.length<filtered.length;
 
   const changeGroup=(value:FilterGroup)=>{setGroup(value);setLimit(120)};
-  const changeQuery=(value:string)=>{setQuery(value);setLimit(120)};
+  const changeQuery=(value:string)=>{
+    setQuery(value);setLimit(120);
+    if(value.trim()&&!allLoaded)void loadAll();
+  };
 
   const openPlayer=async(id:string)=>{
     const cached=cache.current.get(id);
@@ -174,7 +193,7 @@ function PlayerBrowser({players}:{players:PublicPlayerSummary[]}) {
           {(["全部","少年组","青年组"] as FilterGroup[]).map(item=><button className={group===item?styles.active:""} onClick={()=>changeGroup(item)} key={item}>{item}</button>)}
         </div>
       </header>
-      <div className={styles.countLine}><span>共 {filtered.length} 人</span><small>按总积分从高到低排序 · 同名选手按身份 ID 区分</small></div>
+      <div className={styles.countLine}><span>{query.trim()&&loadingAll?"正在搜索全部球员…":`共 ${totalForView} 人`}</span><small>按总积分从高到低排序 · 同名选手按身份 ID 区分</small></div>
       <div className={styles.playerGrid}>
         {visible.map(player=><button className={styles.playerCard} onClick={()=>openPlayer(player.id)} key={player.id} title={`总积分 ${formatPoints(player.totalPoints)}`}>
           <PlayerAvatar name={player.name}/>
@@ -185,7 +204,7 @@ function PlayerBrowser({players}:{players:PublicPlayerSummary[]}) {
           <i>{loadingId===player.id?"…":"›"}</i>
         </button>)}
       </div>
-      {visible.length<filtered.length?<button className={styles.more} onClick={()=>setLimit(value=>value+120)}>显示更多（还有 {filtered.length-visible.length} 人）</button>:null}
+      {canShowMore?<button className={styles.more} disabled={loadingAll} onClick={async()=>{if(!allLoaded)await loadAll();setLimit(value=>value+120)}}>{loadingAll?"正在读取更多球员…":`显示更多（还有 ${remaining} 人）`}</button>:null}
       {!filtered.length?<div className={styles.empty}>没有找到符合条件的球员</div>:null}
     </section>
     {selected?<DetailPanel detail={selected} onClose={()=>setSelected(null)}/>:null}
@@ -195,10 +214,27 @@ function PlayerBrowser({players}:{players:PublicPlayerSummary[]}) {
 export default function PlayerDbView() {
   const [target,setTarget]=useState<HTMLElement|null>(null);
   const [players,setPlayers]=useState<PublicPlayerSummary[]>([]);
+  const [counts,setCounts]=useState<PlayerCounts>({全部:0,少年组:0,青年组:0});
+  const [allLoaded,setAllLoaded]=useState(false);
+  const [loadingAll,setLoadingAll]=useState(false);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
   const loaded=useRef(false);
   const loadingRef=useRef(false);
+  const allLoadedRef=useRef(false);
+  const loadingAllRef=useRef(false);
+
+  const loadAll=async()=>{
+    if(allLoadedRef.current||loadingAllRef.current)return;
+    loadingAllRef.current=true;setLoadingAll(true);
+    try{
+      const response=await fetch("/api/public/players/all");
+      const payload=await response.json() as {data?:PublicPlayerSummary[];error?:string};
+      if(!response.ok||!payload.data)throw new Error(payload.error||"完整球员数据读取失败。");
+      setPlayers(payload.data);allLoadedRef.current=true;setAllLoaded(true);
+    }catch(reason){setError(reason instanceof Error?reason.message:"完整球员数据读取失败。")}
+    finally{loadingAllRef.current=false;setLoadingAll(false)}
+  };
 
   useEffect(()=>{
     let original:HTMLElement|null=null;
@@ -210,9 +246,14 @@ export default function PlayerDbView() {
       setLoading(true);setError("");
       try{
         const response=await fetch("/api/public/players");
-        const payload=await response.json() as {data?:PublicPlayerSummary[];error?:string};
+        const payload=await response.json() as {data?:PublicPlayerSummary[];counts?:PlayerCounts;error?:string};
         if(!response.ok||!payload.data)throw new Error(payload.error||"球员数据读取失败。");
-        setPlayers(payload.data);loaded.current=true;
+        const fallbackCounts:PlayerCounts={
+          全部:payload.data.length,
+          少年组:payload.data.filter((player)=>player.group==="少年组").length,
+          青年组:payload.data.filter((player)=>player.group==="青年组").length,
+        };
+        setPlayers(payload.data);setCounts(payload.counts??fallbackCounts);loaded.current=true;
       }catch(reason){setError(reason instanceof Error?reason.message:"球员数据读取失败。")}
       finally{loadingRef.current=false;setLoading(false)}
     };
@@ -244,5 +285,5 @@ export default function PlayerDbView() {
   if(!target)return null;
   if(loading&&!players.length)return createPortal(<div className={styles.empty}>正在读取球员数据…</div>,target);
   if(error&&!players.length)return createPortal(<div className={styles.empty}>{error}</div>,target);
-  return createPortal(<PlayerBrowser players={players}/>,target);
+  return createPortal(<PlayerBrowser players={players} counts={counts} allLoaded={allLoaded} loadingAll={loadingAll} loadAll={loadAll}/>,target);
 }
