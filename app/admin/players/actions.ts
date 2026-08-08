@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminPlayer, updateAdminPlayer } from "@/db/player-admin-v2";
+import { deleteAdminPlayer } from "@/db/player-admin-delete";
 import { getAdminViewer } from "../admin-viewer";
 
 function text(formData: FormData, key: string) {
@@ -57,11 +58,20 @@ export async function createPlayerAction(formData: FormData) {
   let errorMessage = "";
   try {
     const fields = playerFields(formData);
+    const profileStatus = text(formData, "profileStatus") || "approved";
     playerId = await createAdminPlayer(viewer.username, {
       ...fields,
       identityType: fields.identityType,
       identityNo: fields.identityNo,
     });
+    if (profileStatus !== "approved") {
+      await updateAdminPlayer(viewer.username, {
+        ...fields,
+        playerId,
+        eventId: null,
+        profileStatus,
+      });
+    }
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : "新增球员失败。";
   }
@@ -91,4 +101,21 @@ export async function updatePlayerAction(formData: FormData) {
   if (errorMessage) redirect(redirectTarget(formData, "error", errorMessage, playerId));
   revalidatePath("/admin/players");
   redirect(redirectTarget(formData, "success", "球员档案已更新。", playerId));
+}
+
+export async function deletePlayerAction(formData: FormData) {
+  const viewer = await getAdminViewer();
+  if (!viewer) redirect("/admin/login");
+  const playerId = text(formData, "playerId");
+
+  let errorMessage = "";
+  try {
+    await deleteAdminPlayer(viewer.username, playerId);
+  } catch (error) {
+    errorMessage = error instanceof Error ? error.message : "删除球员失败。";
+  }
+
+  if (errorMessage) redirect(redirectTarget(formData, "error", errorMessage, playerId));
+  revalidatePath("/admin/players");
+  redirect(redirectTarget(formData, "success", "球员档案已删除。"));
 }
