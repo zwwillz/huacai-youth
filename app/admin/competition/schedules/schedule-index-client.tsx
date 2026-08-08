@@ -59,12 +59,13 @@ export default function ScheduleIndexClient({ initialEventId, initialContext, in
       const currentRequest = ++requestId.current;
       const cached = cache.get(nextEventId);
       setError("");
-      if (cached) {
+      if (cached && Date.now() - cached.at < CACHE_TTL) {
         const groupId = cached.data.context.groups[0]?.id || "";
         const phase = defaultPhase(cached.data.items, groupId);
         setEventId(nextEventId); setContext(cached.data.context); setAllItems(cached.data.items); setSelectedGroupId(groupId); setSelectedPhase(phase);
         replaceUrl(nextEventId, groupId, phase);
-        if (Date.now() - cached.at < CACHE_TTL) { setLoading(false); return; }
+        setLoading(false);
+        return;
       }
       setLoading(true);
       void fetch(`/api/admin/competition/schedules-index?eventId=${encodeURIComponent(nextEventId)}`, { cache: "no-store" })
