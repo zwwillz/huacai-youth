@@ -13,8 +13,8 @@ export async function GET(request: Request) {
   if (!eventId) return Response.json({ error: "缺少赛事ID。" }, { status: 400 });
   try {
     const [context, items] = await Promise.all([
-      getCompetitionContextData(viewer.username, eventId),
-      getCompetitionBracketIndex(viewer.username, eventId),
+      getCompetitionContextData(viewer, eventId),
+      getCompetitionBracketIndex(viewer, eventId),
     ]);
     return Response.json({ data: { context, items } }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
   } catch (error) {
