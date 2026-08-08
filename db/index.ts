@@ -10,10 +10,17 @@ export function getSqlClient() {
     throw new Error("后台数据库尚未配置，请在 EdgeOne Pages 中设置 DATABASE_URL。");
   }
   client ??= postgres(databaseUrl, {
-    max: 5,
+    // EdgeOne Pages scales with short-lived server instances. Keeping a
+    // five-connection pool per instance multiplies quickly when several
+    // admin routes are requested at once, so each instance deliberately
+    // uses one connection and lets Supabase's transaction pooler multiplex.
+    max: 1,
     prepare: false,
-    connect_timeout: 10,
-    idle_timeout: 20,
+    connect_timeout: 8,
+    idle_timeout: 5,
+    connection: {
+      application_name: "huacai-edgeone",
+    },
   });
   return client;
 }
