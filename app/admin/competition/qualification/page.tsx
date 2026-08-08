@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
-import { getAdminNavigationEvents } from "@/db/admin-ui";
-import { getQualificationWorkspaceData } from "@/db/qualification-engine";
-import { getMainRosterControlData } from "@/db/main-competition-flow";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
+import { getQualificationWorkspaceDataFast } from "@/db/qualification-fast";
+import { getMainRosterControlDataFast } from "@/db/main-roster-fast";
 import { getCompetitionContextData } from "@/db/competition-context";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import CompetitionContextBar from "../competition-context-bar";
@@ -27,14 +27,14 @@ export default async function QualificationPage({ searchParams }: { searchParams
   const viewer = await getAdminViewer();
   if (!viewer) redirect("/admin/login");
   const query = await searchParams;
-  const events = await getAdminNavigationEvents(viewer.username);
+  const events = await getAdminNavigationEventsForPrincipal(viewer);
   const eventId = events.some((event) => event.id === query.event) ? String(query.event) : events[0]?.id;
   if (!eventId) redirect("/admin/competition");
 
   const result = await captureAdminLoad((async () => {
     const [data, context] = await Promise.all([
-      getQualificationWorkspaceData(viewer.username, eventId),
-      getCompetitionContextData(viewer.username, eventId),
+      getQualificationWorkspaceDataFast(viewer, eventId),
+      getCompetitionContextData(viewer, eventId),
     ]);
     const selectedGroupId = context.groups.some((group) => group.id === query.group) ? String(query.group) : context.groups[0]?.id || "";
     const groupStages = data.stages.filter((stage) => stage.groupId === selectedGroupId);
@@ -43,7 +43,7 @@ export default async function QualificationPage({ searchParams }: { searchParams
     const requestedPhase = PHASES.some((phase) => phase.code === query.phase) ? String(query.phase) : "";
     const qualificationDone = Boolean(q1?.confirmed && q2?.confirmed);
     const needsMainData = requestedPhase.startsWith("main-") || (!requestedPhase && qualificationDone);
-    const mainRosterControl = needsMainData ? await getMainRosterControlData(viewer.username, eventId) : null;
+    const mainRosterControl = needsMainData ? await getMainRosterControlDataFast(viewer, eventId) : null;
     const rosterGroup = mainRosterControl?.groups.find((group) => group.groupId === selectedGroupId);
     const suggestedPhase = !q1 || !q1.confirmed
       ? "qualifier-one"
