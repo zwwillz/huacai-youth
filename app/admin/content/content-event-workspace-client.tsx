@@ -28,10 +28,11 @@ export default function ContentEventWorkspaceClient({ initialData }: { initialDa
       const currentRequest = ++requestId.current;
       const cached = cache.get(eventId);
       setError("");
-      if (cached) {
+      if (cached && Date.now() - cached.at < CACHE_TTL) {
         setData(cached.data);
         replaceUrl(eventId);
-        if (Date.now() - cached.at < CACHE_TTL) { setLoading(false); return; }
+        setLoading(false);
+        return;
       }
       setLoading(true);
       void fetch(`/api/admin/content-management?eventId=${encodeURIComponent(eventId)}`, { cache: "no-store" })
