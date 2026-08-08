@@ -53,9 +53,10 @@ export default function EventEventWorkspaceClient({ initialData }: { initialData
     return () => window.removeEventListener("admin:event-switch", onSwitch);
   }, [data.event.id]);
 
+  const editorKey = `${data.event.id}:${cache.get(data.event.id)?.at ?? "initial"}`;
   return <div className={loading ? "admin-local-workspace is-refreshing" : "admin-local-workspace"}>
     {loading && <div className="admin-local-refresh"><i />正在同步赛事设置…</div>}
     {error && <div className="admin-local-error">{error}{cache.has(data.event.id) ? " 当前显示上一次读取的数据。" : ""}</div>}
-    <EventManagementClient key={data.event.id} initialData={data} />
+    <EventManagementClient key={editorKey} initialData={data} />
   </div>;
 }
