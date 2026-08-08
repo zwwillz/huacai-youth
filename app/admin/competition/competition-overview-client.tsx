@@ -28,9 +28,9 @@ function replaceUrl(eventId: string, groupId: string) {
   window.history.replaceState(window.history.state, "", `/admin/competition?${params.toString()}`);
 }
 
-export default function CompetitionOverviewClient({ initialData }: { initialData: CompetitionDashboardData }) {
+export default function CompetitionOverviewClient({ initialData, initialGroupId }: { initialData: CompetitionDashboardData; initialGroupId: string }) {
   const [data, setData] = useState(initialData);
-  const [selectedGroupId, setSelectedGroupId] = useState(initialData.groups[0]?.id || "");
+  const [selectedGroupId, setSelectedGroupId] = useState(initialGroupId || initialData.groups[0]?.id || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const requestId = useRef(0);
