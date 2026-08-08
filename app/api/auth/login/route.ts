@@ -4,7 +4,9 @@ import { setAdminSessionCookie } from "@/lib/auth/cookies";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  if (!process.env.DATABASE_URL) return Response.json({ error: "后台数据库尚未配置。" }, { status: 503 });
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return Response.json({ error: "后台数据库 HTTPS 连接尚未配置。" }, { status: 503 });
+  }
   try {
     const body = await request.json() as { username?: string; password?: string };
     const session = await loginWithPassword(body.username || "", body.password || "", request.headers.get("x-forwarded-for"), request.headers.get("user-agent"));
