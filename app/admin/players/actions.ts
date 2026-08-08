@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createAdminPlayer, updateAdminPlayer } from "@/db/player-admin";
+import { createAdminPlayer, updateAdminPlayer } from "@/db/player-admin-v2";
 import { getAdminViewer } from "../admin-viewer";
 
 function text(formData: FormData, key: string) {
@@ -17,13 +17,36 @@ function redirectTarget(formData: FormData, messageType: "success" | "error", me
   const query = text(formData, "returnQuery");
   const page = text(formData, "returnPage");
   if (eventId) params.set("event", eventId);
-  if (scope) params.set("scope", scope);
+  if (scope === "all") params.set("scope", "all");
   if (group && group !== "all") params.set("group", group);
   if (query) params.set("q", query);
   if (page && page !== "1") params.set("page", page);
   if (playerId) params.set("player", playerId);
   params.set(messageType, message);
   return `/admin/players?${params.toString()}`;
+}
+
+function playerFields(formData: FormData) {
+  return {
+    fullName: text(formData, "fullName"),
+    nickname: text(formData, "nickname"),
+    gender: text(formData, "gender"),
+    birthDate: text(formData, "birthDate"),
+    nationalityCode: text(formData, "nationalityCode") || "CN",
+    province: text(formData, "province"),
+    city: text(formData, "city"),
+    identityType: text(formData, "identityType") || "id_card",
+    identityNo: text(formData, "identityNo"),
+    phone: text(formData, "phone"),
+    email: text(formData, "email"),
+    wechatId: text(formData, "wechatId"),
+    guardianName: text(formData, "guardianName"),
+    guardianRelationship: text(formData, "guardianRelationship"),
+    guardianPhone: text(formData, "guardianPhone"),
+    clubName: text(formData, "clubName"),
+    schoolName: text(formData, "schoolName"),
+    mentorName: text(formData, "mentorName"),
+  };
 }
 
 export async function createPlayerAction(formData: FormData) {
@@ -33,19 +56,11 @@ export async function createPlayerAction(formData: FormData) {
   let playerId = "";
   let errorMessage = "";
   try {
+    const fields = playerFields(formData);
     playerId = await createAdminPlayer(viewer.username, {
-      fullName: text(formData, "fullName"),
-      gender: text(formData, "gender"),
-      birthDate: text(formData, "birthDate"),
-      province: text(formData, "province"),
-      city: text(formData, "city"),
-      clubName: text(formData, "clubName"),
-      schoolName: text(formData, "schoolName"),
-      phone: text(formData, "phone"),
-      email: text(formData, "email"),
-      nationalityCode: text(formData, "nationalityCode") || "CN",
-      identityType: text(formData, "identityType") || "id_card",
-      identityNo: text(formData, "identityNo"),
+      ...fields,
+      identityType: fields.identityType,
+      identityNo: fields.identityNo,
     });
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : "新增球员失败。";
@@ -64,21 +79,10 @@ export async function updatePlayerAction(formData: FormData) {
   let errorMessage = "";
   try {
     await updateAdminPlayer(viewer.username, {
+      ...playerFields(formData),
       playerId,
       eventId: text(formData, "returnEvent") || null,
-      fullName: text(formData, "fullName"),
-      gender: text(formData, "gender"),
-      birthDate: text(formData, "birthDate"),
-      province: text(formData, "province"),
-      city: text(formData, "city"),
-      clubName: text(formData, "clubName"),
-      schoolName: text(formData, "schoolName"),
-      phone: text(formData, "phone"),
-      email: text(formData, "email"),
-      nationalityCode: text(formData, "nationalityCode") || "CN",
       profileStatus: text(formData, "profileStatus") || "approved",
-      identityType: text(formData, "identityType") || "id_card",
-      identityNo: text(formData, "identityNo"),
     });
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : "更新球员失败。";
