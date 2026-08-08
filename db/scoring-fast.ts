@@ -113,13 +113,13 @@ export async function getScoringWorkspaceBundleFast(
         (select value from date_stats where "actionableCount">0
           order by
             case
-              when match_date=(now() at time zone 'Asia/Shanghai')::date then 0
-              when match_date>(now() at time zone 'Asia/Shanghai')::date then 1
-              when match_date<(now() at time zone 'Asia/Shanghai')::date then 2
+              when match_date::date=(now() at time zone 'Asia/Shanghai')::date then 0
+              when match_date::date>(now() at time zone 'Asia/Shanghai')::date then 1
+              when match_date::date<(now() at time zone 'Asia/Shanghai')::date then 2
               else 3
             end,
-            case when match_date>(now() at time zone 'Asia/Shanghai')::date then match_date end asc nulls last,
-            case when match_date<(now() at time zone 'Asia/Shanghai')::date then match_date end desc nulls last
+            case when match_date::date>(now() at time zone 'Asia/Shanghai')::date then match_date::date end asc nulls last,
+            case when match_date::date<(now() at time zone 'Asia/Shanghai')::date then match_date::date end desc nulls last
           limit 1),
         (select value from date_stats order by match_date nulls last limit 1),
         ''
