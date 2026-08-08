@@ -244,7 +244,7 @@ export default function PublicCompetitionLiveV2({
     const checkVersion = async () => {
       if (document.hidden) return;
       try {
-        const response = await fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition?versionOnly=1`, { cache: "no-store" });
+        const response = await fetch(`/api/public/events/${encodeURIComponent(eventId)}/competition/version`, { cache: "no-store" });
         const payload = await response.json() as { data?: { version: string } };
         const nextVersion = payload.data?.version;
         const currentVersion = versions.current.get(eventId);
