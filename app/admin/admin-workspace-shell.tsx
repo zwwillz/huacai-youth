@@ -87,8 +87,9 @@ function PersistentWorkspaceRoot(props: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [events, setEvents] = useState<AdminWorkspaceEvent[]>(props.events);
   const [registeredPage, setRegisteredPage] = useState<RegisteredPage | null>(null);
-  const [localEventId, setLocalEventId] = useState(props.currentEventId || routeDescriptor.currentEventId || "");
+  const [localEventSelection, setLocalEventSelection] = useState<null | { routeKey: string; eventId: string }>(null);
   const [pending, setPending] = useState<null | { origin: string; targetKey: string; pathname: string; search: string; label: string }>(null);
+  const activePending = pending && pending.targetKey !== currentKey ? pending : null;
 
   const registerPage = useCallback((page: RegisteredPage) => {
     setRegisteredPage(page);
@@ -107,24 +108,15 @@ function PersistentWorkspaceRoot(props: Props) {
     competitionTool: registeredCurrent.competitionTool,
     eventSwitchMode: registeredCurrent.eventSwitchMode,
   } : routeDescriptor;
-  const pendingMeta = pending ? describeAdminRoute(pending.pathname, pending.search) : null;
+  const pendingMeta = activePending ? describeAdminRoute(activePending.pathname, activePending.search) : null;
   const visualMeta = pendingMeta || currentMeta;
 
   useEffect(() => {
-    if (pending?.targetKey === currentKey) setPending(null);
-  }, [currentKey, pending]);
-
-  useEffect(() => {
-    if (pending) return;
-    setLocalEventId(currentMeta.currentEventId || "");
-  }, [currentKey, currentMeta.currentEventId, currentMeta.eventSwitchMode, pending]);
-
-  useEffect(() => {
-    if (!pending) return;
-    const targetKey = pending.targetKey;
+    if (!activePending) return;
+    const targetKey = activePending.targetKey;
     const timer = window.setTimeout(() => setPending((current) => current?.targetKey === targetKey ? null : current), 15000);
     return () => window.clearTimeout(timer);
-  }, [pending]);
+  }, [activePending]);
 
   const beginNavigation = useCallback((target: string, label = "后台页面") => {
     const url = new URL(target, window.location.href);
@@ -160,23 +152,24 @@ function PersistentWorkspaceRoot(props: Props) {
   useEffect(() => {
     const revert = (event: Event) => {
       const detail = (event as CustomEvent<{ eventId?: string }>).detail;
-      if (detail?.eventId) setLocalEventId(detail.eventId);
+      if (detail?.eventId) setLocalEventSelection({ routeKey: currentKey, eventId: detail.eventId });
     };
     window.addEventListener("admin:event-switch-revert", revert);
     return () => window.removeEventListener("admin:event-switch-revert", revert);
-  }, []);
+  }, [currentKey]);
 
+  const locallySelectedEventId = localEventSelection?.routeKey === currentKey ? localEventSelection.eventId : "";
   const effectiveEventId = currentMeta.eventSwitchMode === "local"
-    ? (localEventId || currentMeta.currentEventId || "")
+    ? (locallySelectedEventId || currentMeta.currentEventId || "")
     : (visualMeta.currentEventId || currentMeta.currentEventId || "");
   const currentEvent = events.find((event) => event.id === effectiveEventId);
   const visibleGroups = navGroups.map((group) => ({ ...group, items: group.items.filter((item) => { if (props.viewer.role === "system_admin") return true; if (props.viewer.role === "committee") return !["accounts", "logs"].includes(item.id); return ["dashboard", "competition"].includes(item.id); }) })).filter((group) => group.items.length > 0);
 
   const switchEvent = (eventId: string) => {
-    if (!eventId || eventId === effectiveEventId || pending) return;
+    if (!eventId || eventId === effectiveEventId || activePending) return;
     if (currentMeta.eventSwitchMode === "local") {
       const previousEventId = effectiveEventId;
-      setLocalEventId(eventId);
+      setLocalEventSelection({ routeKey: currentKey, eventId });
       window.dispatchEvent(new CustomEvent("admin:event-switch", { detail: { eventId, previousEventId, active: currentMeta.active, competitionTool: currentMeta.competitionTool } }));
       return;
     }
@@ -187,17 +180,17 @@ function PersistentWorkspaceRoot(props: Props) {
 
   return <PersistentShellContext.Provider value={bridgeValue}>
     <main className="backend-shell admin-workspace-shell">
-      {pending && <div className="admin-navigation-feedback immediate" role="status" aria-live="polite" aria-label={`正在打开${pending.label}`}><span className="admin-navigation-progress" /></div>}
+      {activePending && <div className="admin-navigation-feedback immediate" role="status" aria-live="polite" aria-label={`正在打开${activePending.label}`}><span className="admin-navigation-progress" /></div>}
       {menuOpen && <button className="admin-sidebar-scrim" type="button" aria-label="关闭后台菜单" onClick={() => setMenuOpen(false)} />}
       <aside className={menuOpen ? "backend-sidebar admin-workspace-sidebar open" : "backend-sidebar admin-workspace-sidebar"}>
         <Link prefetch={false} href="/admin" className="backend-brand admin-workspace-brand"><span>华</span><div><strong>华彩赛事后台</strong><small>赛事运营与竞赛执行</small></div></Link>
         <nav className="admin-workspace-nav">{visibleGroups.map((group, groupIndex) => <div className="admin-nav-group" key={group.label || groupIndex}>{group.label && <small className="admin-nav-group-label">{group.label}</small>}{group.items.map((item) => <div className="admin-nav-item-wrap" key={item.id}><Link prefetch={false} href={sectionHref(item.id, effectiveEventId)} className={visualMeta.active === item.id ? "active" : ""} aria-current={visualMeta.active === item.id ? "page" : undefined} onClick={() => setMenuOpen(false)}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div></Link>{item.id === "competition" && <div className="admin-competition-subnav">{competitionTools.map((tool) => <Link prefetch={false} key={tool.id} href={competitionToolHref(tool.id, effectiveEventId)} className={visualMeta.active === "competition" && visualMeta.competitionTool === tool.id ? "active" : ""} aria-current={visualMeta.active === "competition" && visualMeta.competitionTool === tool.id ? "page" : undefined} onClick={() => setMenuOpen(false)}><span>{tool.icon}</span><strong>{tool.title}</strong></Link>)}</div>}</div>)}</div>)}</nav>
         <div className="backend-sidebar-foot"><Link prefetch={false} href="/" target="_blank" rel="noopener noreferrer">查看公众前端</Link><a href="/api/auth/logout">退出后台</a></div>
       </aside>
-      <section className="backend-main admin-workspace-main"><header className="backend-topbar admin-workspace-topbar"><button className="backend-menu" type="button" aria-label={menuOpen ? "关闭后台菜单" : "打开后台菜单"} aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}>☰</button><div className="admin-workspace-title"><small>{visualMeta.pageHint || "后台管理"}</small><h1>{visualMeta.pageTitle}</h1></div>{visualMeta.eventScoped ? <label className="backend-event-select admin-workspace-event-select"><span>当前赛事</span><select value={effectiveEventId} aria-label="切换当前赛事" disabled={Boolean(pending)} onChange={(event) => switchEvent(event.target.value)}><option value="" disabled>请选择赛事</option>{effectiveEventId && !currentEvent && <option value={effectiveEventId}>正在读取所选赛事…</option>}{events.map((event) => <option value={event.id} key={event.id}>第 {event.stationNo} 站 · {event.shortTitle} · {eventStatusLabel(event.status)}</option>)}</select>{currentEvent && <em><b className={eventStatusTone(currentEvent.status)}>{eventStatusLabel(currentEvent.status)}</b>{currentEvent.startDate} — {currentEvent.endDate}</em>}</label> : <div className="admin-workspace-global-context"><span>全局工作区</span><small>不受“当前赛事”切换影响</small></div>}<div className="backend-user"><span>{props.viewer.displayName.slice(0, 1)}</span><div><strong>{props.viewer.displayName}</strong><small>{props.viewer.roleLabel || (props.viewer.role === "system_admin" ? "系统管理员" : props.viewer.role === "committee" ? "组委会" : "裁判")}</small></div></div></header>
+      <section className="backend-main admin-workspace-main"><header className="backend-topbar admin-workspace-topbar"><button className="backend-menu" type="button" aria-label={menuOpen ? "关闭后台菜单" : "打开后台菜单"} aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}>☰</button><div className="admin-workspace-title"><small>{visualMeta.pageHint || "后台管理"}</small><h1>{visualMeta.pageTitle}</h1></div>{visualMeta.eventScoped ? <label className="backend-event-select admin-workspace-event-select"><span>当前赛事</span><select value={effectiveEventId} aria-label="切换当前赛事" disabled={Boolean(activePending)} onChange={(event) => switchEvent(event.target.value)}><option value="" disabled>请选择赛事</option>{effectiveEventId && !currentEvent && <option value={effectiveEventId}>正在读取所选赛事…</option>}{events.map((event) => <option value={event.id} key={event.id}>第 {event.stationNo} 站 · {event.shortTitle} · {eventStatusLabel(event.status)}</option>)}</select>{currentEvent && <em><b className={eventStatusTone(currentEvent.status)}>{eventStatusLabel(currentEvent.status)}</b>{currentEvent.startDate} — {currentEvent.endDate}</em>}</label> : <div className="admin-workspace-global-context"><span>全局工作区</span><small>不受“当前赛事”切换影响</small></div>}<div className="backend-user"><span>{props.viewer.displayName.slice(0, 1)}</span><div><strong>{props.viewer.displayName}</strong><small>{props.viewer.roleLabel || (props.viewer.role === "system_admin" ? "系统管理员" : props.viewer.role === "committee" ? "组委会" : "裁判")}</small></div></div></header>
         <div className="admin-workspace-content">
-          <div className={pending ? "admin-workspace-live is-pending" : "admin-workspace-live"}>{props.children}</div>
-          {pending && <AdminWorkspaceLoading pathname={pending.pathname} search={pending.search} optimistic />}
+          <div className={activePending ? "admin-workspace-live is-pending" : "admin-workspace-live"}>{props.children}</div>
+          {activePending && <AdminWorkspaceLoading pathname={activePending.pathname} search={activePending.search} optimistic />}
         </div>
       </section>
     </main>
