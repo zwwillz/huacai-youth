@@ -5,6 +5,7 @@ import { getAdminNavigationEvents } from "./admin-ui";
 
 type EventIndexMetaRow = {
   id: string;
+  year: number;
   fullTitle: string;
   isHidden: boolean;
   groupNames: string;
@@ -18,6 +19,7 @@ export async function getEventIndexData(username: string) {
   const metaRows = await sql<EventIndexMetaRow[]>`
     select
       e.id,
+      e.year,
       e.full_title as "fullTitle",
       coalesce(e.is_hidden, false) as "isHidden",
       coalesce((
@@ -33,6 +35,7 @@ export async function getEventIndexData(username: string) {
     const meta = metaById.get(event.id);
     return {
       ...event,
+      year: meta?.year ?? new Date(event.startDate).getFullYear(),
       fullTitle: meta?.fullTitle || event.shortTitle,
       isHidden: Boolean(meta?.isHidden),
       groupNames: meta?.groupNames || "",
