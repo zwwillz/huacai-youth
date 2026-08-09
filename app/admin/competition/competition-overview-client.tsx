@@ -23,7 +23,11 @@ export default function CompetitionOverviewClient({ initialData = null, initialE
     catch (failure) { if (currentRequest !== requestId.current) return; setError(failure instanceof Error ? failure.message : "竞赛总览读取失败。"); if (previousEventId) window.dispatchEvent(new CustomEvent("admin:event-switch-revert", { detail: { eventId: previousEventId } })); }
     finally { if (currentRequest === requestId.current) setLoading(false); }
   }, []);
-  useEffect(() => { if (!initialData && initialEventId) void loadEvent(initialEventId, "", initialGroupId); }, [initialData, initialEventId, initialGroupId, loadEvent]);
+  useEffect(() => {
+    if (initialData || !initialEventId) return;
+    const timer = window.setTimeout(() => { void loadEvent(initialEventId, "", initialGroupId); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [initialData, initialEventId, initialGroupId, loadEvent]);
   useEffect(() => { const onSwitch = (event: Event) => { const detail = (event as CustomEvent<{ eventId?: string; previousEventId?: string; active?: string; competitionTool?: string }>).detail; if (detail?.active !== "competition" || detail.competitionTool !== "overview" || !detail.eventId || detail.eventId === eventId) return; void loadEvent(detail.eventId, detail.previousEventId || eventId); }; window.addEventListener("admin:event-switch", onSwitch); return () => window.removeEventListener("admin:event-switch", onSwitch); }, [eventId, loadEvent]);
   const chooseGroup = (groupId: string) => { if (!data) return; setSelectedGroupId(groupId); replaceUrl(data.selectedEventId, groupId); };
   const model = data ? toViewModel(data, selectedGroupId || data.groups[0]?.id || "") : makeCompetitionOverviewLoadingModel(eventId, selectedGroupId);
