@@ -2,6 +2,7 @@ import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { saveEventManagementData, type EventManagementInput } from "@/db/event-management";
 import { getEventManagementDataFast } from "@/db/event-management-fast";
 import { syncEventOverviewPublication } from "@/db/event-publication-sync";
+import { getSqlClient } from "@/db";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,10 @@ export async function POST(request: Request) {
   if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
   try {
     const input = await request.json() as EventManagementInput;
+    const sql = getSqlClient();
+    const rows = await sql<Array<{ status: string }>>`select status from public.events where id=${input.eventId} limit 1`;
+    if (rows[0]?.status === "archived") throw new Error("已归档赛事为只读状态，不能继续修改。");
+
     const data = await saveEventManagementData(viewer.username, input);
     await syncEventOverviewPublication(input.eventId, input.publishStatus === "published");
     revalidateTag("admin-navigation-events", { expire: 0 });
