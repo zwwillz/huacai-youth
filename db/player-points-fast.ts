@@ -122,13 +122,13 @@ export async function getPlayerPointsPageFast(inputPrincipal: AdminPrincipalInpu
       ), grouped as (
         select * from base where (${group}='all' or group_name=${group})
       ), ranked as (
-        select grouped.*,dense_rank() over(order by total_points desc,prize_cents desc)::int as points_rank
+        select grouped.*,dense_rank() over(order by total_points desc)::int as points_rank
         from grouped
       ), searched as (
         select * from ranked where ${query}='' or full_name ilike ${search} or player_code ilike ${search}
       )
       select searched.*,count(*) over()::int as filtered_total
-      from searched order by points_rank,full_name,id limit ${pageSize} offset ${offset}
+      from searched order by points_rank,prize_cents desc,full_name,id limit ${pageSize} offset ${offset}
     `;
     return { items: rows.map(mapRow), filteredTotal: Number(rows[0]?.filtered_total ?? 0), page, pageSize, year: rule.year, scope, eventId, rule };
   }
@@ -165,12 +165,12 @@ export async function getPlayerPointsPageFast(inputPrincipal: AdminPrincipalInpu
     ), grouped as (
       select * from base where (${group}='all' or group_name=${group})
     ), ranked as (
-      select grouped.*,dense_rank() over(order by total_points desc,prize_cents desc)::int as points_rank from grouped
+      select grouped.*,dense_rank() over(order by total_points desc)::int as points_rank from grouped
     ), searched as (
       select * from ranked where ${query}='' or full_name ilike ${search} or player_code ilike ${search}
     )
     select searched.*,count(*) over()::int as filtered_total
-    from searched order by points_rank,full_name,id limit ${pageSize} offset ${offset}
+    from searched order by points_rank,prize_cents desc,full_name,id limit ${pageSize} offset ${offset}
   `;
   return { items: rows.map(mapRow), filteredTotal: Number(rows[0]?.filtered_total ?? 0), page, pageSize, year: rule.year, scope, eventId: null, rule };
 }
