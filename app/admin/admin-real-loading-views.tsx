@@ -1,12 +1,36 @@
 "use client";
 
 import type { ContentManagementData } from "@/db/content-management";
+import type { EventManagementData } from "@/db/event-management";
 import type { AccountManagementRow } from "@/db/account-admin";
 import EventSettingsIndexView from "./events/event-settings-index-view";
+import EventManagementClient from "./events/event-management-client";
 import ContentManagementClient from "./content/content-management-client";
 import { PlayerManagementWorkspace } from "./players/player-management-client";
 import AccountManagementClient from "./accounts/account-management-client";
 import AuditLogView, { type AuditLogRow } from "./logs/audit-log-view";
+
+function placeholderEvent(eventId: string): EventManagementData {
+  const year = new Date().getFullYear();
+  return {
+    viewerRole: "committee",
+    publicationStatuses: { overview: "draft", regulation: "draft", documents: "draft", schedule: "draft", matches: "draft", rankings: "draft" },
+    event: {
+      id: eventId, year, stationNo: 0, fullTitle: "赛事完整名称正在读取", shortTitle: "当前赛事", slug: "", city: "城市读取中",
+      startDate: "", endDate: "", registrationStartAt: "", registrationEndAt: "", coverImageKey: "", summary: "赛事简介正在读取…",
+      status: "draft", publishStatus: "draft",
+      venue: { id: null, name: "场馆读取中", province: "", city: "", district: "", address: "", tableCount: 0 },
+      details: { sponsorLabel: "", durationLabel: "", qualifierDateLabel: "", mainDateLabel: "", totalPrizeLabel: "", mainSizeLabel: "", minimumAgeNote: "", signupNote: "" },
+      sponsors: [], organizations: { host: "", support: "", operator: "", cooperator: "" },
+      groups: [
+        { id: "u16", name: "少年组", code: "U16", birthDateFrom: "", birthDateTo: "", minimumAge: null, registrationFeeYuan: 0, registrationLimit: null, mainDrawSize: 64, status: "active", ageRuleText: "年龄规则正在读取" },
+        { id: "u20", name: "青年组", code: "U20", birthDateFrom: "", birthDateTo: "", minimumAge: null, registrationFeeYuan: 0, registrationLimit: null, mainDrawSize: 64, status: "active", ageRuleText: "年龄规则正在读取" },
+      ],
+      memberIds: [],
+    },
+    assignableAccounts: [],
+  };
+}
 
 function placeholderContent(eventId: string): ContentManagementData {
   const modules = [
@@ -34,6 +58,10 @@ function placeholderContent(eventId: string): ContentManagementData {
 
 export function EventsLoadingView({ canDelete = false }: { canDelete?: boolean }) {
   return <EventSettingsIndexView events={null} canDelete={canDelete} />;
+}
+
+export function EventSettingsLoadingView({ eventId = "" }: { eventId?: string }) {
+  return <div aria-busy="true" style={{ pointerEvents: "none" }}><EventManagementClient initialData={placeholderEvent(eventId)} /></div>;
 }
 
 export function ContentLoadingView({ eventId = "" }: { eventId?: string }) {
