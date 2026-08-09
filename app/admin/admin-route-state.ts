@@ -27,16 +27,18 @@ export function isAdminShelllessRoute(pathname: string) {
 }
 
 /**
- * Route-level skeletons are a fallback, not the first paint.
- * Structure-first pages get a longer grace period because their real UI should
- * normally arrive before a full-page skeleton is useful.
+ * Route-level skeletons are a fallback, not a required transition.
+ * Dashboard and new-event are structure-first pages and intentionally never
+ * use a full-page route skeleton: the real page should replace the previous
+ * workspace directly, while its own data regions load progressively.
  */
 export function adminRouteLoadingDelayMs(pathname: string, search = "") {
   if (pathname === "/admin/login" || isAdminShelllessRoute(pathname)) return Number.POSITIVE_INFINITY;
   const params = new URLSearchParams(search);
   const isDashboard = (pathname === "/admin" || pathname === "/admin/") && !params.get("section");
   const isNewEvent = pathname === "/admin/events/new";
-  return isDashboard || isNewEvent ? 360 : 180;
+  if (isDashboard || isNewEvent) return Number.POSITIVE_INFINITY;
+  return 180;
 }
 
 export function describeAdminRoute(pathname: string, search = ""): AdminRouteDescriptor {

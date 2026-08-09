@@ -3,9 +3,11 @@ import "./admin-workspace-shell.css";
 import "./admin-progressive-loading.css";
 import "./admin-recovery.css";
 import "./admin-local-workspace.css";
+import "./admin-home.css";
 import "./competition-controls.css";
 import "./events/event-management.css";
 import "./events/event-settings-index.css";
+import "./events/new/new-event.css";
 import AdminWorkspaceShell from "./admin-workspace-shell";
 import { getAdminViewer } from "./admin-viewer";
 

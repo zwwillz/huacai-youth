@@ -13,7 +13,8 @@
 - 不允许让用户继续操作旧业务内容；导航期间旧区域必须禁用交互。
 - 完整页面 Skeleton 仅作为冷启动、异常慢请求或尚未完成局部化改造页面的兜底。
 - **不要为了证明“系统正在加载”而主动闪 Skeleton。** 快路由应直接落到真实页面。
-- 当前默认阈值：普通后台路由约 **180ms** 后才显示路由级 Skeleton；工作台、创建新赛事等 structure-first 页面约 **360ms** 后才启用兜底 Skeleton。阈值以后可以按真实 Chrome 数据调整，但原则不变：短请求不显示全页骨架。
+- 普通后台路由当前约 **180ms** 后才显示路由级 Skeleton；阈值以后可以按真实 Chrome 数据调整。
+- **工作台、创建新赛事等 structure-first 页面禁止使用整页 Skeleton。** 如果目标 Server Component 尚未完成，先显示与最终页面同结构的真实框架，只有数字、列表、默认建议等数据位保持未完成状态，再由正式页面无跳动接管。
 
 ## 2. 不依赖数据库的 UI 绝不能等待数据库
 
@@ -83,6 +84,8 @@
 - 首次管理员 setup 状态可以在页面出现后后台确认。
 - `/admin/login` 不使用白色全屏 Route Loading。
 - 登录按钮在提交后必须保持明确状态；认证成功后一直显示“正在进入工作台”，直到路由真正完成，不能中途恢复成可点击状态造成“是不是登录失败”的错觉。
+- 登录成功跨越“未登录页面 → 私有后台 Layout”边界时，优先使用一次文档级进入 `/admin`，确保新 session 在服务端重新建立完整持久 Shell，不能复用未登录 Layout 导致菜单缺失。
+- 退出登录后统一回 `/admin` 欢迎登录页，并清除浏览器 session cookie；远端 session 撤销失败不能阻塞用户退出。
 - 登录成功后进入后台，持久 Shell 只阻塞在真正必要的 session 身份验证上；赛事导航等非必要上下文随后由页面或局部数据补齐。
 - 可以合并安全等价的认证数据库往返，但不得降低 bcrypt 强度、登录限流、session 随机性或账号状态校验。
 
@@ -110,6 +113,7 @@
 - [ ] 页面框架是否能在主业务数据之前显示？
 - [ ] 是否存在不必要的顶层 `await` 阻塞整个页面？
 - [ ] 快页面是否因为 Route Loading 产生了不必要的 Skeleton 闪烁？
+- [ ] structure-first 页面是否使用真实结构占位，而不是另一套视觉完全不同的骨架？
 - [ ] 是否把已有 Layout / 会话数据又查了一次？
 - [ ] 是否可以把多个小查询合成一个轻量数据域查询？
 - [ ] 搜索、筛选、分页、详情关闭是否只更新局部区域？
@@ -122,10 +126,10 @@
 
 ## 11. 当前样板
 
-- `/admin` 工作台：**Static frame + async summary widgets**。
-- `/admin/events/new` 创建赛事：**Static-first form + async suggested defaults**。
+- `/admin` 工作台：**Static frame + async summary widgets + no full-page Skeleton**。
+- `/admin/events/new` 创建赛事：**Static-first form + async suggested defaults + no full-page Skeleton**。
 - `/admin/login` 登录：**Immediate login frame + async setup state + stable submit transition**。
 - `/admin/players` 球员管理：**局部列表请求 + 会话缓存 + 即时详情框架**。
-- `/admin` 持久 Layout：**即时导航 + 延迟路由 Skeleton 兜底**。
+- `/admin` 持久 Layout：**即时导航 + 普通路由延迟 Skeleton；structure-first 路由使用真实页面结构接管**。
 
 后续赛事管理、内容发布、竞赛执行、比分、晋级、最终排名等页面应逐步按照本规范迁移，而不是重新发明另一套加载模式。
