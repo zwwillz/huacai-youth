@@ -78,10 +78,10 @@ export default function EventManagementClient({ initialData }: { initialData: Ev
   return <main className="event-v2-editor">
     <section className="event-v2-editor-head">
       <div><small>EVENT MASTER DATA</small><h2>{archived ? "查看赛事" : "编辑赛事"}</h2><p>{archived ? "该赛事已经归档，当前页面为历史只读状态。" : "这里只维护赛事本身的基础主数据。主题图、赞助商、主要参数和公众展示内容统一前往赛事运营维护。"}</p></div>
-      <div className="event-v2-card-actions"><Link href="/admin/events">返回赛事管理</Link>{!archived && <Link className="primary" href={`/admin/content/${draft.eventId}`}>进入赛事运营</Link>}</div>
+      <div className="event-v2-card-actions"><Link href="/admin/events">返回赛事管理</Link></div>
     </section>
 
-    {archived && <div className="event-v2-readonly">已归档赛事不可再修改、隐藏或删除；所有历史内容仅供查询。</div>}
+    {archived && <div className="event-v2-readonly">已归档赛事不可直接修改；系统管理员可在赛事管理列表中撤回归档后继续维护。</div>}
     {notice && <div className="event-v2-message">✓ {notice}</div>}
     {error && <div className="event-v2-error">{error}</div>}
 
