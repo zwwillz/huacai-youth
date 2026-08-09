@@ -24,7 +24,12 @@ export function AdminWorkspaceLoading({ pathname, search = "", optimistic = fals
   const route = describeAdminRoute(pathname, search);
   const loadingLabel = optimistic ? "正在打开" : "正在读取";
   const delay = adminRouteLoadingDelayMs(pathname, search);
-  const style = delayed && Number.isFinite(delay)
+
+  // Structure-first pages intentionally skip the full route skeleton entirely.
+  // Their real page shell is already cheap and their own data regions load progressively.
+  if (!Number.isFinite(delay)) return null;
+
+  const style = delayed
     ? ({ "--admin-loading-delay": `${delay}ms` } as CSSProperties)
     : undefined;
   const className = [
@@ -72,8 +77,6 @@ export function AdminWorkspaceLoading({ pathname, search = "", optimistic = fals
 export default function AdminRouteLoading() {
   const pathname = usePathname();
   const search = useSearchParams().toString();
-  // Login and print are intentionally shellless. The login page is structure-first
-  // and should never flash a white intermediate loading screen.
   if (pathname === "/admin/login" || isAdminShelllessRoute(pathname)) return null;
   return <AdminWorkspaceLoading pathname={pathname} search={search} delayed />;
 }
