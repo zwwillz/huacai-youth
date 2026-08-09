@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../admin-viewer";
 import LoginForm from "./login-form";
+import "./login-performance.css";
 
 export const dynamic = "force-dynamic";
 
