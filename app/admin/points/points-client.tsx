@@ -2,12 +2,12 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { PlayerPointsDetail, PlayerPointsListItem, PlayerPointsPageData, PlayerPointsRule } from "@/db/player-points";
-import { updatePointsRuleAction } from "./actions";
 
 type PointsState = { event: string; scope: "event" | "all"; group: "all" | "少年组" | "青年组"; q: string; page: number };
 type EventOption = { id: string; shortTitle: string; stationNo: number; status: string; startDate: string; endDate: string; city: string };
 type CachedPage = { data: PlayerPointsPageData };
 type CachedDetail = { data: PlayerPointsDetail };
+type Notice = { tone: "success" | "error"; text: string };
 
 const pageCache = new Map<string, CachedPage>();
 const detailCache = new Map<string, CachedDetail>();
@@ -50,20 +50,60 @@ function money(cents: number) {
 }
 function value(input: string | null | undefined) { return input || "—"; }
 
-function RuleDialog({ rule }: { rule: PlayerPointsRule }) {
+function RuleDialog({ rule, onSaved }: { rule: PlayerPointsRule; onSaved: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const formData = new FormData(event.currentTarget);
+      const response = await fetch("/api/admin/points/rule", {
+        method: "PUT",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          year: rule.year,
+          participationPoints: Number(formData.get("participationPoints")),
+          prizeUnitYuan: Number(formData.get("prizeUnitYuan")),
+          prizePointsPerUnit: Number(formData.get("prizePointsPerUnit")),
+        }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "积分规则保存失败。");
+      await onSaved();
+      setOpen(false);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "积分规则保存失败。");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return <>
-    <button type="button" className="points-rule-button" onClick={() => setOpen(true)}>积分规则设置</button>
-    {open && <div className="points-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
+    <button type="button" className="points-rule-button" onClick={() => { setError(""); setOpen(true); }}>积分规则设置</button>
+    {open && <div className="points-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setOpen(false); }}>
       <section className="points-rule-modal" role="dialog" aria-modal="true" aria-label="积分规则设置">
-        <header><div><small>POINTS RULE</small><h3>{rule.year} 赛季积分规则</h3><p>积分由有效参赛和已发布奖金自动计算。修改规则后，本赛季积分排名会即时重新计算。</p></div><button type="button" aria-label="关闭积分规则" onClick={() => setOpen(false)}>×</button></header>
-        <form action={updatePointsRuleAction} className="points-rule-form">
-          <input type="hidden" name="year" value={rule.year} />
+        <header><div><small>POINTS RULE</small><h3>{rule.year} 赛季积分规则</h3><p>依据中国台球协会赛事积分排名管理办法 E 级赛事规则设置。保存后不跳转页面，当前赛季积分与排名会立即重新计算。</p></div><button type="button" aria-label="关闭积分规则" disabled={saving} onClick={() => setOpen(false)}>×</button></header>
+        <div className="points-rule-reference">
+          <b>中国台球协会 E 级赛事</b>
+          <span>奖金 5 万元以上：积分 = 奖金数额 ÷ 100 × 1.0</span>
+          <span>奖金 3–5 万元：积分 = 奖金数额 ÷ 100 × 0.5</span>
+          <span>奖金 3 万元以下：不获得奖金积分</span>
+          <span>参赛分：参赛费 ÷ 100，100 元以下不计</span>
+          <strong>华彩当前赛事：奖金 5 万元以上，报名费 100 元，因此按“奖金 ÷ 100 + 每站 1 分参赛分”计算。</strong>
+        </div>
+        <form onSubmit={submit} className="points-rule-form">
           <label><span>每参加 1 站赛事</span><div><input type="number" name="participationPoints" min="0" step="1" defaultValue={rule.participationPoints} required /><em>积分</em></div></label>
-          <label><span>每满多少元奖金</span><div><input type="number" name="prizeUnitYuan" min="1" step="1" defaultValue={rule.prizeUnitYuan} required /><em>元</em></div></label>
-          <label><span>对应增加积分</span><div><input type="number" name="prizePointsPerUnit" min="0" step="1" defaultValue={rule.prizePointsPerUnit} required /><em>积分</em></div></label>
-          <p className="points-rule-formula">当前规则：每站 +{rule.participationPoints} 分；奖金每满 {rule.prizeUnitYuan} 元 +{rule.prizePointsPerUnit} 分。</p>
-          <div className="points-rule-actions"><button type="button" className="secondary" onClick={() => setOpen(false)}>取消</button><button type="submit">保存规则</button></div>
+          <label><span>奖金积分计算基数</span><div><input type="number" name="prizeUnitYuan" min="1" step="1" defaultValue={rule.prizeUnitYuan} required /><em>元</em></div></label>
+          <label><span>每个基数对应积分</span><div><input type="number" name="prizePointsPerUnit" min="0" step="1" defaultValue={rule.prizePointsPerUnit} required /><em>积分</em></div></label>
+          <p className="points-rule-formula">当前计算参数：每站 +{rule.participationPoints} 分；奖金每 {rule.prizeUnitYuan} 元 +{rule.prizePointsPerUnit} 分。</p>
+          {error && <p className="points-rule-error">{error}</p>}
+          <div className="points-rule-actions"><button type="button" className="secondary" disabled={saving} onClick={() => setOpen(false)}>取消</button><button type="submit" disabled={saving}>{saving ? "保存并重算中…" : "保存规则"}</button></div>
         </form>
       </section>
     </div>}
@@ -92,7 +132,7 @@ function DetailFrame({ summary, detail, loading, error, onClose, onRetry }: {
             <article><span>累计积分</span><strong>{detail.totalPoints}</strong></article>
           </section>
           <section className="points-history"><h4>参赛赛事</h4>
-            {detail.events.length ? <div className="points-history-table"><div className="head"><span>赛事</span><span>组别</span><span>排名成绩</span><span>奖金</span><span>积分</span></div>{detail.events.map((event) => <div key={`${event.eventId}-${event.groupName}`}><span><b>{event.eventTitle}</b><small>{event.startDate}</small></span><span>{event.groupName}</span><span>{event.placementLabel || "暂无排名"}</span><span>{money(event.prizeCents)}</span><span><b>{event.points}</b></span></div>)}</div> : <p>暂无参赛记录。</p>}
+            {detail.events.length ? <div className="points-history-table"><div className="head"><span>赛事</span><span>组别</span><span>排名成绩</span><span>奖金</span><span>积分</span></div>{detail.events.map((item) => <div key={`${item.eventId}-${item.groupName}`}><span><b>{item.eventTitle}</b><small>{item.startDate}</small></span><span>{item.groupName}</span><span>{item.placementLabel || "暂无排名"}</span><span>{money(item.prizeCents)}</span><span><b>{item.points}</b></span></div>)}</div> : <p>暂无参赛记录。</p>}
           </section>
         </>}
       {loading && detail && <div className="points-detail-refreshing">正在刷新积分详情…</div>}
@@ -113,6 +153,7 @@ export function PointsRankingWorkspace({ viewerRole, events, initialState, initi
   const [pageData, setPageData] = useState(initialPageData);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState("");
+  const [notice, setNotice] = useState<Notice | null>(() => initialSuccess ? { tone: "success", text: initialSuccess } : initialError ? { tone: "error", text: initialError } : null);
   const [searchText, setSearchText] = useState(initialState.q);
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<PlayerPointsDetail | null>(null);
@@ -154,9 +195,9 @@ export function PointsRankingWorkspace({ viewerRole, events, initialState, initi
       pageCache.set(key, { data: payload.data });
       if (requestId !== listRequestId.current) return;
       setPageData(payload.data);
-    } catch (error) {
+    } catch (requestError) {
       if (requestId !== listRequestId.current) return;
-      setListError(error instanceof Error ? error.message : "积分排名读取失败。");
+      setListError(requestError instanceof Error ? requestError.message : "积分排名读取失败。");
     } finally {
       if (requestId === listRequestId.current) setListLoading(false);
     }
@@ -191,9 +232,9 @@ export function PointsRankingWorkspace({ viewerRole, events, initialState, initi
       detailCache.set(cacheKey, { data });
       if (requestId !== detailRequestId.current) return;
       setDetail(data);
-    } catch (error) {
+    } catch (requestError) {
       if (requestId !== detailRequestId.current) return;
-      setDetailError(error instanceof Error ? error.message : "积分详情读取失败。");
+      setDetailError(requestError instanceof Error ? requestError.message : "积分详情读取失败。");
     } finally {
       detailRequests.delete(cacheKey);
       if (requestId === detailRequestId.current) setDetailLoading(false);
@@ -220,21 +261,27 @@ export function PointsRankingWorkspace({ viewerRole, events, initialState, initi
     setDetailLoading(false);
     replaceUrl(state);
   };
-  const ruleDescription = `每站 +${pageData.rule.participationPoints} 分 · 每 ${pageData.rule.prizeUnitYuan} 元奖金 +${pageData.rule.prizePointsPerUnit} 分`;
+  const onRuleSaved = async () => {
+    pageCache.clear();
+    detailCache.clear();
+    detailRequests.clear();
+    await loadList(state, true);
+    setNotice({ tone: "success", text: "积分规则已保存，当前赛季全部积分与排名已按新规则重新计算。" });
+  };
+  const ruleDescription = `E级赛事5万元以上档：奖金÷${pageData.rule.prizeUnitYuan}×${pageData.rule.prizePointsPerUnit}；每站参赛分 +${pageData.rule.participationPoints}`;
 
   return <main className="points-admin">
     <section className="points-admin-head">
-      <div><small>PLAYER POINTS</small><h2>积分排名</h2><p>{pageData.year} 赛季 · {ruleDescription}。总览汇总本赛季有效参赛和已发布奖金，分站只统计该站。</p></div>
-      {viewerRole === "system_admin" && <RuleDialog rule={pageData.rule} />}
+      <div><small>PLAYER POINTS</small><h2>积分排名</h2><p>{pageData.year} 赛季 · {ruleDescription}。当前报名费 100 元，对应每站 1 分参赛分。</p></div>
+      {viewerRole === "system_admin" && <RuleDialog rule={pageData.rule} onSaved={onRuleSaved} />}
     </section>
 
-    {initialSuccess && <div className="points-notice success">{initialSuccess}</div>}
-    {initialError && <div className="points-notice error">{initialError}</div>}
+    {notice && <div className={`points-notice ${notice.tone}`}>{notice.text}<button type="button" onClick={() => setNotice(null)}>×</button></div>}
     {listError && <div className="points-notice error">{listError}</div>}
 
     <nav className="points-event-tabs" aria-label="积分总览与分站切换">
       {viewerRole === "system_admin" && <button type="button" className={state.scope === "all" ? "active" : ""} onClick={() => { if (state.scope !== "all") void loadList({ ...state, scope: "all", event: "", page: 1 }); }}>积分总览</button>}
-      {events.map((event) => <button type="button" key={event.id} className={state.scope === "event" && state.event === event.id ? "active" : ""} onClick={() => { if (state.scope !== "event" || state.event !== event.id) void loadList({ ...state, scope: "event", event: event.id, page: 1 }); }}>第{event.stationNo}站 · {event.city}</button>)}
+      {events.map((item) => <button type="button" key={item.id} className={state.scope === "event" && state.event === item.id ? "active" : ""} onClick={() => { if (state.scope !== "event" || state.event !== item.id) void loadList({ ...state, scope: "event", event: item.id, page: 1 }); }}>第{item.stationNo}站 · {item.city}</button>)}
     </nav>
 
     <section className="points-list-card">
