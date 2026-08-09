@@ -35,21 +35,29 @@ type PersistentShellContextValue = { registerPage: (page: RegisteredPage) => voi
 const PersistentShellContext = createContext<PersistentShellContextValue | null>(null);
 
 const navGroups: Array<{ label?: string; items: Array<{ id: ActiveSection; icon: string; title: string; hint: string }> }> = [
-  { items: [{ id: "dashboard", icon: "首", title: "工作台", hint: "全局总览与待办" },{ id: "events", icon: "赛", title: "赛事管理", hint: "创建赛事与基础设置" }] },
-  { label: "赛事运营", items: [{ id: "content", icon: "发", title: "内容发布", hint: "概览、规程与参赛提示" }] },
-  { label: "竞赛", items: [{ id: "competition", icon: "执", title: "竞赛执行", hint: "抽签、赛程、比分与晋级" }] },
+  { items: [{ id: "dashboard", icon: "首", title: "工作台", hint: "全局总览与待办" }] },
+  { label: "赛事", items: [{ id: "events", icon: "赛", title: "赛事管理", hint: "创建赛事与基础设置" },{ id: "content", icon: "营", title: "赛事运营", hint: "内容、报名、赛程与参赛人员" }] },
+  { label: "竞赛", items: [{ id: "competition", icon: "执", title: "竞赛执行", hint: "抽签、赛程、比分、晋级与排名" }] },
   { label: "球员", items: [{ id: "players", icon: "员", title: "球员档案", hint: "球员基础档案维护与查询" },{ id: "points", icon: "积", title: "积分排名", hint: "积分总览、分站与规则" }] },
   { label: "系统", items: [{ id: "accounts", icon: "权", title: "账号与权限", hint: "账号、角色与赛事分配" },{ id: "logs", icon: "志", title: "操作日志", hint: "系统操作与审计记录" }] },
+];
+const operationsSections: ActiveSection[] = ["content", "registrationPublish", "schedulePublish", "participants"];
+const operationTools: Array<{ id: "content" | "registrationPublish" | "schedulePublish" | "participants"; title: string; icon: string }> = [
+  { id: "content", title: "内容发布", icon: "发" },
+  { id: "registrationPublish", title: "报名发布", icon: "报" },
+  { id: "schedulePublish", title: "赛程发布", icon: "程" },
+  { id: "participants", title: "参赛人员", icon: "人" },
 ];
 const competitionTools: Array<{ id: CompetitionTool; title: string; icon: string }> = [
   { id: "overview", title: "抽签与签表", icon: "签" },
   { id: "schedule", title: "赛程编排", icon: "程" },
   { id: "scoring", title: "比分录入", icon: "分" },
   { id: "qualification", title: "晋级", icon: "晋" },
-  { id: "ranking", title: "最终排名", icon: "榜" },
+  { id: "ranking", title: "排名", icon: "榜" },
 ];
+function operationToolHref(tool: "content" | "registrationPublish" | "schedulePublish" | "participants", eventId?: string) { if (tool === "content") return eventId ? `/admin/content/${eventId}` : "/admin/content"; const suffix = eventId ? `?event=${encodeURIComponent(eventId)}` : ""; if (tool === "registrationPublish") return `/admin/registration-publish${suffix}`; if (tool === "schedulePublish") return `/admin/schedule-publish${suffix}`; return `/admin/participants${suffix}`; }
 function competitionToolHref(tool: CompetitionTool, eventId?: string) { const suffix = eventId ? `?event=${encodeURIComponent(eventId)}` : ""; if (tool === "schedule") return `/admin/competition/schedules${suffix}`; if (tool === "scoring") return `/admin/competition/scoring${suffix}`; if (tool === "qualification") return `/admin/competition/qualification${suffix}`; if (tool === "ranking") return `/admin/competition/final-ranking${suffix}`; return `/admin/competition${suffix}`; }
-function sectionHref(id: ActiveSection, eventId?: string) { if (id === "dashboard") return "/admin"; if (id === "events") return "/admin/events"; if (id === "content") return eventId ? `/admin/content/${eventId}` : "/admin/content"; if (id === "competition") return competitionToolHref("overview", eventId); if (id === "players") return "/admin/players"; if (id === "points") return "/admin/points"; if (id === "registrations") return `/admin?section=registrations${eventId ? `&event=${encodeURIComponent(eventId)}` : ""}`; if (id === "rankings") return "/admin?section=rankings"; if (id === "accounts") return "/admin/accounts"; if (id === "logs") return "/admin/logs"; return "/admin"; }
+function sectionHref(id: ActiveSection, eventId?: string) { if (id === "dashboard") return "/admin"; if (id === "events") return "/admin/events"; if (id === "content") return operationToolHref("content", eventId); if (id === "registrationPublish") return operationToolHref("registrationPublish", eventId); if (id === "schedulePublish") return operationToolHref("schedulePublish", eventId); if (id === "participants") return operationToolHref("participants", eventId); if (id === "competition") return competitionToolHref("overview", eventId); if (id === "players") return "/admin/players"; if (id === "points") return "/admin/points"; if (id === "registrations") return `/admin?section=registrations${eventId ? `&event=${encodeURIComponent(eventId)}` : ""}`; if (id === "rankings") return "/admin?section=rankings"; if (id === "accounts") return "/admin/accounts"; if (id === "logs") return "/admin/logs"; return "/admin"; }
 
 function LogoutWelcomeScreen() {
   return <main className="backend-login" aria-busy="true">
@@ -191,7 +199,13 @@ function PersistentWorkspaceRoot(props: Props) {
     ? (locallySelectedEventId || currentMeta.currentEventId || carriedEventId || (currentMeta.eventScoped ? defaultScopedEventId : ""))
     : (visualMeta.currentEventId || currentMeta.currentEventId || carriedEventId || (visualMeta.eventScoped ? defaultScopedEventId : ""));
   const currentEvent = events.find((event) => event.id === effectiveEventId);
-  const visibleGroups = navGroups.map((group) => ({ ...group, items: group.items.filter((item) => { if (props.viewer.role === "system_admin") return true; if (props.viewer.role === "committee") return !["accounts", "logs"].includes(item.id); return ["dashboard", "competition"].includes(item.id); }) })).filter((group) => group.items.length > 0);
+  const visibleGroups = navGroups.map((group) => ({ ...group, items: group.items.filter((item) => {
+    if (props.viewer.role === "system_admin") return true;
+    if (props.viewer.role === "committee") return ["dashboard", "events", "content", "players", "points"].includes(item.id);
+    return ["dashboard", "competition"].includes(item.id);
+  }) })).filter((group) => group.items.length > 0);
+  const operationsActive = operationsSections.includes(visualMeta.active);
+  const navItemActive = (id: ActiveSection) => id === "content" ? operationsActive : visualMeta.active === id;
 
   const switchEvent = (eventId: string) => {
     if (!eventId || eventId === effectiveEventId || activePending) return;
@@ -230,7 +244,7 @@ function PersistentWorkspaceRoot(props: Props) {
       {menuOpen && <button className="admin-sidebar-scrim" type="button" aria-label="关闭后台菜单" onClick={() => setMenuOpen(false)} />}
       <aside className={menuOpen ? "backend-sidebar admin-workspace-sidebar open" : "backend-sidebar admin-workspace-sidebar"}>
         <Link prefetch={false} href="/admin" className="backend-brand admin-workspace-brand"><span>华</span><div><strong>华彩赛事后台</strong><small>赛事运营与竞赛执行</small></div></Link>
-        <nav className="admin-workspace-nav">{visibleGroups.map((group, groupIndex) => <div className="admin-nav-group" key={group.label || groupIndex}>{group.label && <small className="admin-nav-group-label">{group.label}</small>}{group.items.map((item) => <div className="admin-nav-item-wrap" key={item.id}><Link prefetch={false} href={sectionHref(item.id, effectiveEventId)} className={visualMeta.active === item.id ? "active" : ""} aria-current={visualMeta.active === item.id ? "page" : undefined} onClick={() => setMenuOpen(false)}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div></Link>{item.id === "competition" && <div className="admin-competition-subnav">{competitionTools.map((tool) => <Link prefetch={false} key={tool.id} href={competitionToolHref(tool.id, effectiveEventId)} className={visualMeta.active === "competition" && visualMeta.competitionTool === tool.id ? "active" : ""} aria-current={visualMeta.active === "competition" && visualMeta.competitionTool === tool.id ? "page" : undefined} onClick={() => setMenuOpen(false)}><span>{tool.icon}</span><strong>{tool.title}</strong></Link>)}</div>}</div>)}</div>)}</nav>
+        <nav className="admin-workspace-nav">{visibleGroups.map((group, groupIndex) => <div className="admin-nav-group" key={group.label || groupIndex}>{group.label && <small className="admin-nav-group-label">{group.label}</small>}{group.items.map((item) => <div className="admin-nav-item-wrap" key={item.id}><Link prefetch={false} href={sectionHref(item.id, effectiveEventId)} className={navItemActive(item.id) ? "active" : ""} aria-current={navItemActive(item.id) ? "page" : undefined} onClick={() => setMenuOpen(false)}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div></Link>{item.id === "content" && <div className="admin-competition-subnav">{operationTools.map((tool) => <Link prefetch={false} key={tool.id} href={operationToolHref(tool.id, effectiveEventId)} className={visualMeta.active === tool.id ? "active" : ""} aria-current={visualMeta.active === tool.id ? "page" : undefined} onClick={() => setMenuOpen(false)}><span>{tool.icon}</span><strong>{tool.title}</strong></Link>)}</div>}{item.id === "competition" && <div className="admin-competition-subnav">{competitionTools.map((tool) => <Link prefetch={false} key={tool.id} href={competitionToolHref(tool.id, effectiveEventId)} className={visualMeta.active === "competition" && visualMeta.competitionTool === tool.id ? "active" : ""} aria-current={visualMeta.active === "competition" && visualMeta.competitionTool === tool.id ? "page" : undefined} onClick={() => setMenuOpen(false)}><span>{tool.icon}</span><strong>{tool.title}</strong></Link>)}</div>}</div>)}</div>)}</nav>
         <div className="backend-sidebar-foot"><Link prefetch={false} href="/" target="_blank" rel="noopener noreferrer">查看公众前端</Link><a href="/api/auth/logout" onClick={logout}>退出登录</a></div>
       </aside>
       <section className="backend-main admin-workspace-main"><header className="backend-topbar admin-workspace-topbar"><button className="backend-menu" type="button" aria-label={menuOpen ? "关闭后台菜单" : "打开后台菜单"} aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}>☰</button><div className="admin-workspace-title"><small>{visualMeta.pageHint || "后台管理"}</small><h1>{visualMeta.pageTitle}</h1></div>{visualMeta.eventScoped ? <label className="backend-event-select admin-workspace-event-select"><span>当前赛事</span><select value={effectiveEventId} aria-label="切换当前赛事" disabled={Boolean(activePending)} onChange={(event) => switchEvent(event.target.value)}><option value="" disabled>请选择赛事</option>{effectiveEventId && !currentEvent && <option value={effectiveEventId}>正在读取所选赛事…</option>}{events.map((event) => <option value={event.id} key={event.id}>第 {event.stationNo} 站 · {event.shortTitle} · {eventStatusLabel(event.status)}</option>)}</select>{currentEvent && <em><b className={eventStatusTone(currentEvent.status)}>{eventStatusLabel(currentEvent.status)}</b>{currentEvent.startDate} — {currentEvent.endDate}</em>}</label> : <div className="admin-workspace-global-context"><span>全局工作区</span><small>不受“当前赛事”切换影响</small></div>}<div className="backend-user"><span>{props.viewer.displayName.slice(0, 1)}</span><div><strong>{props.viewer.displayName}</strong><small>{props.viewer.roleLabel || (props.viewer.role === "system_admin" ? "系统管理员" : props.viewer.role === "committee" ? "组委会" : "裁判")}</small></div></div></header>

@@ -1,4 +1,4 @@
-export type AdminActiveSection = "dashboard" | "events" | "content" | "registrations" | "players" | "points" | "competition" | "rankings" | "accounts" | "logs";
+export type AdminActiveSection = "dashboard" | "events" | "content" | "registrationPublish" | "schedulePublish" | "participants" | "registrations" | "players" | "points" | "competition" | "rankings" | "accounts" | "logs";
 export type AdminCompetitionTool = "overview" | "schedule" | "scoring" | "qualification" | "ranking";
 export type AdminEventSwitchMode = "route" | "local";
 
@@ -41,6 +41,9 @@ export function describeAdminRoute(pathname: string, search = ""): AdminRouteDes
     if (eventId) return { ...base, active: "content", pageTitle: "内容发布", pageHint: "赛事运营 · 静态内容", eventScoped: true, currentEventId: eventId, eventSwitchMode: "local", loadingKind: "content" };
     return { ...base, active: "content", pageTitle: "内容发布", pageHint: "赛事运营 · 请选择赛事", eventScoped: true, loadingKind: "content" };
   }
+  if (pathname.startsWith("/admin/registration-publish")) return { ...base, active: "registrationPublish", pageTitle: "报名发布", pageHint: "赛事运营 · 报名信息与入口", eventScoped: true, currentEventId: eventFromQuery, loadingKind: "content" };
+  if (pathname.startsWith("/admin/schedule-publish")) return { ...base, active: "schedulePublish", pageTitle: "赛程发布", pageHint: "赛事运营 · 对外主赛程", eventScoped: true, currentEventId: eventFromQuery, loadingKind: "content" };
+  if (pathname.startsWith("/admin/participants")) return { ...base, active: "participants", pageTitle: "参赛人员", pageHint: "赛事运营 · 名单确认与锁定", eventScoped: true, currentEventId: eventFromQuery, loadingKind: "content" };
   if (pathname.startsWith("/admin/players")) return { ...base, active: "players", pageTitle: "球员档案", pageHint: "球员 · 档案管理", loadingKind: "players" };
   if (pathname.startsWith("/admin/points")) return { ...base, active: "points", pageTitle: "积分排名", pageHint: "球员 · 积分总览与分站排名", loadingKind: "points" };
 
@@ -50,7 +53,7 @@ export function describeAdminRoute(pathname: string, search = ""): AdminRouteDes
     if (pathname.startsWith("/admin/competition/schedule")) return { ...base, active: "competition", pageTitle: "赛程编排", pageHint: "竞赛执行 · 当前阶段排程", eventScoped: true, currentEventId: eventFromQuery, competitionTool: "schedule", loadingKind: "schedule" };
     if (pathname.startsWith("/admin/competition/scoring")) return { ...base, active: "competition", pageTitle: "比分录入", pageHint: "竞赛执行 · 当前待办优先", eventScoped: true, currentEventId: eventFromQuery, eventSwitchMode: "local", competitionTool: "scoring", loadingKind: "scoring" };
     if (pathname.startsWith("/admin/competition/qualification")) return { ...base, active: "competition", pageTitle: "晋级", pageHint: "竞赛执行 · 当前阶段晋级确认", eventScoped: true, currentEventId: eventFromQuery, competitionTool: "qualification", loadingKind: "qualification" };
-    if (pathname.startsWith("/admin/competition/final-ranking")) return { ...base, active: "competition", pageTitle: "最终排名", pageHint: "竞赛执行 · 自动生成 / 人工调整 / 确认 / 发布", eventScoped: true, currentEventId: eventFromQuery, competitionTool: "ranking", loadingKind: "ranking" };
+    if (pathname.startsWith("/admin/competition/final-ranking")) return { ...base, active: "competition", pageTitle: "排名", pageHint: "竞赛执行 · 自动生成 / 人工调整 / 确认 / 发布", eventScoped: true, currentEventId: eventFromQuery, competitionTool: "ranking", loadingKind: "ranking" };
     if (/\/admin\/competition\/draw\/[^/]+\/screen\/?$/.test(pathname)) return { ...base, active: "competition", pageTitle: "抽签大屏", pageHint: "竞赛执行 · 现场展示", competitionTool: "overview", loadingKind: "competition" };
     if (pathname.startsWith("/admin/competition/draw")) return { ...base, active: "competition", pageTitle: "抽签与签表", pageHint: "竞赛执行 · 当前组别与阶段", eventScoped: true, currentEventId: eventFromQuery, competitionTool: "overview", loadingKind: "competition" };
     if (pathname.startsWith("/admin/competition/print")) return { ...base, active: "competition", pageTitle: "打印签表 / 赛程", pageHint: "竞赛执行 · 打印视图", competitionTool: "schedule", loadingKind: "schedule" };
