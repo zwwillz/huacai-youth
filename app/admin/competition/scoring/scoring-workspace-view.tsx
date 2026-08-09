@@ -1,0 +1,107 @@
+"use client";
+
+import type { CompetitionContextData } from "@/db/competition-context";
+import type { ScoringMatch, ScoringWorkspaceData } from "@/db/scoring-engine";
+import CompetitionContextBar, { type CompetitionPhaseOption } from "../competition-context-bar";
+import CompetitionPublicationBar from "../competition-publication-bar";
+
+export type ScoringDraft = { scoreA: string; scoreB: string; resultType: string; note: string };
+
+type Props = {
+  data: ScoringWorkspaceData | null;
+  context: CompetitionContextData | null;
+  selectedGroupId: string;
+  selectedPhase: string;
+  phaseOptions: CompetitionPhaseOption[];
+  drafts: Record<string, ScoringDraft>;
+  query: string;
+  busyId: string;
+  message: string;
+  loading: boolean;
+  publicationDirty: boolean;
+  onQueryChange?: (value: string) => void;
+  onGroupChange?: (groupId: string) => void;
+  onPhaseChange?: (phaseCode: string) => void;
+  onDateChange?: (date: string) => void;
+  onToggleConfirmed?: () => void;
+  onDraftChange?: (assignmentId: string, draft: ScoringDraft) => void;
+  onSubmit?: (match: ScoringMatch) => void;
+  onConfirm?: (match: ScoringMatch) => void;
+  onPublicationChanged?: (status: string, dirty: boolean) => void;
+};
+
+export const scoringPhases = [
+  { code: "qualifier-one", title: "资格赛第一场" },
+  { code: "qualifier-two", title: "资格赛第二场" },
+  { code: "main-one", title: "正赛第一阶段" },
+  { code: "main-two", title: "正赛第二阶段" },
+];
+
+function resultStatusLabel(status: string) {
+  if (status === "submitted") return "待组委会确认";
+  if (status === "confirmed") return "已确认";
+  return "待录入";
+}
+
+export function scoringDateLabel(value: string) {
+  if (value === "__unscheduled__") return "未排期";
+  const [, month, day] = value.split("-");
+  if (!month || !day) return value;
+  const weekday = ["日", "一", "二", "三", "四", "五", "六"][new Date(`${value}T12:00:00+08:00`).getDay()];
+  return `${Number(month)}月${Number(day)}日 · 周${weekday}`;
+}
+
+function LoadingMatchCard({ index }: { index: number }) {
+  return <article className="scoring-card pending">
+    <header><div><b>比赛阶段读取中</b><span>场次 —{index + 1}</span></div><em>待录入</em></header>
+    <div className="scoring-meta"><span>比赛时间读取中</span><strong>球台读取中</strong><small>裁判：—</small></div>
+    <div className="scoring-versus"><div><span>A</span><strong>球员读取中</strong><input disabled value="" readOnly /></div><i>VS</i><div><span>B</span><strong>球员读取中</strong><input disabled value="" readOnly /></div></div>
+    <div className="scoring-actions-row"><select disabled value="normal"><option value="normal">正常完赛</option></select><input disabled value="" readOnly placeholder="备注（可选）" /><button type="button" disabled>提交赛果</button></div>
+  </article>;
+}
+
+export default function ScoringWorkspaceView(props: Props) {
+  const { data, context, selectedGroupId, selectedPhase, phaseOptions, drafts, query, busyId, message, loading, publicationDirty } = props;
+  const groups = context?.groups ?? data?.groups ?? [{ id: "u16", name: "少年组", code: "U16" }, { id: "u20", name: "青年组", code: "U20" }];
+  const effectiveGroupId = groups.some((group) => group.id === selectedGroupId) ? selectedGroupId : groups[0]?.id || "u16";
+  const groupName = groups.find((group) => group.id === effectiveGroupId)?.name || "当前组别";
+  const selectedPhaseTitle = scoringPhases.find((phase) => phase.code === selectedPhase)?.title || "当前阶段";
+  const eventId = data?.event.id || context?.event.id || "";
+  const eventTitle = data?.event.shortTitle || context?.event.shortTitle || "当前赛事";
+  const viewerRole = data?.viewer.role || "system_admin";
+  const publication = context?.publications.matches;
+  const canConfirm = data ? data.viewer.role === "system_admin" || data.viewer.role === "committee" : false;
+  const filtered = data ? (() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return data.matches;
+    return data.matches.filter((match) => `${match.matchCode} ${match.playerAName || ""} ${match.playerBName || ""} ${match.tableName || ""}`.toLowerCase().includes(keyword));
+  })() : [];
+
+  return <>
+    <CompetitionContextBar eventId={eventId} eventTitle={eventTitle} groups={groups} selectedGroupId={effectiveGroupId} basePath="/admin/competition/scoring" phases={phaseOptions} selectedPhase={selectedPhase} eyebrow="比分录入" title={`${groupName} · ${selectedPhaseTitle}`} description="组别、阶段、日期和已确认视图都在当前工作区内切换；旧列表会保留到新数据返回，并保持原标签避免误读。" onGroupChange={loading ? undefined : props.onGroupChange} onPhaseChange={loading ? undefined : props.onPhaseChange} />
+    <CompetitionPublicationBar eventId={eventId} moduleType="matches" title="对阵与比分" status={publication?.status || "draft"} hasUnpublishedChanges={Boolean(publication?.hasUnpublishedChanges || publicationDirty)} viewerRole={viewerRole} hint="比分确认后先进入后台未发布更新。用户端仍保持上一版已发布比分；点击“发布更新”后才整体切换。" loading={loading && !context} onChanged={props.onPublicationChanged} />
+
+    <main className={loading && data ? "scoring-workbench admin-local-stale" : "scoring-workbench"} aria-busy={loading} style={loading && !data ? { pointerEvents: "none" } : undefined}>
+      <section className="scoring-taskbar">
+        <div className="scoring-task-summary"><div><small>当前待处理</small><strong>{data ? data.counts.actionable : "—"}</strong><span>场</span></div><div><small>等待确认</small><strong>{data ? data.counts.submitted : "—"}</strong><span>场</span></div><div><small>本日已确认</small><strong>{data ? data.counts.confirmed : "—"}</strong><span>场</span></div></div>
+        <div className="scoring-view-actions"><button type="button" className={data?.filters.showConfirmed ? "active" : ""} disabled={loading || !data} onClick={props.onToggleConfirmed}>{data?.filters.showConfirmed ? "隐藏已确认" : "查看已确认"}</button><input value={query} disabled={!data} onChange={(event) => props.onQueryChange?.(event.target.value)} placeholder="搜索球员或台号" /></div>
+      </section>
+
+      {data?.dates.length ? <nav className="scoring-date-tabs">{data.dates.map((date) => <button type="button" key={date.value} className={date.value === data.filters.date ? "active" : ""} disabled={loading} onClick={() => props.onDateChange?.(date.value)}><strong>{scoringDateLabel(date.value)}</strong><small>{date.actionableCount > 0 ? `${date.actionableCount}场待处理` : `${date.confirmedCount}场已确认`}</small></button>)}</nav> : loading ? <nav className="scoring-date-tabs"><button type="button" className="active" disabled><strong>比赛日期读取中</strong><small>场次正在同步</small></button></nav> : null}
+      {message && <p className="scoring-message">{message}</p>}
+
+      <section className="scoring-list">{data ? filtered.map((match) => {
+        const draft = drafts[match.assignmentId] ?? { scoreA: match.scoreA === null ? "" : String(match.scoreA), scoreB: match.scoreB === null ? "" : String(match.scoreB), resultType: match.resultType || "normal", note: "" };
+        const locked = match.resultStatus === "confirmed";
+        return <article className={`scoring-card ${match.resultStatus}`} key={match.assignmentId}>
+          <header><div><b>{match.roundName}</b><span>{match.matchCode}</span></div><em>{resultStatusLabel(match.resultStatus)}</em></header>
+          <div className="scoring-meta"><span>{match.matchDate ? scoringDateLabel(match.matchDate) : "未排期"} {match.startTime || ""}</span><strong>{match.tableName || "待定球台"}</strong>{match.refereeName && <small>裁判：{match.refereeName}</small>}</div>
+          <div className="scoring-versus"><div><span>A</span><strong>{match.playerAName || "待产生"}</strong><input type="number" min={0} inputMode="numeric" value={draft.scoreA} disabled={locked || draft.resultType !== "normal"} onChange={(event) => props.onDraftChange?.(match.assignmentId, { ...draft, scoreA: event.target.value })} /></div><i>VS</i><div><span>B</span><strong>{match.playerBName || "待产生"}</strong><input type="number" min={0} inputMode="numeric" value={draft.scoreB} disabled={locked || draft.resultType !== "normal"} onChange={(event) => props.onDraftChange?.(match.assignmentId, { ...draft, scoreB: event.target.value })} /></div></div>
+          <div className="scoring-actions-row"><select value={draft.resultType} disabled={locked} onChange={(event) => props.onDraftChange?.(match.assignmentId, { ...draft, resultType: event.target.value })}><option value="normal">正常完赛</option><option value="a_forfeit">A方弃权</option><option value="b_forfeit">B方弃权</option><option value="a_no_show">A方未到</option><option value="b_no_show">B方未到</option><option value="a_disqualified">A方判负 / 取消资格</option><option value="b_disqualified">B方判负 / 取消资格</option></select><input value={draft.note} disabled={locked} onChange={(event) => props.onDraftChange?.(match.assignmentId, { ...draft, note: event.target.value })} placeholder="备注（可选）" />{match.resultStatus !== "confirmed" && <button type="button" disabled={busyId === match.assignmentId || !match.playerAName || !match.playerBName} onClick={() => props.onSubmit?.(match)}>{busyId === match.assignmentId ? "提交中..." : match.resultStatus === "submitted" ? "修改并重新提交" : "提交赛果"}</button>}{canConfirm && match.resultStatus === "submitted" && <button className="confirm" type="button" disabled={busyId === match.assignmentId} onClick={() => props.onConfirm?.(match)}>确认赛果</button>}</div>
+          {locked && <footer>胜者：<strong>{match.winnerPlayerName}</strong> · 已确认</footer>}
+        </article>;
+      }) : <><LoadingMatchCard index={0} /><LoadingMatchCard index={1} /></>}</section>
+      {data && !filtered.length && <section className="scoring-empty"><strong>{data.counts.confirmed > 0 && !data.filters.showConfirmed ? "当前日期没有待处理比赛" : "当前阶段还没有可录入的比赛"}</strong><p>{data.counts.confirmed > 0 && !data.filters.showConfirmed ? "已确认场次默认自动收起；需要复核时点击“查看已确认”。" : "可能还未排赛程，或上一轮赛果尚未产生下一场对阵。"}</p></section>}
+    </main>
+  </>;
+}
