@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminHomeData } from "@/db/admin-ui";
 import AdminWorkspaceShell from "./admin-workspace-shell";
 import { getAdminViewer } from "./admin-viewer";
+import DashboardClient from "./dashboard-client";
 import "./admin-home.css";
 import { eventStatusLabel } from "./admin-status";
 
@@ -25,16 +25,23 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   if (query.section === "accounts") redirect("/admin/accounts");
   if (query.section === "logs") redirect("/admin/logs");
 
-  const data = await getAdminHomeData(viewer.username);
   let section = normalizeSection(query.section);
   if (viewer.role === "referee" && section !== "dashboard") section = "dashboard";
 
+  // Structure first: the dashboard itself has no blocking business-data read.
+  // Its real frame renders immediately and only the live metrics/recent events
+  // are filled by a small private endpoint after paint.
+  if (section === "dashboard") return <DashboardClient viewerKey={viewer.id} viewerRole={viewer.role} />;
+
+  // These legacy secondary sections still use their existing server payload.
+  // They can be migrated to the same structure-first pattern when their UI is
+  // developed further.
+  const data = await getAdminHomeData(viewer.username);
   const events = data.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }));
   const currentEventId = data.events.some((event) => event.id === query.event) ? query.event : data.events[0]?.id;
   const currentEvent = data.events.find((event) => event.id === currentEventId);
   const eventScoped = section === "registrations";
   const titles = {
-    dashboard: ["工作台", "全局总览与待办"],
     registrations: ["报名审核", "赛事运营 · 当前赛事"],
     rankings: ["排名积分", "全局 · 总积分与分站排名"],
   } as const;
@@ -49,44 +56,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     currentEventId={eventScoped ? currentEventId : undefined}
     eventScoped={eventScoped}
   >
-    {section === "dashboard" && <Dashboard data={data} viewerRole={viewer.role} />}
     {section === "registrations" && <ScopedPlaceholder title="报名审核" eventTitle={currentEvent?.shortTitle} description="报名审核后续会在这里处理报名资料、组别、审核状态和缴费/确认状态。当前先统一到新的后台结构。" />}
     {section === "rankings" && <RankingsOverview events={data.events} />}
   </AdminWorkspaceShell>;
-}
-
-function Dashboard({ data, viewerRole }: { data: Awaited<ReturnType<typeof getAdminHomeData>>; viewerRole: string }) {
-  const recentEvents = data.events.slice(0, 4);
-  const currentEventId = recentEvents[0]?.id;
-  const primary = viewerRole === "system_admin"
-    ? { href: "/admin/events/new", label: "＋ 创建新赛事" }
-    : viewerRole === "referee"
-      ? { href: currentEventId ? `/admin/competition/scoring?event=${encodeURIComponent(currentEventId)}` : "/admin/competition", label: "进入比分录入" }
-      : { href: currentEventId ? `/admin/competition?event=${encodeURIComponent(currentEventId)}` : "/admin/competition", label: "进入当前赛事" };
-  const eventHref = (eventId: string) => viewerRole === "referee"
-    ? `/admin/competition/scoring?event=${encodeURIComponent(eventId)}`
-    : `/admin/competition?event=${encodeURIComponent(eventId)}`;
-
-  return <main className="admin-home">
-    <section className="admin-home-hero"><div><small>HUACAI EVENT ADMIN</small><h2>华彩赛事管理后台</h2><p>{viewerRole === "referee" ? "这里只显示分配给你的赛事。进入比分录入后，默认只看当前需要处理的比赛。" : "先选择一场赛事，再按内容发布、抽签、赛程、比分、晋级和排名的顺序处理。"}</p></div><Link prefetch={false} href={primary.href}>{primary.label}</Link></section>
-    <section className="admin-home-metrics">
-      <article><span>可管理赛事</span><strong>{data.metrics.eventCount}</strong><small>{viewerRole === "system_admin" ? "系统内全部赛事" : "已分配给当前账号"}</small></article>
-      <article><span>进行中赛事</span><strong>{data.metrics.activeEventCount}</strong><small>报名中或比赛中</small></article>
-      <article><span>待审核报名</span><strong>{data.metrics.pendingRegistrationCount}</strong><small>后续报名模块接入后处理</small></article>
-      <article><span>待发布内容</span><strong>{data.metrics.draftPublicationCount}</strong><small>仍处于草稿状态</small></article>
-    </section>
-    <section className="admin-home-grid">
-      <article className="admin-home-panel"><header><div><small>MY EVENTS</small><h3>{viewerRole === "system_admin" ? "最近赛事" : "已分配赛事"}</h3></div>{viewerRole === "system_admin" && <Link prefetch={false} href="/admin/events">查看全部赛事 →</Link>}</header>
-        {recentEvents.length ? recentEvents.map((event) => <div className="admin-home-event" key={event.id}><span>{event.stationNo}</span><div><strong>{event.shortTitle}</strong><small>{event.city} · {event.venueName || "场馆待设置"} · {event.startDate} — {event.endDate}</small></div><Link prefetch={false} href={eventHref(event.id)}>{viewerRole === "referee" ? "录入比分" : "继续处理"}</Link></div>) : <div className="admin-simple-empty">{viewerRole === "system_admin" ? "尚未创建赛事。" : "当前账号尚未分配赛事，请联系系统管理员。"}</div>}
-      </article>
-      <article className="admin-home-panel"><header><div><small>NEXT ACTION</small><h3>常用入口</h3></div></header><div className="admin-home-links">
-        {viewerRole === "system_admin" && <Link prefetch={false} href="/admin/events"><span>赛事管理</span><b>创建 / 设置 →</b></Link>}
-        {viewerRole !== "referee" && <Link prefetch={false} href={currentEventId ? `/admin/content/${currentEventId}` : "/admin/content"}><span>内容发布</span><b>概览 / 规程 →</b></Link>}
-        <Link prefetch={false} href={currentEventId ? `/admin/competition?event=${encodeURIComponent(currentEventId)}` : "/admin/competition"}><span>竞赛执行</span><b>查看当前待办 →</b></Link>
-        <Link prefetch={false} href={currentEventId ? `/admin/competition/scoring?event=${encodeURIComponent(currentEventId)}` : "/admin/competition/scoring"}><span>比分录入</span><b>进入工作台 →</b></Link>
-      </div></article>
-    </section>
-  </main>;
 }
 
 function ScopedPlaceholder({ title, eventTitle, description }: { title: string; eventTitle?: string; description: string }) {

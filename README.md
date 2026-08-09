@@ -10,6 +10,12 @@
 - 角色：系统管理员、组委会、裁判。
 - 数据库：Supabase PostgreSQL，通过 Drizzle ORM 访问。
 
+## 后台页面开发原则
+
+后台页面统一遵循 **Structure first, data second（结构优先，数据随后）**：页面框架和不依赖数据库的 UI 先显示，轻数据、主数据、深层数据按数据域渐进补齐；禁止为了少量动态数据阻塞整页结构。后台数据不得使用公共 CDN 缓存。
+
+详细规范见：[`docs/admin-ui-performance.md`](docs/admin-ui-performance.md)。后续新增或重构后台页面时，应将该文档作为默认性能与加载规范执行。
+
 ## 本地开发
 
 需要 Node.js 22.17 或更高版本。

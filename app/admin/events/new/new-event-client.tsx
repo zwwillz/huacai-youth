@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type EventRow = { id: string; year: number; stationNo: number; shortTitle: string };
 type SnapshotResponse = { data?: { events: EventRow[] }; error?: string };
+type SuggestionResponse = { data?: { latestYear: number; nextStationNo: number }; error?: string };
 
 type Draft = {
   fullTitle: string;
@@ -23,15 +24,22 @@ type Draft = {
   publishStatus: string;
 };
 
-export default function NewEventClient({ defaultYear, defaultStationNo }: { defaultYear: number; defaultStationNo: number }) {
+type Touched = Partial<Record<keyof Draft, boolean>>;
+
+function fullTitleForYear(year: number) { return `${year}中国华彩十六球青少年系列赛`; }
+function shortTitleForYear(year: number) { return `${year}华彩青少年系列赛新分站`; }
+
+export default function NewEventClient({ initialYear }: { initialYear: number }) {
   const router = useRouter();
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
+  const [suggestionState, setSuggestionState] = useState<"loading" | "ready" | "error">("loading");
+  const touched = useRef<Touched>({});
   const [draft, setDraft] = useState<Draft>({
-    fullTitle: `${defaultYear}中国华彩十六球青少年系列赛`,
-    shortTitle: `${defaultYear}华彩青少年系列赛新分站`,
-    year: defaultYear,
-    stationNo: defaultStationNo,
+    fullTitle: fullTitleForYear(initialYear),
+    shortTitle: shortTitleForYear(initialYear),
+    year: initialYear,
+    stationNo: 1,
     city: "",
     venueName: "",
     startDate: "",
@@ -43,7 +51,44 @@ export default function NewEventClient({ defaultYear, defaultStationNo }: { defa
     publishStatus: "draft",
   });
 
-  const update = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }));
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/admin/events/new-defaults", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json() as SuggestionResponse;
+        if (response.status === 401) {
+          window.location.assign("/admin/login");
+          throw new Error("登录状态已失效，请重新登录。");
+        }
+        if (!response.ok || !payload.data) throw new Error(payload.error || "建议站次读取失败。");
+        if (cancelled) return;
+        const suggestion = payload.data;
+        setDraft((current) => ({
+          ...current,
+          year: touched.current.year ? current.year : suggestion.latestYear,
+          stationNo: touched.current.stationNo ? current.stationNo : suggestion.nextStationNo,
+          fullTitle: touched.current.fullTitle || touched.current.year ? current.fullTitle : fullTitleForYear(suggestion.latestYear),
+          shortTitle: touched.current.shortTitle || touched.current.year ? current.shortTitle : shortTitleForYear(suggestion.latestYear),
+        }));
+        setSuggestionState("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setSuggestionState("error");
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const update = <K extends keyof Draft>(key: K, value: Draft[K]) => {
+    touched.current[key] = true;
+    setDraft((current) => {
+      const next = { ...current, [key]: value } as Draft;
+      if (key === "year" && typeof value === "number") {
+        if (!touched.current.fullTitle && current.fullTitle === fullTitleForYear(current.year)) next.fullTitle = fullTitleForYear(value);
+        if (!touched.current.shortTitle && current.shortTitle === shortTitleForYear(current.year)) next.shortTitle = shortTitleForYear(value);
+      }
+      return next;
+    });
+  };
   const canSubmit = useMemo(() => Boolean(draft.fullTitle.trim() && draft.shortTitle.trim() && draft.city.trim() && draft.startDate && draft.endDate), [draft]);
 
   const submit = async (event: FormEvent) => {
@@ -67,7 +112,7 @@ export default function NewEventClient({ defaultYear, defaultStationNo }: { defa
     <section className="new-event-head"><div><small>CREATE EVENT</small><h2>创建新赛事</h2><p>这里只建立一场赛事的基础主数据。创建成功后会自动建立少年组、青年组以及基础发布模块，然后进入“赛事完整设置”继续上传主题图、配置赞助商、组织机构和后台成员。</p></div><Link href="/admin/events">← 返回赛事列表</Link></section>
     <form className="new-event-form" onSubmit={submit}>
       <section className="new-event-main">
-        <header><small>01 · BASIC INFORMATION</small><h3>赛事基础信息</h3></header>
+        <header><div><small>01 · BASIC INFORMATION</small><h3>赛事基础信息</h3></div><span className={`new-event-suggestion ${suggestionState}`}>{suggestionState === "loading" ? "正在补充建议年份 / 站次" : suggestionState === "ready" ? "建议年份 / 站次已就绪" : "建议值暂未读取，可手动填写"}</span></header>
         {error && <p className="new-event-message error">{error}</p>}
         <div className="new-event-grid">
           <label className="wide"><span>完整赛事名称 *</span><input value={draft.fullTitle} onChange={(e) => update("fullTitle", e.target.value)} required /></label>
