@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { adminRouteLoadingDelayMs, describeAdminRoute, isAdminShelllessRoute } from "./admin-route-state";
 
@@ -16,23 +17,23 @@ function DashboardStructureFrame() {
   return <main className="admin-home" aria-busy="true" style={{ pointerEvents: "none" }}>
     <section className="admin-home-hero">
       <div><small>HUACAI EVENT ADMIN</small><h2>华彩赛事管理后台</h2><p>赛事工作区已经打开，实时统计会在对应位置自动补齐。</p></div>
-      <a href="/admin/events/new" tabIndex={-1}>＋ 创建新赛事</a>
+      <Link href="/admin/events/new" tabIndex={-1}>＋ 创建新赛事</Link>
     </section>
     <section className="admin-home-metrics">
       {["可管理赛事", "进行中赛事", "待审核报名", "待发布内容"].map((label) => <article key={label}><span>{label}</span><strong>—</strong><small>数据正在补齐</small></article>)}
     </section>
     <section className="admin-home-grid">
       <article className="admin-home-panel">
-        <header><div><small>MY EVENTS</small><h3>最近赛事</h3></div><a href="/admin/events" tabIndex={-1}>查看全部赛事 →</a></header>
+        <header><div><small>MY EVENTS</small><h3>最近赛事</h3></div><Link href="/admin/events" tabIndex={-1}>查看全部赛事 →</Link></header>
         <div className="admin-simple-empty">赛事列表正在补齐，页面结构已经可以使用。</div>
       </article>
       <article className="admin-home-panel">
         <header><div><small>NEXT ACTION</small><h3>常用入口</h3></div></header>
         <div className="admin-home-links">
-          <a href="/admin/events" tabIndex={-1}><span>赛事管理</span><b>创建 / 设置 →</b></a>
-          <a href="/admin/content" tabIndex={-1}><span>内容发布</span><b>概览 / 规程 →</b></a>
-          <a href="/admin/competition" tabIndex={-1}><span>竞赛执行</span><b>查看当前待办 →</b></a>
-          <a href="/admin/competition/scoring" tabIndex={-1}><span>比分录入</span><b>进入工作台 →</b></a>
+          <Link href="/admin/events" tabIndex={-1}><span>赛事管理</span><b>创建 / 设置 →</b></Link>
+          <Link href="/admin/content" tabIndex={-1}><span>内容发布</span><b>概览 / 规程 →</b></Link>
+          <Link href="/admin/competition" tabIndex={-1}><span>竞赛执行</span><b>查看当前待办 →</b></Link>
+          <Link href="/admin/competition/scoring" tabIndex={-1}><span>比分录入</span><b>进入工作台 →</b></Link>
         </div>
       </article>
     </section>
@@ -42,7 +43,7 @@ function DashboardStructureFrame() {
 function NewEventStructureFrame() {
   const year = new Date().getFullYear();
   return <main className="new-event-page" aria-busy="true" style={{ pointerEvents: "none" }}>
-    <section className="new-event-head"><div><small>CREATE EVENT</small><h2>创建新赛事</h2><p>这里只建立一场赛事的基础主数据。创建成功后会自动建立少年组、青年组以及基础发布模块，然后进入“赛事完整设置”继续完善。</p></div><a href="/admin/events" tabIndex={-1}>← 返回赛事列表</a></section>
+    <section className="new-event-head"><div><small>CREATE EVENT</small><h2>创建新赛事</h2><p>这里只建立一场赛事的基础主数据。创建成功后会自动建立少年组、青年组以及基础发布模块，然后进入“赛事完整设置”继续完善。</p></div><Link href="/admin/events" tabIndex={-1}>← 返回赛事列表</Link></section>
     <div className="new-event-form">
       <section className="new-event-main">
         <header><div><small>01 · BASIC INFORMATION</small><h3>赛事基础信息</h3></div><span className="new-event-suggestion loading">正在补充建议年份 / 站次</span></header>
@@ -62,7 +63,7 @@ function NewEventStructureFrame() {
           <label className="wide"><span>赛事简介</span><textarea rows={4} placeholder="可先写一句简要说明，完整内容之后在内容发布中继续完善" readOnly /></label>
         </div>
       </section>
-      <aside className="new-event-side"><small>创建后的系统动作</small><h3>先建立赛事，再进入本站工作区</h3><p>新赛事创建后，系统会自动准备基础结构，不需要重复创建后续模块。</p><ul><li>建立赛事主记录</li><li>自动建立少年组 U16</li><li>自动建立青年组 U20</li><li>建立概览 / 规程 / 文件发布模块</li><li>预留赛程 / 对阵 / 排名动态模块</li></ul><div className="new-event-actions"><button type="button">创建赛事并继续设置</button><a href="/admin/events" tabIndex={-1}>取消创建</a></div></aside>
+      <aside className="new-event-side"><small>创建后的系统动作</small><h3>先建立赛事，再进入本站工作区</h3><p>新赛事创建后，系统会自动准备基础结构，不需要重复创建后续模块。</p><ul><li>建立赛事主记录</li><li>自动建立少年组 U16</li><li>自动建立青年组 U20</li><li>建立概览 / 规程 / 文件发布模块</li><li>预留赛程 / 对阵 / 排名动态模块</li></ul><div className="new-event-actions"><button type="button">创建赛事并继续设置</button><Link href="/admin/events" tabIndex={-1}>取消创建</Link></div></aside>
     </div>
   </main>;
 }
