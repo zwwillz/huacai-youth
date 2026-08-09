@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { EventData, Station } from "@/app/public-types";
 import { getDb } from "./index";
 import { events, venues } from "./schema";
@@ -126,7 +126,7 @@ export async function getPublicHomeData(): Promise<EventData> {
     })
     .from(events)
     .leftJoin(venues, eq(events.venueId, venues.id))
-    .where(eq(events.publishStatus, "published"))
+    .where(and(eq(events.publishStatus, "published"), sql`coalesce(is_hidden, false) = false`))
     .orderBy(desc(events.year), desc(events.stationNo));
 
   return {
