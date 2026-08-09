@@ -14,7 +14,6 @@ import "./events/event-management-v2.css";
 import "./events/event-management-v2-controls.css";
 import "./content/content-management.css";
 import "./content/content-extensions.css";
-import "./content/content-publishing-v2.css";
 import "./content/[eventId]/guides/guide-management.css";
 import "./players/player-management.css";
 import "./players/player-management-performance.css";
