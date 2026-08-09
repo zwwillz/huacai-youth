@@ -35,11 +35,6 @@ function normalizeRecentEvents(value: unknown): DashboardRecentEvent[] {
   return [];
 }
 
-/**
- * Structure-first dashboard payload.
- * The page frame renders without this query; this function only supplies the
- * small set of values that truly depend on current database state.
- */
 export async function getAdminDashboardSummaryFast(input: AdminPrincipalInput): Promise<AdminDashboardSummary> {
   const principal = await resolveAdminPrincipal(input);
   const sql = getSqlClient();
@@ -95,30 +90,44 @@ export async function getAdminDashboardSummaryFast(input: AdminPrincipalInput): 
   };
 }
 
-export type NewEventSuggestion = { latestYear: number; nextStationNo: number };
+export type NewEventAccount = { id: string; username: string; displayName: string; role: string; status: string };
+export type NewEventSuggestion = {
+  latestYear: number;
+  nextStationNo: number;
+  viewerRole: string;
+  assignableAccounts: NewEventAccount[];
+};
 
-/**
- * Lightweight suggestion only. It never decides whether a create is valid;
- * the create mutation remains authoritative and must revalidate uniqueness.
- */
 export async function getNewEventSuggestionFast(input: AdminPrincipalInput): Promise<NewEventSuggestion> {
   const principal = await resolveAdminPrincipal(input);
   assertAdminRole(principal, ["system_admin", "committee"], "当前账号没有创建赛事的权限。");
   const currentYear = new Date().getFullYear();
   const sql = getSqlClient();
-  const rows = await sql<Array<{ latestYear: number; nextStationNo: number }>>`
-    with target as (
-      select greatest(${currentYear}::int,coalesce(max(year),${currentYear}::int))::int as year
-      from public.events
-    )
-    select target.year::int as "latestYear",
-      (coalesce(max(e.station_no),0)+1)::int as "nextStationNo"
-    from target
-    left join public.events e on e.year=target.year
-    group by target.year
-  `;
+  const [rows, accounts] = await Promise.all([
+    sql<Array<{ latestYear: number; nextStationNo: number }>>`
+      with target as (
+        select greatest(${currentYear}::int,coalesce(max(year),${currentYear}::int))::int as year
+        from public.events
+      )
+      select target.year::int as "latestYear",
+        (coalesce(max(e.station_no),0)+1)::int as "nextStationNo"
+      from target
+      left join public.events e on e.year=target.year
+      group by target.year
+    `,
+    principal.role === "system_admin"
+      ? sql<NewEventAccount[]>`
+          select id, username, display_name as "displayName", role, status
+          from public.users
+          where role in ('committee','referee')
+          order by case when status='active' then 0 else 1 end, display_name asc
+        `
+      : Promise.resolve([] as NewEventAccount[]),
+  ]);
   return {
     latestYear: Number(rows[0]?.latestYear ?? currentYear),
     nextStationNo: Number(rows[0]?.nextStationNo ?? 1),
+    viewerRole: principal.role,
+    assignableAccounts: accounts,
   };
 }
