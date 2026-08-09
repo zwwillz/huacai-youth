@@ -30,11 +30,11 @@ export async function POST(request: Request) {
       const created = data.events.find((event) => event.year === Number(input.year) && event.stationNo === Number(input.stationNo) && event.shortTitle === input.shortTitle.trim()) ?? data.events[0];
       if (created) {
         await ensureNewEventDefaults(created.id);
+        const sql = getSqlClient();
 
         // A committee account that creates a new event must immediately retain
         // access to that event before the full setup bundle is saved.
         if (viewer.role === "committee") {
-          const sql = getSqlClient();
           const timestamp = new Date().toISOString();
           await sql`
             insert into public.event_members (id,event_id,user_id,role,status,created_at,updated_at)
@@ -54,7 +54,11 @@ export async function POST(request: Request) {
             const requested = requestedGroups.find((item) => item.code === group.code) ?? requestedGroups[index];
             return requested ? { ...group, name: requested.name, code: requested.code, status: requested.status } : group;
           });
-          await saveEventManagementData(viewer.username, {
+
+          // The current event-management writer still expects a venue while saving
+          // groups/organizations/members. Use a short-lived internal placeholder,
+          // then immediately remove it so a newly created event has no fake venue.
+          const saved = await saveEventManagementData(viewer.username, {
             eventId: current.event.id,
             year: current.event.year,
             stationNo: current.event.stationNo,
@@ -69,7 +73,7 @@ export async function POST(request: Request) {
             summary: current.event.summary,
             status: current.event.status as "draft",
             publishStatus: current.event.publishStatus as "draft",
-            venue: { ...current.event.venue, name: current.event.venue.name || `${current.event.city}比赛场馆` },
+            venue: { ...current.event.venue, name: current.event.venue.name || "待设置场馆" },
             details: { ...current.event.details },
             sponsors: current.event.sponsors.map((row) => ({ ...row })),
             organizations: {
@@ -81,6 +85,11 @@ export async function POST(request: Request) {
             groups,
             memberIds: viewer.role === "system_admin" ? (input.setup.memberIds ?? []) : current.event.memberIds,
           });
+          const placeholderVenueId = saved.event.venue.id;
+          if (!current.event.venue.id && placeholderVenueId) {
+            await sql`update public.events set venue_id=null where id=${created.id} and venue_id=${placeholderVenueId}`;
+            await sql`delete from public.venues where id=${placeholderVenueId}`;
+          }
         }
         await syncEventOverviewPublication(created.id, input.publishStatus === "published");
       }
