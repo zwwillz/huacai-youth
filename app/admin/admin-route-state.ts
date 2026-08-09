@@ -1,4 +1,4 @@
-export type AdminActiveSection = "dashboard" | "events" | "content" | "registrations" | "players" | "competition" | "rankings" | "accounts" | "logs";
+export type AdminActiveSection = "dashboard" | "events" | "content" | "registrations" | "players" | "points" | "competition" | "rankings" | "accounts" | "logs";
 export type AdminCompetitionTool = "overview" | "schedule" | "scoring" | "qualification" | "ranking";
 export type AdminEventSwitchMode = "route" | "local";
 
@@ -10,7 +10,7 @@ export type AdminRouteDescriptor = {
   currentEventId: string;
   competitionTool: AdminCompetitionTool;
   eventSwitchMode: AdminEventSwitchMode;
-  loadingKind: "dashboard" | "events" | "event-editor" | "content" | "players" | "competition" | "schedule" | "scoring" | "qualification" | "ranking" | "system";
+  loadingKind: "dashboard" | "events" | "event-editor" | "content" | "players" | "points" | "competition" | "schedule" | "scoring" | "qualification" | "ranking" | "system";
 };
 
 function safeDecode(value: string | undefined) {
@@ -62,7 +62,8 @@ export function describeAdminRoute(pathname: string, search = ""): AdminRouteDes
     return { ...base, active: "content", pageTitle: "内容发布", pageHint: "赛事运营 · 请选择赛事", eventScoped: true, loadingKind: "content" };
   }
 
-  if (pathname.startsWith("/admin/players")) return { ...base, active: "players", pageTitle: "球员管理", pageHint: "球员档案管理", loadingKind: "players" };
+  if (pathname.startsWith("/admin/players")) return { ...base, active: "players", pageTitle: "球员档案", pageHint: "球员 · 档案管理", loadingKind: "players" };
+  if (pathname.startsWith("/admin/points")) return { ...base, active: "points", pageTitle: "积分排名", pageHint: "球员 · 积分总览与分站排名", loadingKind: "points" };
 
   if (pathname.startsWith("/admin/competition")) {
     if (pathname.startsWith("/admin/competition/schedules")) return { ...base, active: "competition", pageTitle: "赛程编排", pageHint: "竞赛执行 · 按组别与阶段编排", eventScoped: true, currentEventId: eventFromQuery, eventSwitchMode: "local", competitionTool: "schedule", loadingKind: "schedule" };

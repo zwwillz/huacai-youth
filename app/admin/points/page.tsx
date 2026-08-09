@@ -1,18 +1,17 @@
 import { redirect } from "next/navigation";
 import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
-import { getPlayerAdminPageFast } from "@/db/player-admin-fast";
+import { getPlayerPointsPageFast } from "@/db/player-points-fast";
 import AdminWorkspaceShell from "../admin-workspace-shell";
 import { getAdminViewer } from "../admin-viewer";
-import { PlayerManagementWorkspace } from "./player-management-client";
-import "./player-management.css";
-import "./player-management-performance.css";
+import { PointsRankingWorkspace } from "./points-client";
+import "./points.css";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = { event?: string; scope?: string; group?: string; q?: string; page?: string; player?: string; success?: string; error?: string };
-type QueryState = { event: string; scope: "event" | "all"; group: "all" | "少年组" | "青年组"; q: string; page: number };
+type PointsState = { event: string; scope: "event" | "all"; group: "all" | "少年组" | "青年组"; q: string; page: number };
 
-function asGroup(value?: string): QueryState["group"] {
+function asGroup(value?: string): PointsState["group"] {
   return value === "少年组" || value === "青年组" ? value : "all";
 }
 function pageNumber(value?: string) {
@@ -20,7 +19,7 @@ function pageNumber(value?: string) {
   return Number.isFinite(parsed) ? Math.max(1, parsed) : 1;
 }
 
-export default async function PlayersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+export default async function PointsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const viewer = await getAdminViewer();
   if (!viewer) redirect("/admin/login");
   if (viewer.role === "referee") redirect("/admin");
@@ -29,7 +28,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
   const events = await getAdminNavigationEventsForPrincipal(viewer);
   const requestedEvent = events.find((event) => event.id === query.event);
   const overview = viewer.role === "system_admin" && !requestedEvent && (query.scope === "all" || !query.event);
-  const state: QueryState = {
+  const state: PointsState = {
     event: overview ? "" : (requestedEvent?.id || events[0]?.id || ""),
     scope: overview ? "all" : "event",
     group: asGroup(query.group),
@@ -37,7 +36,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     page: pageNumber(query.page),
   };
 
-  const pageData = await getPlayerAdminPageFast(viewer, {
+  const pageData = await getPlayerPointsPageFast(viewer, {
     eventId: state.event || null,
     scope: state.scope,
     group: state.group,
@@ -59,11 +58,11 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
   return <AdminWorkspaceShell
     viewer={{ displayName: viewer.displayName, role: viewer.role }}
     events={eventOptions}
-    active="players"
-    pageTitle="球员档案"
-    pageHint="球员 · 档案管理"
+    active="points"
+    pageTitle="积分排名"
+    pageHint="球员 · 积分总览与分站排名"
   >
-    <PlayerManagementWorkspace
+    <PointsRankingWorkspace
       viewerRole={viewer.role}
       events={eventOptions}
       initialState={state}
