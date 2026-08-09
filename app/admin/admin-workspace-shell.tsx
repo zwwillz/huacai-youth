@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { eventStatusLabel, eventStatusTone } from "./admin-status";
 import { AdminWorkspaceLoading } from "./admin-workspace-loading";
 import {
@@ -51,6 +51,22 @@ const competitionTools: Array<{ id: CompetitionTool; title: string; icon: string
 function competitionToolHref(tool: CompetitionTool, eventId?: string) { const suffix = eventId ? `?event=${encodeURIComponent(eventId)}` : ""; if (tool === "schedule") return `/admin/competition/schedules${suffix}`; if (tool === "scoring") return `/admin/competition/scoring${suffix}`; if (tool === "qualification") return `/admin/competition/qualification${suffix}`; if (tool === "ranking") return `/admin/competition/final-ranking${suffix}`; return `/admin/competition${suffix}`; }
 function sectionHref(id: ActiveSection, eventId?: string) { if (id === "dashboard") return "/admin"; if (id === "events") return "/admin/events"; if (id === "content") return eventId ? `/admin/content/${eventId}` : "/admin/content"; if (id === "competition") return competitionToolHref("overview", eventId); if (id === "players") return "/admin/players"; if (id === "registrations") return `/admin?section=registrations${eventId ? `&event=${encodeURIComponent(eventId)}` : ""}`; if (id === "rankings") return "/admin?section=rankings"; if (id === "accounts") return "/admin/accounts"; if (id === "logs") return "/admin/logs"; return "/admin"; }
 
+function LogoutWelcomeScreen() {
+  return <main className="backend-login" aria-busy="true">
+    <section className="backend-login-card">
+      <Link className="backend-login-brand" href="/"><span>华</span><strong>华彩赛事管理后台</strong></Link>
+      <div className="backend-login-copy"><small>赛事运营与竞赛执行</small><h1>赛事资料、报名和赛程<br/>统一后台管理</h1><p>管理员和组委会负责赛事与内容发布，裁判负责赛程、比分、晋级和排名。公众前端只读取已经正式发布的数据。</p></div>
+      <form className="backend-login-form" aria-label="正在退出登录">
+        <p className="admin-logout-welcome-status">正在安全退出当前账号，欢迎登录页已经就绪。</p>
+        <label><span>用户名</span><input disabled placeholder="请输入后台用户名" /></label>
+        <label><span>登录密码</span><input type="password" disabled placeholder="至少8个字符" /></label>
+        <button type="button" disabled>正在退出登录…</button>
+      </form>
+      <footer><span>管理员</span><span>组委会</span><span>裁判</span><Link href="/">返回公众赛事页面</Link></footer>
+    </section>
+  </main>;
+}
+
 function PageMetadataBridge(props: Props & { bridge: PersistentShellContextValue }) {
   const pathname = usePathname();
   const search = useSearchParams().toString();
@@ -91,6 +107,7 @@ function PersistentWorkspaceRoot(props: Props) {
   const [registeredPage, setRegisteredPage] = useState<RegisteredPage | null>(null);
   const [localEventSelection, setLocalEventSelection] = useState<null | { routeKey: string; eventId: string }>(null);
   const [pending, setPending] = useState<null | { origin: string; targetKey: string; pathname: string; search: string; label: string }>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
   const activePending = pending && pending.targetKey !== currentKey ? pending : null;
 
   const registerPage = useCallback((page: RegisteredPage) => {
@@ -114,9 +131,8 @@ function PersistentWorkspaceRoot(props: Props) {
   const visualMeta = pendingMeta || currentMeta;
 
   useEffect(() => {
-    // These two routes are deliberately structure-first and never use a full
-    // skeleton. Warming their RSC payloads makes the eventual real-page swap
-    // usually complete without any intermediate visual state.
+    // Keep proactive warming deliberately limited to light structure-first routes.
+    // Heavy competition workspaces continue to load only after explicit user intent.
     router.prefetch("/admin");
     if (props.viewer.role !== "referee") router.prefetch("/admin/events/new");
   }, [router, props.viewer.role]);
@@ -190,6 +206,22 @@ function PersistentWorkspaceRoot(props: Props) {
     router.push(target);
   };
 
+  const logout = useCallback(async (event: ReactMouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setMenuOpen(false);
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST", cache: "no-store" });
+      if (!response.ok) throw new Error("logout failed");
+      window.location.replace("/admin");
+    } catch {
+      // Fall back to the server redirect endpoint if the background request itself fails.
+      window.location.replace("/api/auth/logout");
+    }
+  }, [loggingOut]);
+
+  if (loggingOut) return <LogoutWelcomeScreen />;
   if (pathname === "/admin/login" || isAdminShelllessRoute(pathname)) return <>{props.children}</>;
 
   return <PersistentShellContext.Provider value={bridgeValue}>
@@ -199,12 +231,12 @@ function PersistentWorkspaceRoot(props: Props) {
       <aside className={menuOpen ? "backend-sidebar admin-workspace-sidebar open" : "backend-sidebar admin-workspace-sidebar"}>
         <Link prefetch={false} href="/admin" className="backend-brand admin-workspace-brand"><span>华</span><div><strong>华彩赛事后台</strong><small>赛事运营与竞赛执行</small></div></Link>
         <nav className="admin-workspace-nav">{visibleGroups.map((group, groupIndex) => <div className="admin-nav-group" key={group.label || groupIndex}>{group.label && <small className="admin-nav-group-label">{group.label}</small>}{group.items.map((item) => <div className="admin-nav-item-wrap" key={item.id}><Link prefetch={false} href={sectionHref(item.id, effectiveEventId)} className={visualMeta.active === item.id ? "active" : ""} aria-current={visualMeta.active === item.id ? "page" : undefined} onClick={() => setMenuOpen(false)}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div></Link>{item.id === "competition" && <div className="admin-competition-subnav">{competitionTools.map((tool) => <Link prefetch={false} key={tool.id} href={competitionToolHref(tool.id, effectiveEventId)} className={visualMeta.active === "competition" && visualMeta.competitionTool === tool.id ? "active" : ""} aria-current={visualMeta.active === "competition" && visualMeta.competitionTool === tool.id ? "page" : undefined} onClick={() => setMenuOpen(false)}><span>{tool.icon}</span><strong>{tool.title}</strong></Link>)}</div>}</div>)}</div>)}</nav>
-        <div className="backend-sidebar-foot"><Link prefetch={false} href="/" target="_blank" rel="noopener noreferrer">查看公众前端</Link><a href="/api/auth/logout">退出登录</a></div>
+        <div className="backend-sidebar-foot"><Link prefetch={false} href="/" target="_blank" rel="noopener noreferrer">查看公众前端</Link><a href="/api/auth/logout" onClick={logout}>退出登录</a></div>
       </aside>
       <section className="backend-main admin-workspace-main"><header className="backend-topbar admin-workspace-topbar"><button className="backend-menu" type="button" aria-label={menuOpen ? "关闭后台菜单" : "打开后台菜单"} aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}>☰</button><div className="admin-workspace-title"><small>{visualMeta.pageHint || "后台管理"}</small><h1>{visualMeta.pageTitle}</h1></div>{visualMeta.eventScoped ? <label className="backend-event-select admin-workspace-event-select"><span>当前赛事</span><select value={effectiveEventId} aria-label="切换当前赛事" disabled={Boolean(activePending)} onChange={(event) => switchEvent(event.target.value)}><option value="" disabled>请选择赛事</option>{effectiveEventId && !currentEvent && <option value={effectiveEventId}>正在读取所选赛事…</option>}{events.map((event) => <option value={event.id} key={event.id}>第 {event.stationNo} 站 · {event.shortTitle} · {eventStatusLabel(event.status)}</option>)}</select>{currentEvent && <em><b className={eventStatusTone(currentEvent.status)}>{eventStatusLabel(currentEvent.status)}</b>{currentEvent.startDate} — {currentEvent.endDate}</em>}</label> : <div className="admin-workspace-global-context"><span>全局工作区</span><small>不受“当前赛事”切换影响</small></div>}<div className="backend-user"><span>{props.viewer.displayName.slice(0, 1)}</span><div><strong>{props.viewer.displayName}</strong><small>{props.viewer.roleLabel || (props.viewer.role === "system_admin" ? "系统管理员" : props.viewer.role === "committee" ? "组委会" : "裁判")}</small></div></div></header>
         <div className="admin-workspace-content">
           <div className={activePending ? "admin-workspace-live is-transitioning" : "admin-workspace-live"} aria-hidden={Boolean(activePending)}>{props.children}</div>
-          {activePending && <AdminWorkspaceLoading pathname={activePending.pathname} search={activePending.search} optimistic delayed overlay />}
+          {activePending && <AdminWorkspaceLoading pathname={activePending.pathname} search={activePending.search} overlay />}
         </div>
       </section>
     </main>

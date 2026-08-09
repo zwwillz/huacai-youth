@@ -26,21 +26,6 @@ export function isAdminShelllessRoute(pathname: string) {
   return pathname === "/admin/competition/print";
 }
 
-/**
- * Route-level skeletons are a fallback, not a required transition.
- * Dashboard and new-event are structure-first pages and intentionally never
- * use a full-page route skeleton: the real page should replace the previous
- * workspace directly, while its own data regions load progressively.
- */
-export function adminRouteLoadingDelayMs(pathname: string, search = "") {
-  if (pathname === "/admin/login" || isAdminShelllessRoute(pathname)) return Number.POSITIVE_INFINITY;
-  const params = new URLSearchParams(search);
-  const isDashboard = (pathname === "/admin" || pathname === "/admin/") && !params.get("section");
-  const isNewEvent = pathname === "/admin/events/new";
-  if (isDashboard || isNewEvent) return Number.POSITIVE_INFINITY;
-  return 180;
-}
-
 export function describeAdminRoute(pathname: string, search = ""): AdminRouteDescriptor {
   const params = new URLSearchParams(search);
   const segments = pathname.split("/").filter(Boolean);

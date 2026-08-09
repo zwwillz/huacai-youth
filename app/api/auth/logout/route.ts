@@ -4,17 +4,25 @@ import { clearAdminSessionCookie, readAdminSessionCookie } from "@/lib/auth/cook
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+async function performLogout() {
   const token = await readAdminSessionCookie();
   if (token && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     try {
       await revokeSession(token);
     } catch {
-      // Clearing the browser cookie is the critical logout step. If the remote
-      // session revoke has a transient failure, do not strand the user inside admin.
+      // Clearing the browser cookie is the critical logout step. A transient
+      // remote revoke failure must not strand the user inside the admin UI.
     }
   }
   await clearAdminSessionCookie();
-  // `/admin` is also the structure-first welcome/login entry when no session exists.
+}
+
+export async function POST() {
+  await performLogout();
+  return Response.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
+}
+
+export async function GET(request: Request) {
+  await performLogout();
   return NextResponse.redirect(new URL("/admin", request.url));
 }
