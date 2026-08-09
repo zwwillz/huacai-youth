@@ -3,6 +3,7 @@ import { getAdminHomeData } from "@/db/admin-ui";
 import AdminWorkspaceShell from "./admin-workspace-shell";
 import { getAdminViewer } from "./admin-viewer";
 import DashboardClient from "./dashboard-client";
+import LoginScreen from "./login/login-screen";
 import "./admin-home.css";
 import { eventStatusLabel } from "./admin-status";
 
@@ -16,7 +17,11 @@ function normalizeSection(value?: string): Section {
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ section?: string; event?: string }> }) {
   const viewer = await getAdminViewer();
-  if (!viewer) redirect("/admin/login");
+  // `/admin` is the public entry point used by the website header. When there is
+  // no session, render the real login screen directly instead of redirecting to
+  // another route and showing an intermediate loading page.
+  if (!viewer) return <LoginScreen />;
+
   const query = await searchParams;
   if (query.section === "events") redirect("/admin/events");
   if (query.section === "content") redirect("/admin/content");
