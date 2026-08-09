@@ -67,7 +67,7 @@ export function EventSettingsLoadingView({ eventId = "" }: { eventId?: string })
 }
 
 export function ContentLoadingView({ eventId = "" }: { eventId?: string }) {
-  return <div aria-busy="true" style={{ pointerEvents: "none" }}><ContentManagementClient initialData={placeholderContent(eventId)} /></div>;
+  return <div aria-busy="true" style={{ pointerEvents: "none" }}><ContentManagementClient initialData={placeholderContent(eventId)} initialEventData={placeholderEvent(eventId)} /></div>;
 }
 
 export function PlayersLoadingView({ viewerRole = "committee", eventId = "" }: { viewerRole?: string; eventId?: string }) {
