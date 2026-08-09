@@ -60,8 +60,8 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     viewer={{ displayName: viewer.displayName, role: viewer.role }}
     events={eventOptions}
     active="players"
-    pageTitle="球员管理"
-    pageHint="球员档案管理"
+    pageTitle="球员档案"
+    pageHint="球员 · 档案管理"
   >
     <PlayerManagementWorkspace
       viewerRole={viewer.role}
