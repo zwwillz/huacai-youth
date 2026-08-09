@@ -5,7 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
-type LifecycleAction = "hide" | "show" | "archive";
+type LifecycleAction = "hide" | "show" | "archive" | "restore";
 
 function id(prefix: string) {
   return prefix + "_" + crypto.randomUUID().replaceAll("-", "");
@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ eve
   try {
     const { eventId } = await params;
     const payload = await request.json() as { action?: LifecycleAction };
-    if (!payload.action || !["hide", "show", "archive"].includes(payload.action)) {
+    if (!payload.action || !["hide", "show", "archive", "restore"].includes(payload.action)) {
       return Response.json({ error: "赛事操作不正确。" }, { status: 400 });
     }
 
@@ -33,22 +33,36 @@ export async function POST(request: Request, { params }: { params: Promise<{ eve
     `;
     const current = rows[0];
     if (!current) throw new Error("没有找到这场赛事。");
-    if (current.status === "archived") throw new Error("已归档赛事为只读状态，不能继续修改。");
+
+    if (payload.action === "restore") {
+      if (actor.role !== "system_admin") throw new Error("只有系统管理员可以撤回赛事归档。");
+      if (current.status !== "archived") throw new Error("只有已归档赛事可以撤回归档。");
+    } else if (current.status === "archived") {
+      throw new Error("已归档赛事为只读状态。如需继续维护，请由系统管理员先撤回归档。");
+    }
 
     const updatedAt = new Date().toISOString();
     if (payload.action === "archive") {
       if (current.status !== "finished") throw new Error("只有已结束的赛事才能归档。请先确认赛事已经结束。");
       await sql`update public.events set status='archived', updated_by=${actor.id}, updated_at=${updatedAt} where id=${eventId}`;
+    } else if (payload.action === "restore") {
+      await sql`update public.events set status='finished', updated_by=${actor.id}, updated_at=${updatedAt} where id=${eventId}`;
     } else {
       await sql`update public.events set is_hidden=${payload.action === "hide"}, updated_by=${actor.id}, updated_at=${updatedAt} where id=${eventId}`;
     }
+
+    const after = payload.action === "archive"
+      ? { status: "archived" }
+      : payload.action === "restore"
+        ? { status: "finished" }
+        : { isHidden: payload.action === "hide" };
 
     await sql`
       insert into public.audit_logs (id, actor_user_id, event_id, module_type, target_type, target_id, action, before_json, after_json, created_at)
       values (
         ${id("log")}, ${actor.id}, ${eventId}, 'events', 'event', ${eventId}, ${`event_${payload.action}`},
         ${JSON.stringify({ status: current.status, isHidden: current.isHidden })},
-        ${JSON.stringify(payload.action === "archive" ? { status: "archived" } : { isHidden: payload.action === "hide" })},
+        ${JSON.stringify(after)},
         ${updatedAt}
       )
     `;
@@ -56,6 +70,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ eve
     revalidateTag("admin-navigation-events", { expire: 0 });
     revalidateTag("public-site", { expire: 0 });
     revalidateTag("public-content", { expire: 0 });
+    revalidateTag(`public-event-detail-${eventId}`, { expire: 0 });
     revalidatePath("/");
     return Response.json({ data: { ok: true } });
   } catch (error) {
