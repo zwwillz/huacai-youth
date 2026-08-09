@@ -15,14 +15,14 @@ const DEFAULT_FORMAT = [
   ["正赛第二轮", "32强单败淘汰至冠军", "17局9胜", "21局11胜"],
 ];
 
+const DEFAULT_RULE_STANDARD = "执行中国台球协会2026版《华彩十六球比赛规则和竞赛规定（试行）》，全程采用三角框摆球。";
 const DEFAULT_DRAW_RULES = [
-  "@@rule-standard:执行中国台球协会2026版《华彩十六球比赛规则和竞赛规定（试行）》，全程采用三角框摆球。",
   "资格赛不设种子，全部混抽入位。",
   "各组别正赛第一阶段将直接参加正赛的16名运动员按照蛇形排位抽入种子位，其他运动员混抽入位。",
   "各组别正赛第二阶段将第一阶段胜部晋级的16名运动员抽入种子位，败部晋级的运动员混抽入位。",
   "正赛阶段抽签全部由裁判员统一代抽，抽签过程全程直播。",
-  "@@prize-note:以上均为税前奖金，由承办单位按国家有关规定代扣代缴个人所得税；领取奖金需提供有效身份证明；各组前三名须穿着比赛服出席闭幕式颁奖；正赛阶段需打满一场方可领取相应名次奖金。",
 ];
+const DEFAULT_PRIZE_NOTE = "以上均为税前奖金，由承办单位按国家有关规定代扣代缴个人所得税；领取奖金需提供有效身份证明；各组前三名须穿着比赛服出席闭幕式颁奖；正赛阶段需打满一场方可领取相应名次奖金。";
 
 const DEFAULT_PRIZES = {
   少年组: [
@@ -62,7 +62,9 @@ export async function ensureNewEventDefaults(eventId: string) {
     signupNote: "本赛事单站参赛费为100元人民币；一次报名可参加两场资格赛。参赛运动员交通、食宿等费用自理，具体报名时间和入口以组委会发布信息为准。",
     ageRules: { 少年组: "", 青年组: "" },
     competitionFormat: DEFAULT_FORMAT,
+    ruleStandard: DEFAULT_RULE_STANDARD,
     drawRules: DEFAULT_DRAW_RULES,
+    prizeNote: DEFAULT_PRIZE_NOTE,
     prizes: DEFAULT_PRIZES,
     createdAt: timestamp,
     updatedAt: timestamp,
