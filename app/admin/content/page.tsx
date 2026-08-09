@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getAdminNavigationEvents } from "@/db/admin-ui";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
 import { getAdminViewer } from "../admin-viewer";
 import AdminWorkspaceShell from "../admin-workspace-shell";
 import "../events/event-settings-index.css";
@@ -14,7 +14,7 @@ export default async function ContentPublishingIndexPage() {
     return <main className="backend-state backend-denied"><div className="backend-state-logo">锁</div><small>内容发布</small><h1>当前账号没有内容发布权限</h1><p>赛事内容由系统管理员或组委会维护和发布。</p><a href="/admin">返回赛事后台</a></main>;
   }
 
-  const events = await getAdminNavigationEvents(viewer.username);
+  const events = await getAdminNavigationEventsForPrincipal(viewer);
 
   return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="content" pageTitle="内容发布" pageHint="赛事运营 · 请选择赛事" eventScoped>
     <main className="event-settings-index">
