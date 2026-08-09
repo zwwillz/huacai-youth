@@ -1,5 +1,6 @@
 import "./admin.css";
 import "./admin-workspace-shell.css";
+import "./admin-sidebar-scrollbar.css";
 import "./admin-progressive-loading.css";
 import "./admin-structure-frame.css";
 import "./admin-recovery.css";
