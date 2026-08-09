@@ -1,27 +1,28 @@
 .admin-workspace-nav{
   scrollbar-width:thin;
-  scrollbar-color:rgba(189,156,232,.52) transparent;
-  scrollbar-gutter:stable;
+  scrollbar-color:rgba(195,164,235,.24) transparent;
+  scrollbar-gutter:auto;
+  margin-right:-8px!important;
+  padding-right:10px!important;
 }
 
 .admin-workspace-nav::-webkit-scrollbar{
-  width:5px;
+  width:3px;
 }
 
 .admin-workspace-nav::-webkit-scrollbar-track{
   background:transparent;
-  margin:8px 0;
+  margin:10px 0;
 }
 
 .admin-workspace-nav::-webkit-scrollbar-thumb{
   min-height:52px;
   border-radius:999px;
-  background:linear-gradient(180deg,rgba(213,190,244,.48),rgba(151,109,215,.62));
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+  background:linear-gradient(180deg,rgba(223,205,248,.16),rgba(171,130,226,.24));
 }
 
 .admin-workspace-nav::-webkit-scrollbar-thumb:hover{
-  background:linear-gradient(180deg,rgba(226,207,250,.68),rgba(172,126,232,.78));
+  background:linear-gradient(180deg,rgba(226,207,250,.38),rgba(172,126,232,.48));
 }
 
 .admin-workspace-nav::-webkit-scrollbar-corner{
