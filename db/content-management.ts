@@ -10,9 +10,6 @@ import {
   publications,
 } from "./schema";
 
-const RULE_STANDARD_PREFIX = "@@rule-standard:";
-const PRIZE_NOTE_PREFIX = "@@prize-note:";
-
 export type ContentPublication = {
   id: string;
   moduleType: string;
@@ -99,17 +96,6 @@ function asStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => String(item ?? "")).filter(Boolean) : [];
 }
 
-function parseDrawBundle(value: unknown) {
-  const rows = asStrings(value);
-  const standard = rows.find((item) => item.startsWith(RULE_STANDARD_PREFIX))?.slice(RULE_STANDARD_PREFIX.length) ?? "";
-  const prizeNote = rows.find((item) => item.startsWith(PRIZE_NOTE_PREFIX))?.slice(PRIZE_NOTE_PREFIX.length) ?? "";
-  return {
-    ruleStandard: standard,
-    prizeNote,
-    drawRules: rows.filter((item) => !item.startsWith(RULE_STANDARD_PREFIX) && !item.startsWith(PRIZE_NOTE_PREFIX)),
-  };
-}
-
 function prizeMap(value: unknown) {
   const result: Record<"少年组" | "青年组", string[][]> = { 少年组: [], 青年组: [] };
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -163,7 +149,6 @@ export async function getContentManagementData(username: string, eventId: string
     const row = guideByType.get(guideType);
     return { id: row?.id ?? "", guideType, title: row?.title ?? title, body: row?.body ?? "", publishStatus: row?.publishStatus ?? "draft" };
   });
-  const drawBundle = parseDrawBundle(details?.drawRules);
 
   return {
     event: {
@@ -180,9 +165,9 @@ export async function getContentManagementData(username: string, eventId: string
     })),
     details: {
       competitionFormat: asRows(details?.competitionFormat),
-      drawRules: drawBundle.drawRules,
-      ruleStandard: drawBundle.ruleStandard,
-      prizeNote: drawBundle.prizeNote,
+      drawRules: asStrings(details?.drawRules),
+      ruleStandard: details?.ruleStandard ?? "",
+      prizeNote: details?.prizeNote ?? "",
       prizes: prizeMap(details?.prizes),
     },
     documents: normalizedDocuments,
@@ -208,11 +193,7 @@ export async function saveContentManagementData(username: string, input: Content
   const [event] = await db.select().from(events).where(eq(events.id, input.eventId)).limit(1);
   if (!event) throw new Error("没有找到这场赛事。");
   const updatedAt = now();
-  const storedDrawRules = [
-    input.ruleStandard?.trim() ? `${RULE_STANDARD_PREFIX}${input.ruleStandard.trim()}` : "",
-    ...(input.drawRules ?? []).map((item) => item.trim()).filter(Boolean),
-    input.prizeNote?.trim() ? `${PRIZE_NOTE_PREFIX}${input.prizeNote.trim()}` : "",
-  ].filter(Boolean);
+  const cleanDrawRules = (input.drawRules ?? []).map((item) => item.trim()).filter(Boolean);
 
   await db.transaction(async (tx) => {
     await tx.update(events).set({ summary: input.summary.trim() || null, updatedBy: account.id, updatedAt }).where(eq(events.id, input.eventId));
@@ -221,7 +202,9 @@ export async function saveContentManagementData(username: string, input: Content
       eventId: input.eventId,
       ageRules: {},
       competitionFormat: input.competitionFormat ?? [],
-      drawRules: storedDrawRules,
+      ruleStandard: input.ruleStandard.trim() || null,
+      drawRules: cleanDrawRules,
+      prizeNote: input.prizeNote.trim() || null,
       prizes: input.prizes ?? { 少年组: [], 青年组: [] },
       createdAt: updatedAt,
       updatedAt,
@@ -229,7 +212,9 @@ export async function saveContentManagementData(username: string, input: Content
       target: eventDetails.eventId,
       set: {
         competitionFormat: input.competitionFormat ?? [],
-        drawRules: storedDrawRules,
+        ruleStandard: input.ruleStandard.trim() || null,
+        drawRules: cleanDrawRules,
+        prizeNote: input.prizeNote.trim() || null,
         prizes: input.prizes ?? { 少年组: [], 青年组: [] },
         updatedAt,
       },
@@ -261,7 +246,7 @@ export async function saveContentManagementData(username: string, input: Content
 
     await tx.insert(auditLogs).values({
       id: id("log"), actorUserId: account.id, eventId: input.eventId, moduleType: "content", targetType: "content_bundle", targetId: input.eventId,
-      action: "save_content", afterJson: JSON.stringify({ formatRows: input.competitionFormat?.length ?? 0, drawRules: input.drawRules?.length ?? 0, documents: input.documents?.length ?? 0, guides: input.guides?.length ?? 0 }), createdAt: updatedAt,
+      action: "save_content", afterJson: JSON.stringify({ formatRows: input.competitionFormat?.length ?? 0, drawRules: cleanDrawRules.length, documents: input.documents?.length ?? 0, guides: input.guides?.length ?? 0 }), createdAt: updatedAt,
     });
   });
 
