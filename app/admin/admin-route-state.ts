@@ -26,6 +26,19 @@ export function isAdminShelllessRoute(pathname: string) {
   return pathname === "/admin/competition/print";
 }
 
+/**
+ * Route-level skeletons are a fallback, not the first paint.
+ * Structure-first pages get a longer grace period because their real UI should
+ * normally arrive before a full-page skeleton is useful.
+ */
+export function adminRouteLoadingDelayMs(pathname: string, search = "") {
+  if (pathname === "/admin/login" || isAdminShelllessRoute(pathname)) return Number.POSITIVE_INFINITY;
+  const params = new URLSearchParams(search);
+  const isDashboard = (pathname === "/admin" || pathname === "/admin/") && !params.get("section");
+  const isNewEvent = pathname === "/admin/events/new";
+  return isDashboard || isNewEvent ? 360 : 180;
+}
+
 export function describeAdminRoute(pathname: string, search = ""): AdminRouteDescriptor {
   const params = new URLSearchParams(search);
   const segments = pathname.split("/").filter(Boolean);
