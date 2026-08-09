@@ -1,15 +1,12 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
 
 type LoginMode = "login" | "setup";
 type SubmitPhase = "idle" | "submitting" | "redirecting";
 type ConfigState = "checking" | "ready" | "unconfigured" | "error";
 
 export default function LoginForm() {
-  const router = useRouter();
-  const pathname = usePathname();
   const [mode, setMode] = useState<LoginMode>("login");
   const [configState, setConfigState] = useState<ConfigState>("checking");
   const [username, setUsername] = useState("");
@@ -57,12 +54,11 @@ export default function LoginForm() {
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error || "登录失败，请重试。");
 
-      // Do not return the button to its idle state after authentication succeeds.
-      // The authenticated workspace still needs to verify the new session once;
-      // keep the transition visible until the login component unmounts.
       setPhase("redirecting");
-      if (pathname === "/admin" || pathname === "/admin/") router.refresh();
-      else router.replace("/admin");
+      // Authentication crosses the public/login and private admin-layout boundary.
+      // Use a document-level navigation so the authenticated layout is rebuilt
+      // from the new session instead of reusing a shellless login layout.
+      window.location.replace("/admin");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "登录失败，请重试。");
       setPhase("idle");
