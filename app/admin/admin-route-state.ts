@@ -23,7 +23,7 @@ export function adminRouteKey(pathname: string, search: string) {
 }
 
 export function isAdminShelllessRoute(pathname: string) {
-  return pathname === "/admin/competition/print";
+  return pathname === "/admin/competition/print" || /\/admin\/competition\/draw\/[^/]+\/screen\/?$/.test(pathname);
 }
 
 export function describeAdminRoute(pathname: string, search = ""): AdminRouteDescriptor {
@@ -65,11 +65,13 @@ export function describeAdminRoute(pathname: string, search = ""): AdminRouteDes
   if (pathname.startsWith("/admin/players")) return { ...base, active: "players", pageTitle: "球员管理", pageHint: "球员档案管理", loadingKind: "players" };
 
   if (pathname.startsWith("/admin/competition")) {
+    if (pathname === "/admin/competition/bracket" || pathname === "/admin/competition/bracket/") return { ...base, active: "competition", pageTitle: "完整分区签表", pageHint: "竞赛执行 · 比赛关系", eventScoped: true, currentEventId: eventFromQuery, competitionTool: "overview", loadingKind: "competition" };
     if (pathname.startsWith("/admin/competition/schedules")) return { ...base, active: "competition", pageTitle: "赛程编排", pageHint: "竞赛执行 · 按组别与阶段编排", eventScoped: true, currentEventId: eventFromQuery, eventSwitchMode: "local", competitionTool: "schedule", loadingKind: "schedule" };
     if (pathname.startsWith("/admin/competition/schedule")) return { ...base, active: "competition", pageTitle: "赛程编排", pageHint: "竞赛执行 · 当前阶段排程", eventScoped: true, currentEventId: eventFromQuery, competitionTool: "schedule", loadingKind: "schedule" };
     if (pathname.startsWith("/admin/competition/scoring")) return { ...base, active: "competition", pageTitle: "比分录入", pageHint: "竞赛执行 · 当前待办优先", eventScoped: true, currentEventId: eventFromQuery, eventSwitchMode: "local", competitionTool: "scoring", loadingKind: "scoring" };
     if (pathname.startsWith("/admin/competition/qualification")) return { ...base, active: "competition", pageTitle: "晋级", pageHint: "竞赛执行 · 当前阶段晋级确认", eventScoped: true, currentEventId: eventFromQuery, competitionTool: "qualification", loadingKind: "qualification" };
     if (pathname.startsWith("/admin/competition/final-ranking")) return { ...base, active: "competition", pageTitle: "最终排名", pageHint: "竞赛执行 · 自动生成 / 人工调整 / 确认 / 发布", eventScoped: true, currentEventId: eventFromQuery, competitionTool: "ranking", loadingKind: "ranking" };
+    if (/\/admin\/competition\/draw\/[^/]+\/screen\/?$/.test(pathname)) return { ...base, active: "competition", pageTitle: "抽签大屏", pageHint: "竞赛执行 · 现场展示", competitionTool: "overview", loadingKind: "competition" };
     if (pathname.startsWith("/admin/competition/draw")) return { ...base, active: "competition", pageTitle: "抽签与签表", pageHint: "竞赛执行 · 当前组别与阶段", eventScoped: true, currentEventId: eventFromQuery, competitionTool: "overview", loadingKind: "competition" };
     if (pathname.startsWith("/admin/competition/print")) return { ...base, active: "competition", pageTitle: "打印签表 / 赛程", pageHint: "竞赛执行 · 打印视图", competitionTool: "schedule", loadingKind: "schedule" };
     return { ...base, active: "competition", pageTitle: "竞赛执行", pageHint: "先选组别，再处理当前任务", eventScoped: true, currentEventId: eventFromQuery, eventSwitchMode: "local", competitionTool: "overview", loadingKind: "competition" };
