@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { getAdminNavigationEvents, getAuditLogData } from "@/db/admin-ui";
+import { getAuditLogData } from "@/db/admin-ui";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
 import { getAdminViewer } from "../admin-viewer";
 import AdminWorkspaceShell from "../admin-workspace-shell";
 import "../system-admin.css";
@@ -35,7 +36,7 @@ export default async function LogsPage() {
   if (viewer.role !== "system_admin") redirect("/admin");
   const [logs, events] = await Promise.all([
     getAuditLogData(viewer.username, 150),
-    getAdminNavigationEvents(viewer.username),
+    getAdminNavigationEventsForPrincipal(viewer),
   ]);
 
   return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="logs" pageTitle="操作日志" pageHint="系统 · 审计与操作记录">
