@@ -2,6 +2,7 @@ import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { saveContentManagementData, type ContentManagementInput } from "@/db/content-management";
 import { getContentManagementDataFast } from "@/db/content-management-fast";
 import { setContentPublicationStatusFast } from "@/db/content-publication-fast";
+import { getSqlClient } from "@/db";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,10 @@ export async function POST(request: Request) {
     const payload = await request.json() as
       | { action: "save"; data: ContentManagementInput }
       | { action: "publication"; eventId: string; publicationId: string; status: "draft" | "published" };
+    const eventId = payload.action === "publication" ? payload.eventId : payload.data.eventId;
+    const sql = getSqlClient();
+    const rows = await sql<Array<{ status: string }>>`select status from public.events where id=${eventId} limit 1`;
+    if (rows[0]?.status === "archived") throw new Error("已归档赛事为只读状态，不能继续修改或发布内容。");
 
     if (payload.action === "publication") {
       const data = await setContentPublicationStatusFast(viewer, payload.eventId, payload.publicationId, payload.status);
