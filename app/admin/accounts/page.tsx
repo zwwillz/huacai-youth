@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAccountsForAdmin } from "@/db/account-admin";
-import { getAdminNavigationEvents } from "@/db/admin-ui";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
 import { getAdminViewer } from "../admin-viewer";
 import AdminWorkspaceShell from "../admin-workspace-shell";
 import AccountManagementClient from "./account-management-client";
@@ -14,7 +14,7 @@ export default async function AccountsPage() {
   if (viewer.role !== "system_admin") redirect("/admin");
   const [accounts, events] = await Promise.all([
     getAccountsForAdmin(viewer.username),
-    getAdminNavigationEvents(viewer.username),
+    getAdminNavigationEventsForPrincipal(viewer),
   ]);
   return <AdminWorkspaceShell
     viewer={{ displayName: viewer.displayName, role: viewer.role }}

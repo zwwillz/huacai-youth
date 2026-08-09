@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
-import { getAdminNavigationEvents } from "@/db/admin-ui";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
 import { getScheduleWorkspaceData } from "@/db/schedule-engine";
 import { getCompetitionContextData } from "@/db/competition-context";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
@@ -26,11 +26,11 @@ export default async function ScheduleWorkbenchPage({ searchParams }: { searchPa
   const query = await searchParams;
   const sessionId = String(query.session || "");
   if (!sessionId) redirect("/admin/competition/schedules");
-  const events = await getAdminNavigationEvents(viewer.username);
+  const events = await getAdminNavigationEventsForPrincipal(viewer);
 
   const result = await captureAdminLoad((async () => {
     const data = await getScheduleWorkspaceData(viewer.username, sessionId);
-    const context = await getCompetitionContextData(viewer.username, data.bracket.eventId);
+    const context = await getCompetitionContextData(viewer, data.bracket.eventId);
     return { data, context };
   })());
   if (!result.data) {
