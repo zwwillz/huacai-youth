@@ -55,6 +55,7 @@ function PageMetadataBridge(props: Props & { bridge: PersistentShellContextValue
   const pathname = usePathname();
   const search = useSearchParams().toString();
   const routeKey = adminRouteKey(pathname, search);
+  const routeEventId = describeAdminRoute(pathname, search).currentEventId;
   const { bridge } = props;
   useEffect(() => {
     bridge.registerPage({
@@ -62,13 +63,13 @@ function PageMetadataBridge(props: Props & { bridge: PersistentShellContextValue
       active: props.active,
       pageTitle: props.pageTitle,
       pageHint: props.pageHint || "后台管理",
-      currentEventId: props.currentEventId || "",
+      currentEventId: routeEventId || props.currentEventId || "",
       eventScoped: Boolean(props.eventScoped),
       competitionTool: props.competitionTool || "overview",
       eventSwitchMode: props.eventSwitchMode || "route",
       events: props.events,
     });
-  }, [bridge, routeKey, props.active, props.pageTitle, props.pageHint, props.currentEventId, props.eventScoped, props.competitionTool, props.eventSwitchMode, props.events]);
+  }, [bridge, routeKey, routeEventId, props.active, props.pageTitle, props.pageHint, props.currentEventId, props.eventScoped, props.competitionTool, props.eventSwitchMode, props.events]);
   return <>{props.children}</>;
 }
 
@@ -161,9 +162,10 @@ function PersistentWorkspaceRoot(props: Props) {
 
   const locallySelectedEventId = localEventSelection?.routeKey === currentKey ? localEventSelection.eventId : "";
   const defaultScopedEventId = events[0]?.id || "";
+  const carriedEventId = registeredPage?.currentEventId || props.currentEventId || "";
   const effectiveEventId = currentMeta.eventSwitchMode === "local"
-    ? (locallySelectedEventId || currentMeta.currentEventId || (currentMeta.eventScoped ? defaultScopedEventId : ""))
-    : (visualMeta.currentEventId || currentMeta.currentEventId || (visualMeta.eventScoped ? defaultScopedEventId : ""));
+    ? (locallySelectedEventId || currentMeta.currentEventId || carriedEventId || (currentMeta.eventScoped ? defaultScopedEventId : ""))
+    : (visualMeta.currentEventId || currentMeta.currentEventId || carriedEventId || (visualMeta.eventScoped ? defaultScopedEventId : ""));
   const currentEvent = events.find((event) => event.id === effectiveEventId);
   const visibleGroups = navGroups.map((group) => ({ ...group, items: group.items.filter((item) => { if (props.viewer.role === "system_admin") return true; if (props.viewer.role === "committee") return !["accounts", "logs"].includes(item.id); return ["dashboard", "competition"].includes(item.id); }) })).filter((group) => group.items.length > 0);
 
