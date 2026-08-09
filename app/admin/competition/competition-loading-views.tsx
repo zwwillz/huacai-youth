@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import type { DrawWorkspaceData } from "@/db/draw-engine";
 import type { QualificationWorkspaceData } from "@/db/qualification-engine";
 import type { MainRosterControlData } from "@/db/main-competition-flow";
 import type { FinalRankingWorkspaceData } from "@/db/final-ranking-engine";
 import CompetitionContextBar from "./competition-context-bar";
 import CompetitionPublicationBar from "./competition-publication-bar";
+import DrawWorkbenchClient from "./draw/draw-workbench-client";
+import MainStageWorkbenchClient from "./draw/main-stage-workbench-client";
 import QualificationWorkbenchClient from "./qualification/qualification-workbench-client";
 import MainRosterControlClient from "./qualification/main-roster-control-client";
 import FinalRankingClient from "./final-ranking/final-ranking-client";
@@ -22,6 +25,42 @@ function groupIdOf(input: string) { return input === "u20" ? "u20" : "u16"; }
 function groupNameOf(input: string) { return groupIdOf(input) === "u20" ? "青年组" : "少年组"; }
 function phaseOf(input: string) { return phases.some((phase) => phase.code === input) ? input : "qualifier-one"; }
 function phaseTitleOf(input: string) { return phases.find((phase) => phase.code === phaseOf(input))?.title || "资格赛第一场"; }
+
+export function DrawLoadingView({ eventId = "", groupId = "u16", phase = "qualifier-one" }: { eventId?: string; groupId?: string; phase?: string }) {
+  const selectedGroupId = groupIdOf(groupId);
+  const selectedPhase = phaseOf(phase);
+  const groupName = groupNameOf(selectedGroupId);
+  const phaseTitle = phaseTitleOf(selectedPhase);
+  const qualifier: DrawWorkspaceData = {
+    viewerRole: "referee",
+    event: { id: eventId, shortTitle: "当前赛事", stationNo: 0, status: "draft" },
+    groups: [{ id: "u16", name: "少年组", code: "U16", approvedCount: 0 }, { id: "u20", name: "青年组", code: "U20", approvedCount: 0 }],
+    selectedGroupId,
+    selectedPhase: selectedPhase === "qualifier-two" ? "qualifier-two" : "qualifier-one",
+    phaseTitle,
+    settings: { bracketSize: 512, divisionSize: 32, rateQualifierCount: 8, seedsEnabled: false, seedTargetCount: 0, seedFillRule: "game_win_rate" },
+    plan: { entrantCount: 0, bracketSize: 512, divisionSize: 32, divisionCount: 16, directQualifierCount: 16, rateQualifierCount: 8, totalQualifierCount: 24, playoffMatchCount: 0, playoffPlayerCount: 0, directEntryCount: 0, byeCount: 512, roundsPerDivision: 5, sourceReady: false, sourceNote: "当前阶段名单与抽签状态正在读取。" },
+    latestSession: null,
+  };
+  const mainData = {
+    viewerRole: "referee",
+    event: { id: eventId, shortTitle: "当前赛事" },
+    groups,
+    selectedGroupId,
+    selectedPhase: (selectedPhase === "main-two" ? "main-two" : "main-one") as "main-one" | "main-two",
+    phaseTitle,
+    sourceCount: 0,
+    sourceReady: false,
+    sourceNote: "当前阶段名单与抽签状态正在读取。",
+    seedCount: 0,
+    latestSession: null,
+  };
+  return <div aria-busy="true" style={{ pointerEvents: "none" }}>
+    <CompetitionContextBar eventId={eventId} eventTitle="当前赛事" groups={groups} selectedGroupId={selectedGroupId} basePath="/admin/competition/draw" phases={phases} selectedPhase={selectedPhase} eyebrow="抽签与签表" title={`${groupName} · ${phaseTitle}`} description="抽签草稿只保存在后台；用户端始终保持上一版正式签表，直到再次点击发布更新。四个阶段使用同一套组别、阶段切换逻辑。" />
+    <CompetitionPublicationBar eventId={eventId} moduleType="schedule" title="签表与赛程" status="draft" viewerRole="referee" hint="抽签与签表状态正在读取。" loading />
+    <div className="unified-competition-context">{selectedPhase.startsWith("qualifier") ? <DrawWorkbenchClient initialData={qualifier} /> : <MainStageWorkbenchClient initialData={mainData} />}</div>
+  </div>;
+}
 
 export function QualificationLoadingView({ eventId = "", groupId = "u16", phase = "qualifier-one" }: { eventId?: string; groupId?: string; phase?: string }) {
   const selectedGroupId = groupIdOf(groupId);
