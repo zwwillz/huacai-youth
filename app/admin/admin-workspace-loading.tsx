@@ -13,26 +13,26 @@ function Filters({ count = 4 }: { count?: number }) {
 }
 
 function DashboardStructureFrame() {
-  return <main className="admin-home admin-structure-first-frame" aria-busy="true">
+  return <main className="admin-home" aria-busy="true" style={{ pointerEvents: "none" }}>
     <section className="admin-home-hero">
       <div><small>HUACAI EVENT ADMIN</small><h2>华彩赛事管理后台</h2><p>赛事工作区已经打开，实时统计会在对应位置自动补齐。</p></div>
-      <span className="admin-structure-action">＋ 创建新赛事</span>
+      <a href="/admin/events/new" tabIndex={-1}>＋ 创建新赛事</a>
     </section>
     <section className="admin-home-metrics">
-      {["可管理赛事", "进行中赛事", "待审核报名", "待发布内容"].map((label) => <article key={label}><span>{label}</span><strong className="admin-home-metric-value">—</strong><small>数据正在补齐</small></article>)}
+      {["可管理赛事", "进行中赛事", "待审核报名", "待发布内容"].map((label) => <article key={label}><span>{label}</span><strong>—</strong><small>数据正在补齐</small></article>)}
     </section>
     <section className="admin-home-grid">
       <article className="admin-home-panel">
-        <header><div><small>MY EVENTS</small><h3>最近赛事</h3></div></header>
+        <header><div><small>MY EVENTS</small><h3>最近赛事</h3></div><a href="/admin/events" tabIndex={-1}>查看全部赛事 →</a></header>
         <div className="admin-simple-empty">赛事列表正在补齐，页面结构已经可以使用。</div>
       </article>
       <article className="admin-home-panel">
         <header><div><small>NEXT ACTION</small><h3>常用入口</h3></div></header>
-        <div className="admin-home-links admin-structure-links">
-          <span><b>赛事管理</b><em>创建 / 设置 →</em></span>
-          <span><b>内容发布</b><em>概览 / 规程 →</em></span>
-          <span><b>竞赛执行</b><em>查看当前待办 →</em></span>
-          <span><b>比分录入</b><em>进入工作台 →</em></span>
+        <div className="admin-home-links">
+          <a href="/admin/events" tabIndex={-1}><span>赛事管理</span><b>创建 / 设置 →</b></a>
+          <a href="/admin/content" tabIndex={-1}><span>内容发布</span><b>概览 / 规程 →</b></a>
+          <a href="/admin/competition" tabIndex={-1}><span>竞赛执行</span><b>查看当前待办 →</b></a>
+          <a href="/admin/competition/scoring" tabIndex={-1}><span>比分录入</span><b>进入工作台 →</b></a>
         </div>
       </article>
     </section>
@@ -41,38 +41,39 @@ function DashboardStructureFrame() {
 
 function NewEventStructureFrame() {
   const year = new Date().getFullYear();
-  return <main className="new-event-page admin-structure-first-frame" aria-busy="true">
-    <section className="new-event-head"><div><small>CREATE EVENT</small><h2>创建新赛事</h2><p>先填写一场赛事的基础主数据，建议年份与站次会在页面内自动补齐。</p></div><span>← 返回赛事列表</span></section>
+  return <main className="new-event-page" aria-busy="true" style={{ pointerEvents: "none" }}>
+    <section className="new-event-head"><div><small>CREATE EVENT</small><h2>创建新赛事</h2><p>这里只建立一场赛事的基础主数据。创建成功后会自动建立少年组、青年组以及基础发布模块，然后进入“赛事完整设置”继续完善。</p></div><a href="/admin/events" tabIndex={-1}>← 返回赛事列表</a></section>
     <div className="new-event-form">
       <section className="new-event-main">
         <header><div><small>01 · BASIC INFORMATION</small><h3>赛事基础信息</h3></div><span className="new-event-suggestion loading">正在补充建议年份 / 站次</span></header>
         <div className="new-event-grid">
-          <label className="wide"><span>完整赛事名称 *</span><input defaultValue={`${year}中国华彩十六球青少年系列赛`} disabled /></label>
-          <label className="wide"><span>前端显示简称 *</span><input defaultValue={`${year}华彩青少年系列赛新分站`} disabled /></label>
-          <label><span>赛季年份 *</span><input type="number" defaultValue={year} disabled /></label>
-          <label><span>第几站 *</span><input type="number" defaultValue={1} disabled /></label>
-          <label><span>城市 *</span><input placeholder="例如：山东济南" disabled /></label>
-          <label><span>比赛场馆</span><input placeholder="可先填写场馆名称，详细地址后补" disabled /></label>
-          <label><span>比赛开始日期 *</span><input type="date" disabled /></label>
-          <label><span>比赛结束日期 *</span><input type="date" disabled /></label>
-          <label><span>报名开始时间</span><input type="datetime-local" disabled /></label>
-          <label><span>报名截止时间</span><input type="datetime-local" disabled /></label>
-          <label><span>赛事状态</span><select defaultValue="draft" disabled><option value="draft">草稿</option></select></label>
-          <label><span>前端发布</span><select defaultValue="draft" disabled><option value="draft">先保存草稿</option></select></label>
-          <label className="wide"><span>赛事简介</span><textarea rows={4} placeholder="可先写一句简要说明" disabled /></label>
+          <label className="wide"><span>完整赛事名称 *</span><input defaultValue={`${year}中国华彩十六球青少年系列赛`} readOnly /></label>
+          <label className="wide"><span>前端显示简称 *</span><input defaultValue={`${year}华彩青少年系列赛新分站`} readOnly /></label>
+          <label><span>赛季年份 *</span><input type="number" defaultValue={year} readOnly /></label>
+          <label><span>第几站 *</span><input type="number" defaultValue={1} readOnly /></label>
+          <label><span>城市 *</span><input placeholder="例如：山东济南" readOnly /></label>
+          <label><span>比赛场馆</span><input placeholder="可先填写场馆名称，详细地址后补" readOnly /></label>
+          <label><span>比赛开始日期 *</span><input type="date" readOnly /></label>
+          <label><span>比赛结束日期 *</span><input type="date" readOnly /></label>
+          <label><span>报名开始时间</span><input type="datetime-local" readOnly /></label>
+          <label><span>报名截止时间</span><input type="datetime-local" readOnly /></label>
+          <label><span>赛事状态</span><select defaultValue="draft"><option value="draft">草稿</option></select></label>
+          <label><span>前端发布</span><select defaultValue="draft"><option value="draft">先保存草稿</option></select></label>
+          <label className="wide"><span>赛事简介</span><textarea rows={4} placeholder="可先写一句简要说明，完整内容之后在内容发布中继续完善" readOnly /></label>
         </div>
       </section>
-      <aside className="new-event-side"><small>创建后的系统动作</small><h3>先建立赛事，再进入本站工作区</h3><p>新赛事创建后，系统会自动准备基础结构，不需要重复创建后续模块。</p><ul><li>建立赛事主记录</li><li>自动建立少年组 U16</li><li>自动建立青年组 U20</li><li>建立概览 / 规程 / 文件发布模块</li><li>预留赛程 / 对阵 / 排名动态模块</li></ul><div className="new-event-actions"><button type="button" disabled>创建赛事并继续设置</button><span>取消创建</span></div></aside>
+      <aside className="new-event-side"><small>创建后的系统动作</small><h3>先建立赛事，再进入本站工作区</h3><p>新赛事创建后，系统会自动准备基础结构，不需要重复创建后续模块。</p><ul><li>建立赛事主记录</li><li>自动建立少年组 U16</li><li>自动建立青年组 U20</li><li>建立概览 / 规程 / 文件发布模块</li><li>预留赛程 / 对阵 / 排名动态模块</li></ul><div className="new-event-actions"><button type="button">创建赛事并继续设置</button><a href="/admin/events" tabIndex={-1}>取消创建</a></div></aside>
     </div>
   </main>;
 }
 
-function StructureFirstFrame({ pathname, search }: { pathname: string; search: string }) {
+function StructureFirstFrame({ pathname, search, overlay }: { pathname: string; search: string; overlay: boolean }) {
   const params = new URLSearchParams(search);
   const dashboard = (pathname === "/admin" || pathname === "/admin/") && !params.get("section");
-  if (dashboard) return <DashboardStructureFrame />;
-  if (pathname === "/admin/events/new") return <NewEventStructureFrame />;
-  return null;
+  const frame = dashboard ? <DashboardStructureFrame /> : pathname === "/admin/events/new" ? <NewEventStructureFrame /> : null;
+  if (!frame) return null;
+  if (!overlay) return frame;
+  return <div style={{ position: "absolute", inset: 0, zIndex: 6, background: "#f7f6fa" }}>{frame}</div>;
 }
 
 type LoadingProps = {
@@ -88,7 +89,7 @@ export function AdminWorkspaceLoading({ pathname, search = "", optimistic = fals
   const loadingLabel = optimistic ? "正在打开" : "正在读取";
   const delay = adminRouteLoadingDelayMs(pathname, search);
 
-  if (!Number.isFinite(delay)) return <StructureFirstFrame pathname={pathname} search={search} />;
+  if (!Number.isFinite(delay)) return <StructureFirstFrame pathname={pathname} search={search} overlay={overlay} />;
 
   const style = delayed
     ? ({ "--admin-loading-delay": `${delay}ms` } as CSSProperties)
