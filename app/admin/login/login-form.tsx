@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 type LoginMode = "login" | "setup";
 type SubmitPhase = "idle" | "submitting" | "redirecting";
@@ -9,6 +9,7 @@ type ConfigState = "checking" | "ready" | "unconfigured" | "error";
 
 export default function LoginForm() {
   const router = useRouter();
+  const pathname = usePathname();
   const [mode, setMode] = useState<LoginMode>("login");
   const [configState, setConfigState] = useState<ConfigState>("checking");
   const [username, setUsername] = useState("");
@@ -57,10 +58,11 @@ export default function LoginForm() {
       if (!response.ok) throw new Error(payload.error || "登录失败，请重试。");
 
       // Do not return the button to its idle state after authentication succeeds.
-      // The authenticated /admin route can take a moment to verify the new session;
-      // keeping this state makes the transition explicit instead of looking like a failed click.
+      // The authenticated workspace still needs to verify the new session once;
+      // keep the transition visible until the login component unmounts.
       setPhase("redirecting");
-      router.replace("/admin");
+      if (pathname === "/admin" || pathname === "/admin/") router.refresh();
+      else router.replace("/admin");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "登录失败，请重试。");
       setPhase("idle");
