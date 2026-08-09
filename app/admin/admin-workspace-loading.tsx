@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { describeAdminRoute } from "./admin-route-state";
+import { describeAdminRoute, isAdminShelllessRoute } from "./admin-route-state";
 
 function Bars({ rows = 5 }: { rows?: number }) {
   return <div className="admin-progressive-rows">{Array.from({ length: rows }, (_, index) => <div className="admin-progressive-row" key={index}><i /><i /><i /><i /></div>)}</div>;
@@ -52,6 +52,6 @@ export function AdminWorkspaceLoading({ pathname, search = "", optimistic = fals
 export default function AdminRouteLoading() {
   const pathname = usePathname();
   const search = useSearchParams().toString();
-  if (pathname === "/admin/login") return <main className="backend-route-pending" aria-busy="true"><span>正在打开后台…</span></main>;
+  if (pathname === "/admin/login" || isAdminShelllessRoute(pathname)) return <main className="backend-route-pending" aria-busy="true"><span>正在打开页面…</span></main>;
   return <AdminWorkspaceLoading pathname={pathname} search={search} />;
 }
