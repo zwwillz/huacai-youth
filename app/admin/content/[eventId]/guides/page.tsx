@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getAdminViewer } from "../../../admin-viewer";
-import { getAdminNavigationEvents } from "@/db/admin-ui";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
 import { getGuideManagementData } from "@/db/guides";
 import AdminWorkspaceShell from "../../../admin-workspace-shell";
 import GuideManagementClient from "./guide-management-client";
@@ -19,7 +19,7 @@ export default async function GuideManagementPage({ params }: { params: Promise<
   const { eventId } = await params;
   const result = await captureAdminLoad(Promise.all([
     getGuideManagementData(viewer.username, eventId),
-    getAdminNavigationEvents(viewer.username),
+    getAdminNavigationEventsForPrincipal(viewer),
   ]));
   if (!result.data) {
     return <main className="backend-state backend-denied"><div className="backend-state-logo">!</div><small>参赛提示</small><h1>暂时不能打开这场赛事</h1><p>{result.error instanceof Error ? result.error.message : "数据读取失败。"}</p><Link href="/admin/content">返回内容发布</Link></main>;
