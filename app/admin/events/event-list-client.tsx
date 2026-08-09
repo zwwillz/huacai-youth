@@ -8,6 +8,7 @@ import { eventStatusLabel } from "../admin-status";
 
 export type EventRow = {
   id: string;
+  year: number;
   stationNo: number;
   shortTitle: string;
   fullTitle: string;
@@ -84,7 +85,7 @@ export default function EventListClient({ events, canDelete, loading = false }: 
     const busy = workingId === event.id;
     return <article className={archived ? "event-v2-card archived" : "event-v2-card"} key={event.id}>
       <div className="event-v2-card-top">
-        <div className="event-v2-card-tags"><span>第 {event.stationNo} 站</span><small>2026赛季</small></div>
+        <div className="event-v2-card-tags"><span>第 {event.stationNo} 站</span><small>{event.year}赛季</small></div>
         <div className="event-v2-card-state"><b>{eventStatusLabel(event.status)}</b>{event.isHidden && <em>前端隐藏</em>}</div>
       </div>
       <h3>{event.fullTitle || event.shortTitle}</h3>
