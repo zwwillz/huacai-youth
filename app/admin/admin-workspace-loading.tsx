@@ -7,6 +7,7 @@ import CompetitionOverviewView, { makeCompetitionOverviewLoadingModel } from "./
 import ScheduleIndexView, { makeScheduleIndexLoadingModel } from "./competition/schedules/schedule-index-view";
 import ScoringWorkspaceView, { scoringPhases } from "./competition/scoring/scoring-workspace-view";
 import { DrawLoadingView, FinalRankingLoadingView, QualificationLoadingView } from "./competition/competition-loading-views";
+import { BracketLoadingView, ScheduleWorkbenchLoadingView } from "./competition/competition-deep-loading-views";
 import { AccountsLoadingView, ContentLoadingView, EventSettingsLoadingView, EventsLoadingView, LogsLoadingView, PlayersLoadingView } from "./admin-real-loading-views";
 import { ContentIndexLoadingView, GlobalRankingsLoadingView, GuidesLoadingView, RegistrationsLoadingView } from "./admin-secondary-loading-views";
 
@@ -38,6 +39,7 @@ function RealPageLoading({ pathname, search, viewerRole = "committee" }: { pathn
   const eventFromQuery = params.get("event") || "";
   const groupId = params.get("group") || "u16";
   const phase = params.get("phase") || "qualifier-one";
+  const sessionId = params.get("session") || "";
   const rootSection = params.get("section") || "";
 
   if ((pathname === "/admin" || pathname === "/admin/") && !rootSection) return <DashboardLoadingView />;
@@ -55,6 +57,8 @@ function RealPageLoading({ pathname, search, viewerRole = "committee" }: { pathn
   if (pathname.startsWith("/admin/players")) return <PlayersLoadingView viewerRole={viewerRole} eventId={eventFromQuery} />;
 
   if (pathname === "/admin/competition" || pathname === "/admin/competition/") return <CompetitionOverviewView model={makeCompetitionOverviewLoadingModel(eventFromQuery, groupId)} />;
+  if (pathname === "/admin/competition/schedule" || pathname === "/admin/competition/schedule/") return <ScheduleWorkbenchLoadingView sessionId={sessionId} />;
+  if (pathname === "/admin/competition/bracket" || pathname === "/admin/competition/bracket/") return <BracketLoadingView sessionId={sessionId} eventId={eventFromQuery} />;
   if (pathname.startsWith("/admin/competition/draw") && !pathname.includes("/screen")) return <DrawLoadingView eventId={eventFromQuery} groupId={groupId} phase={phase} />;
   if (pathname.startsWith("/admin/competition/schedules")) return <ScheduleIndexView model={makeScheduleIndexLoadingModel(eventFromQuery, groupId, phase)} />;
   if (pathname.startsWith("/admin/competition/scoring")) return <ScoringWorkspaceView data={null} context={null} selectedGroupId={groupId} selectedPhase={phase} phaseOptions={scoringPhases.map((item) => ({ ...item, hint: "数据读取中" }))} drafts={{}} query="" busyId="" message="" loading publicationDirty={false} />;
