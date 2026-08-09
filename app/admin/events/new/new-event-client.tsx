@@ -26,6 +26,9 @@ type Draft = {
 
 type Touched = Partial<Record<keyof Draft, boolean>>;
 
+function fullTitleForYear(year: number) { return `${year}中国华彩十六球青少年系列赛`; }
+function shortTitleForYear(year: number) { return `${year}华彩青少年系列赛新分站`; }
+
 export default function NewEventClient({ initialYear }: { initialYear: number }) {
   const router = useRouter();
   const [working, setWorking] = useState(false);
@@ -33,8 +36,8 @@ export default function NewEventClient({ initialYear }: { initialYear: number })
   const [suggestionState, setSuggestionState] = useState<"loading" | "ready" | "error">("loading");
   const touched = useRef<Touched>({});
   const [draft, setDraft] = useState<Draft>({
-    fullTitle: `${initialYear}中国华彩十六球青少年系列赛`,
-    shortTitle: `${initialYear}华彩青少年系列赛新分站`,
+    fullTitle: fullTitleForYear(initialYear),
+    shortTitle: shortTitleForYear(initialYear),
     year: initialYear,
     stationNo: 1,
     city: "",
@@ -64,8 +67,8 @@ export default function NewEventClient({ initialYear }: { initialYear: number })
           ...current,
           year: touched.current.year ? current.year : suggestion.latestYear,
           stationNo: touched.current.stationNo ? current.stationNo : suggestion.nextStationNo,
-          fullTitle: touched.current.fullTitle ? current.fullTitle : `${suggestion.latestYear}中国华彩十六球青少年系列赛`,
-          shortTitle: touched.current.shortTitle ? current.shortTitle : `${suggestion.latestYear}华彩青少年系列赛新分站`,
+          fullTitle: touched.current.fullTitle || touched.current.year ? current.fullTitle : fullTitleForYear(suggestion.latestYear),
+          shortTitle: touched.current.shortTitle || touched.current.year ? current.shortTitle : shortTitleForYear(suggestion.latestYear),
         }));
         setSuggestionState("ready");
       })
@@ -77,7 +80,14 @@ export default function NewEventClient({ initialYear }: { initialYear: number })
 
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     touched.current[key] = true;
-    setDraft((current) => ({ ...current, [key]: value }));
+    setDraft((current) => {
+      const next = { ...current, [key]: value } as Draft;
+      if (key === "year" && typeof value === "number") {
+        if (!touched.current.fullTitle && current.fullTitle === fullTitleForYear(current.year)) next.fullTitle = fullTitleForYear(value);
+        if (!touched.current.shortTitle && current.shortTitle === shortTitleForYear(current.year)) next.shortTitle = shortTitleForYear(value);
+      }
+      return next;
+    });
   };
   const canSubmit = useMemo(() => Boolean(draft.fullTitle.trim() && draft.shortTitle.trim() && draft.city.trim() && draft.startDate && draft.endDate), [draft]);
 
