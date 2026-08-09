@@ -2,9 +2,6 @@ import { getSqlClient } from "./index";
 import { assertAdminRole, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 import type { ContentDocument, ContentGuide, ContentManagementData, ContentPublication } from "./content-management";
 
-const RULE_STANDARD_PREFIX = "@@rule-standard:";
-const PRIZE_NOTE_PREFIX = "@@prize-note:";
-
 type BundleRow = {
   id: string;
   shortTitle: string;
@@ -14,7 +11,9 @@ type BundleRow = {
   publishStatus: string;
   summary: string | null;
   competitionFormat: unknown;
+  ruleStandard: string | null;
   drawRules: unknown;
+  prizeNote: string | null;
   prizes: unknown;
   publications: ContentPublication[] | null;
   documents: Array<{ id: string; documentType: string; title: string; url: string; isPublished: boolean }> | null;
@@ -27,14 +26,6 @@ function asRows(value: unknown): string[][] {
 }
 function asStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => String(item ?? "")).filter(Boolean) : [];
-}
-function parseDrawBundle(value: unknown) {
-  const rows = asStrings(value);
-  return {
-    ruleStandard: rows.find((item) => item.startsWith(RULE_STANDARD_PREFIX))?.slice(RULE_STANDARD_PREFIX.length) ?? "",
-    prizeNote: rows.find((item) => item.startsWith(PRIZE_NOTE_PREFIX))?.slice(PRIZE_NOTE_PREFIX.length) ?? "",
-    drawRules: rows.filter((item) => !item.startsWith(RULE_STANDARD_PREFIX) && !item.startsWith(PRIZE_NOTE_PREFIX)),
-  };
 }
 function prizeMap(value: unknown) {
   const result: Record<"少年组" | "青年组", string[][]> = { 少年组: [], 青年组: [] };
@@ -53,7 +44,7 @@ export async function getContentManagementDataFast(input: AdminPrincipalInput, e
   const sql = getSqlClient();
   const rows = await sql<BundleRow[]>`
     select e.id,e.short_title as "shortTitle",e.full_title as "fullTitle",e.city,e.status,e.publish_status as "publishStatus",e.summary,
-      d.competition_format as "competitionFormat",d.draw_rules as "drawRules",d.prizes,
+      d.competition_format as "competitionFormat",d.rule_standard as "ruleStandard",d.draw_rules as "drawRules",d.prize_note as "prizeNote",d.prizes,
       coalesce((select jsonb_agg(jsonb_build_object(
         'id',p.id,'moduleType',p.module_type,'moduleTitle',p.module_title,'versionNo',p.version_no,
         'status',p.status,'publishedAt',coalesce(p.published_at,'')
@@ -93,7 +84,6 @@ export async function getContentManagementDataFast(input: AdminPrincipalInput, e
     const item = guideByType.get(guideType);
     return { id: item?.id ?? "", guideType, title: item?.title ?? title, body: item?.body ?? "", publishStatus: item?.publishStatus ?? "draft" };
   });
-  const drawBundle = parseDrawBundle(row.drawRules);
 
   return {
     event: {
@@ -108,9 +98,9 @@ export async function getContentManagementDataFast(input: AdminPrincipalInput, e
     publications: row.publications ?? [],
     details: {
       competitionFormat: asRows(row.competitionFormat),
-      drawRules: drawBundle.drawRules,
-      ruleStandard: drawBundle.ruleStandard,
-      prizeNote: drawBundle.prizeNote,
+      drawRules: asStrings(row.drawRules),
+      ruleStandard: row.ruleStandard ?? "",
+      prizeNote: row.prizeNote ?? "",
       prizes: prizeMap(row.prizes),
     },
     documents: normalizedDocuments,
