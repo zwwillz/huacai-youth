@@ -2,6 +2,9 @@ import { getSqlClient } from "./index";
 import { assertAdminRole, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 import type { ContentDocument, ContentGuide, ContentManagementData, ContentPublication } from "./content-management";
 
+const RULE_STANDARD_PREFIX = "@@rule-standard:";
+const PRIZE_NOTE_PREFIX = "@@prize-note:";
+
 type BundleRow = {
   id: string;
   shortTitle: string;
@@ -25,6 +28,14 @@ function asRows(value: unknown): string[][] {
 function asStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => String(item ?? "")).filter(Boolean) : [];
 }
+function parseDrawBundle(value: unknown) {
+  const rows = asStrings(value);
+  return {
+    ruleStandard: rows.find((item) => item.startsWith(RULE_STANDARD_PREFIX))?.slice(RULE_STANDARD_PREFIX.length) ?? "",
+    prizeNote: rows.find((item) => item.startsWith(PRIZE_NOTE_PREFIX))?.slice(PRIZE_NOTE_PREFIX.length) ?? "",
+    drawRules: rows.filter((item) => !item.startsWith(RULE_STANDARD_PREFIX) && !item.startsWith(PRIZE_NOTE_PREFIX)),
+  };
+}
 function prizeMap(value: unknown) {
   const result: Record<"少年组" | "青年组", string[][]> = { 少年组: [], 青年组: [] };
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -35,7 +46,6 @@ function prizeMap(value: unknown) {
   return result;
 }
 
-/** One bridge request for static content, documents, guides and publication state. */
 export async function getContentManagementDataFast(input: AdminPrincipalInput, eventId: string): Promise<ContentManagementData> {
   const principal = await resolveAdminPrincipal(input);
   assertAdminRole(principal, ["system_admin", "committee"], "当前账号没有编辑和发布赛事内容的权限。");
@@ -83,6 +93,7 @@ export async function getContentManagementDataFast(input: AdminPrincipalInput, e
     const item = guideByType.get(guideType);
     return { id: item?.id ?? "", guideType, title: item?.title ?? title, body: item?.body ?? "", publishStatus: item?.publishStatus ?? "draft" };
   });
+  const drawBundle = parseDrawBundle(row.drawRules);
 
   return {
     event: {
@@ -95,7 +106,13 @@ export async function getContentManagementDataFast(input: AdminPrincipalInput, e
       summary: row.summary ?? "",
     },
     publications: row.publications ?? [],
-    details: { competitionFormat: asRows(row.competitionFormat), drawRules: asStrings(row.drawRules), prizes: prizeMap(row.prizes) },
+    details: {
+      competitionFormat: asRows(row.competitionFormat),
+      drawRules: drawBundle.drawRules,
+      ruleStandard: drawBundle.ruleStandard,
+      prizeNote: drawBundle.prizeNote,
+      prizes: prizeMap(row.prizes),
+    },
     documents: normalizedDocuments,
     guides: normalizedGuides,
   };
