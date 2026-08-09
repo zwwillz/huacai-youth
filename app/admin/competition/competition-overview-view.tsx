@@ -46,8 +46,8 @@ function drawStatusLabel(status?: string, loading?: boolean) {
   return "等待处理";
 }
 
-function value(value: number | null | undefined, loading?: boolean) {
-  return loading || value == null ? "—" : String(value);
+function value(current: number | null | undefined, loading?: boolean) {
+  return loading || current == null ? "—" : String(current);
 }
 
 export function makeCompetitionOverviewLoadingModel(eventId = "", selectedGroupId = "u16"): CompetitionOverviewViewModel {
@@ -83,7 +83,7 @@ export default function CompetitionOverviewView({ model, onGroupChange }: Props)
           ? { title: `${nextPhase.title} · ${nextDraw?.status === "draft" ? "确认抽签草稿" : "生成抽签"}`, detail: `当前名单 ${approvedCount} 人。完成这一阶段后再进入赛程编排，避免跨阶段操作。`, label: nextDraw?.status === "draft" ? "继续确认抽签" : "进入抽签", href: `/admin/competition/draw?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup.id)}&phase=${nextPhase.code}` }
           : { title: "当前组别签表均已确认", detail: "下一步进入赛程编排，设置比赛时间、球台、TV台和裁判。", label: "进入赛程编排", href: `/admin/competition/schedules?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup.id)}` };
 
-  return <main className="competition-workspace-page" aria-busy={loading}><section className="competition-workspace-shell">
+  return <main className="competition-workspace-page" aria-busy={loading} style={loading ? { pointerEvents: "none" } : undefined}><section className="competition-workspace-shell">
     {selectedGroup && <CompetitionContextBar
       eventId={model.eventId}
       eventTitle={model.eventTitle || "竞赛执行"}
@@ -96,7 +96,7 @@ export default function CompetitionOverviewView({ model, onGroupChange }: Props)
       onGroupChange={loading ? undefined : onGroupChange}
     />}
 
-    <section className="competition-next-task"><div><small>当前建议下一步</small><h2>{nextAction.title}</h2><p>{nextAction.detail}</p></div>{loading ? <span className="competition-loading-action">{nextAction.label} →</span> : <Link prefetch={false} href={nextAction.href}>{nextAction.label} →</Link>}</section>
+    <section className="competition-next-task"><div><small>当前建议下一步</small><h2>{nextAction.title}</h2><p>{nextAction.detail}</p></div><Link prefetch={false} href={nextAction.href}>{nextAction.label} →</Link></section>
 
     {selectedGroup && <section className="competition-qualifier-summary">
       <article><small>当前报名审核</small><strong>{value(approvedCount, loading)}</strong><span>人</span></article>
@@ -111,16 +111,16 @@ export default function CompetitionOverviewView({ model, onGroupChange }: Props)
       <div className="competition-stage-grid">{competitionOverviewPhases.map((phase) => {
         const draw = selectedGroup?.draws[phase.code];
         const phaseHref = selectedGroup ? `/admin/competition/draw?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup.id)}&phase=${phase.code}` : "/admin/competition";
-        return <article key={phase.code} className="ready"><div className="competition-stage-no">{phase.no}</div><div className="competition-stage-copy"><span>{phase.note}</span><h3>{phase.title}</h3><p>名单来源：{phase.source}</p></div><dl><div><dt>抽签状态</dt><dd>{drawStatusLabel(draw?.status, loading)}</dd></div>{draw && <><div><dt>版本</dt><dd>V{draw.versionNo}</dd></div><div><dt>抽签人数</dt><dd>{draw.entrantCount}</dd></div></>}</dl>{loading ? <span className="competition-loading-action">进入当前阶段 →</span> : <Link prefetch={false} href={phaseHref}>{draw ? "查看当前阶段 →" : "进入当前阶段 →"}</Link>}</article>;
+        return <article key={phase.code} className="ready"><div className="competition-stage-no">{phase.no}</div><div className="competition-stage-copy"><span>{phase.note}</span><h3>{phase.title}</h3><p>名单来源：{phase.source}</p></div><dl><div><dt>抽签状态</dt><dd>{drawStatusLabel(draw?.status, loading)}</dd></div>{draw && <><div><dt>版本</dt><dd>V{draw.versionNo}</dd></div><div><dt>抽签人数</dt><dd>{draw.entrantCount}</dd></div></>}</dl><Link prefetch={false} href={phaseHref}>{draw ? "查看当前阶段 →" : "进入当前阶段 →"}</Link></article>;
       })}</div>
     </section>
 
     <section className="competition-flow compact-flow">
       <article className="available"><span>01</span><h2>抽签与签表</h2><p>按组别、阶段生成抽签。草稿只保存在后台，确认后再决定何时发布。</p><b>抽签</b></article><i>→</i>
-      <article className="available"><span>02</span><h2>赛程编排</h2><p>只显示当前组别和阶段，设置时间、球台、TV台与裁判。</p><b>{loading ? "进入赛程" : <Link prefetch={false} href={`/admin/competition/schedules?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup?.id || "")}`}>进入赛程</Link>}</b></article><i>→</i>
-      <article className="available"><span>03</span><h2>比分录入</h2><p>默认只看最新待处理比赛，已确认比赛自动收起。</p><b>{loading ? "进入比分" : <Link prefetch={false} href={`/admin/competition/scoring?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup?.id || "")}`}>进入比分</Link>}</b></article><i>→</i>
-      <article className="available"><span>04</span><h2>晋级</h2><p>按阶段完成资格赛晋级、种子递补、64人锁定和32强确认。</p><b>{loading ? "进入晋级" : <Link prefetch={false} href={`/admin/competition/qualification?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup?.id || "")}`}>进入晋级</Link>}</b></article><i>→</i>
-      <article className="available"><span>05</span><h2>最终排名</h2><p>自动生成 → 可人工调整 → 确认 → 发布到用户端。</p><b>{loading ? "进入排名" : <Link prefetch={false} href={`/admin/competition/final-ranking?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup?.id || "")}`}>进入排名</Link>}</b></article>
+      <article className="available"><span>02</span><h2>赛程编排</h2><p>只显示当前组别和阶段，设置时间、球台、TV台与裁判。</p><b><Link prefetch={false} href={`/admin/competition/schedules?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup?.id || "")}`}>进入赛程</Link></b></article><i>→</i>
+      <article className="available"><span>03</span><h2>比分录入</h2><p>默认只看最新待处理比赛，已确认比赛自动收起。</p><b><Link prefetch={false} href={`/admin/competition/scoring?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup?.id || "")}`}>进入比分</Link></b></article><i>→</i>
+      <article className="available"><span>04</span><h2>晋级</h2><p>按阶段完成资格赛晋级、种子递补、64人锁定和32强确认。</p><b><Link prefetch={false} href={`/admin/competition/qualification?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup?.id || "")}`}>进入晋级</Link></b></article><i>→</i>
+      <article className="available"><span>05</span><h2>最终排名</h2><p>自动生成 → 可人工调整 → 确认 → 发布到用户端。</p><b><Link prefetch={false} href={`/admin/competition/final-ranking?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup?.id || "")}`}>进入排名</Link></b></article>
     </section>
 
     <section className="competition-principles"><article><strong>保存 ≠ 发布</strong><p>抽签、赛程和比分在后台保存或确认后，先作为后台正式数据；只有对应模块点击“发布到用户端”，公众页面才显示。</p></article><article><strong>默认只看当前任务</strong><p>比分隐藏已确认场次；赛程和晋级只处理当前组别、当前阶段，需要复核历史时再主动切换。</p></article><article><strong>未就绪也有明确入口</strong><p>阶段数据尚未产生时保留入口和签表结构，通过“等待上一阶段 / 待定 / 尚未排期”等友好状态说明下一步。</p></article></section>
