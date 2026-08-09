@@ -3,7 +3,7 @@ import { getEventIndexData } from "@/db/admin-index";
 import { getAdminViewer } from "../admin-viewer";
 import AdminWorkspaceShell from "../admin-workspace-shell";
 import EventSettingsIndexView from "./event-settings-index-view";
-import "./event-settings-index.css";
+import "./event-management-v2.css";
 
 export const dynamic = "force-dynamic";
 
@@ -15,5 +15,5 @@ export default async function EventSettingsIndexPage() {
   }
   const listEvents = await getEventIndexData(viewer.username);
   const navEvents = listEvents.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }));
-  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={navEvents} active="events" pageTitle="赛事管理" pageHint="全局 · 创建与管理分站"><EventSettingsIndexView events={listEvents} canDelete={viewer.role === "system_admin"} /></AdminWorkspaceShell>;
+  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={navEvents} active="events" pageTitle="赛事管理" pageHint="全局 · 创建与管理赛事"><EventSettingsIndexView events={listEvents} canDelete={viewer.role === "system_admin"} /></AdminWorkspaceShell>;
 }
