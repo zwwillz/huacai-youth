@@ -38,7 +38,7 @@ const navGroups: Array<{ label?: string; items: Array<{ id: ActiveSection; icon:
   { items: [{ id: "dashboard", icon: "首", title: "工作台", hint: "全局总览与待办" },{ id: "events", icon: "赛", title: "赛事管理", hint: "创建赛事与基础设置" }] },
   { label: "赛事运营", items: [{ id: "content", icon: "发", title: "内容发布", hint: "概览、规程与参赛提示" }] },
   { label: "竞赛", items: [{ id: "competition", icon: "执", title: "竞赛执行", hint: "抽签、赛程、比分与晋级" }] },
-  { label: "球员", items: [{ id: "players", icon: "员", title: "球员管理", hint: "球员档案维护与查询" }] },
+  { label: "球员", items: [{ id: "players", icon: "员", title: "球员档案", hint: "球员基础档案维护与查询" },{ id: "points", icon: "积", title: "积分排名", hint: "积分总览、分站与规则" }] },
   { label: "系统", items: [{ id: "accounts", icon: "权", title: "账号与权限", hint: "账号、角色与赛事分配" },{ id: "logs", icon: "志", title: "操作日志", hint: "系统操作与审计记录" }] },
 ];
 const competitionTools: Array<{ id: CompetitionTool; title: string; icon: string }> = [
@@ -49,7 +49,7 @@ const competitionTools: Array<{ id: CompetitionTool; title: string; icon: string
   { id: "ranking", title: "最终排名", icon: "榜" },
 ];
 function competitionToolHref(tool: CompetitionTool, eventId?: string) { const suffix = eventId ? `?event=${encodeURIComponent(eventId)}` : ""; if (tool === "schedule") return `/admin/competition/schedules${suffix}`; if (tool === "scoring") return `/admin/competition/scoring${suffix}`; if (tool === "qualification") return `/admin/competition/qualification${suffix}`; if (tool === "ranking") return `/admin/competition/final-ranking${suffix}`; return `/admin/competition${suffix}`; }
-function sectionHref(id: ActiveSection, eventId?: string) { if (id === "dashboard") return "/admin"; if (id === "events") return "/admin/events"; if (id === "content") return eventId ? `/admin/content/${eventId}` : "/admin/content"; if (id === "competition") return competitionToolHref("overview", eventId); if (id === "players") return "/admin/players"; if (id === "registrations") return `/admin?section=registrations${eventId ? `&event=${encodeURIComponent(eventId)}` : ""}`; if (id === "rankings") return "/admin?section=rankings"; if (id === "accounts") return "/admin/accounts"; if (id === "logs") return "/admin/logs"; return "/admin"; }
+function sectionHref(id: ActiveSection, eventId?: string) { if (id === "dashboard") return "/admin"; if (id === "events") return "/admin/events"; if (id === "content") return eventId ? `/admin/content/${eventId}` : "/admin/content"; if (id === "competition") return competitionToolHref("overview", eventId); if (id === "players") return "/admin/players"; if (id === "points") return "/admin/points"; if (id === "registrations") return `/admin?section=registrations${eventId ? `&event=${encodeURIComponent(eventId)}` : ""}`; if (id === "rankings") return "/admin?section=rankings"; if (id === "accounts") return "/admin/accounts"; if (id === "logs") return "/admin/logs"; return "/admin"; }
 
 function LogoutWelcomeScreen() {
   return <main className="backend-login" aria-busy="true">
