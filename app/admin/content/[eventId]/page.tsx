@@ -7,7 +7,6 @@ import { getEventManagementDataFast } from "@/db/event-management-fast";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import ContentEventWorkspaceClient from "../content-event-workspace-client";
 import { captureAdminLoad } from "../../capture-admin-load";
-import "../content-publishing-v2.css";
 
 export const dynamic = "force-dynamic";
 
