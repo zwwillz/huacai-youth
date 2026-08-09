@@ -27,7 +27,11 @@ export default function ScheduleIndexClient({ initialEventId, initialContext = n
     catch (failure) { if (currentRequest !== requestId.current) return; setError(failure instanceof Error ? failure.message : "赛程索引读取失败。"); if (previousEventId) window.dispatchEvent(new CustomEvent("admin:event-switch-revert", { detail: { eventId: previousEventId } })); }
     finally { if (currentRequest === requestId.current) setLoading(false); }
   }, [applyPayload]);
-  useEffect(() => { if (!initialContext && initialEventId) void loadEvent(initialEventId, "", initialGroupId, initialPhase); }, [initialContext, initialEventId, initialGroupId, initialPhase, loadEvent]);
+  useEffect(() => {
+    if (initialContext || !initialEventId) return;
+    const timer = window.setTimeout(() => { void loadEvent(initialEventId, "", initialGroupId, initialPhase); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [initialContext, initialEventId, initialGroupId, initialPhase, loadEvent]);
   useEffect(() => { const onSwitch = (event: Event) => { const detail = (event as CustomEvent<{ eventId?: string; previousEventId?: string; active?: string; competitionTool?: string }>).detail; if (detail?.active !== "competition" || detail.competitionTool !== "schedule" || !detail.eventId || detail.eventId === eventId) return; void loadEvent(detail.eventId, detail.previousEventId || eventId); }; window.addEventListener("admin:event-switch", onSwitch); return () => window.removeEventListener("admin:event-switch", onSwitch); }, [eventId, loadEvent]);
   const items = useMemo(() => selectedGroupId ? allItems.filter((item) => item.groupId === selectedGroupId) : [], [allItems, selectedGroupId]);
   const current = useMemo(() => items.filter((item) => item.phaseCode === selectedPhase).sort((a, b) => b.drawVersion - a.drawVersion)[0] ?? null, [items, selectedPhase]);
