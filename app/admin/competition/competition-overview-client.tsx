@@ -14,7 +14,9 @@ export default function CompetitionOverviewClient({ initialData = null, initialE
   const [data, setData] = useState<CompetitionDashboardData | null>(initialData); const [eventId, setEventId] = useState(initialData?.selectedEventId || initialEventId); const [selectedGroupId, setSelectedGroupId] = useState(initialGroupId || initialData?.groups[0]?.id || ""); const [loading, setLoading] = useState(!initialData); const [error, setError] = useState(""); const requestId = useRef(0);
   useEffect(() => { if (initialData?.selectedEventId) cache.set(initialData.selectedEventId, { data: initialData, at: Date.now() }); }, [initialData]);
   const loadEvent = useCallback(async (nextEventId: string, previousEventId = "", preferredGroupId = "") => {
-    if (!nextEventId) return; const currentRequest = ++requestId.current; const cached = cache.get(nextEventId); setEventId(nextEventId); setError("");
+    if (!nextEventId) return;
+    await Promise.resolve();
+    const currentRequest = ++requestId.current; const cached = cache.get(nextEventId); setEventId(nextEventId); setError("");
     if (cached && Date.now() - cached.at < CACHE_TTL) { setData(cached.data); const groupId = cached.data.groups.some((group) => group.id === preferredGroupId) ? preferredGroupId : cached.data.groups[0]?.id || ""; setSelectedGroupId(groupId); replaceUrl(nextEventId, groupId); setLoading(false); return; }
     setLoading(true);
     try { const response = await fetch(`/api/admin/competition/overview?eventId=${encodeURIComponent(nextEventId)}`, { cache: "no-store" }); const payload = await response.json() as { data?: CompetitionDashboardData; error?: string }; if (!response.ok || !payload.data) throw new Error(payload.error || "竞赛总览读取失败。"); if (currentRequest !== requestId.current) return; cache.set(nextEventId, { data: payload.data, at: Date.now() }); setData(payload.data); const groupId = payload.data.groups.some((group) => group.id === preferredGroupId) ? preferredGroupId : payload.data.groups[0]?.id || ""; setSelectedGroupId(groupId); replaceUrl(nextEventId, groupId); }
