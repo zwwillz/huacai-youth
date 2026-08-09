@@ -8,6 +8,7 @@ import { AdminWorkspaceLoading } from "./admin-workspace-loading";
 import {
   adminRouteKey,
   describeAdminRoute,
+  isAdminShelllessRoute,
   type AdminActiveSection,
   type AdminCompetitionTool,
   type AdminEventSwitchMode,
@@ -159,9 +160,10 @@ function PersistentWorkspaceRoot(props: Props) {
   }, [currentKey]);
 
   const locallySelectedEventId = localEventSelection?.routeKey === currentKey ? localEventSelection.eventId : "";
+  const defaultScopedEventId = events[0]?.id || "";
   const effectiveEventId = currentMeta.eventSwitchMode === "local"
-    ? (locallySelectedEventId || currentMeta.currentEventId || "")
-    : (visualMeta.currentEventId || currentMeta.currentEventId || "");
+    ? (locallySelectedEventId || currentMeta.currentEventId || (currentMeta.eventScoped ? defaultScopedEventId : ""))
+    : (visualMeta.currentEventId || currentMeta.currentEventId || (visualMeta.eventScoped ? defaultScopedEventId : ""));
   const currentEvent = events.find((event) => event.id === effectiveEventId);
   const visibleGroups = navGroups.map((group) => ({ ...group, items: group.items.filter((item) => { if (props.viewer.role === "system_admin") return true; if (props.viewer.role === "committee") return !["accounts", "logs"].includes(item.id); return ["dashboard", "competition"].includes(item.id); }) })).filter((group) => group.items.length > 0);
 
@@ -177,6 +179,8 @@ function PersistentWorkspaceRoot(props: Props) {
     beginNavigation(target, "所选赛事");
     router.push(target);
   };
+
+  if (pathname === "/admin/login" || isAdminShelllessRoute(pathname)) return <>{props.children}</>;
 
   return <PersistentShellContext.Provider value={bridgeValue}>
     <main className="backend-shell admin-workspace-shell">
