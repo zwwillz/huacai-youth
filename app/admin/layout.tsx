@@ -1,5 +1,6 @@
 import "./admin.css";
 import "./admin-workspace-shell.css";
+import "./admin-progressive-loading.css";
 import "./admin-recovery.css";
 import "./admin-local-workspace.css";
 import "./competition-controls.css";
