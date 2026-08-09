@@ -7,8 +7,22 @@ type Props = { events: EventRow[] | null; canDelete: boolean };
 
 export default function EventSettingsIndexView({ events, canDelete }: Props) {
   const loading = events === null;
-  return <main className="event-settings-index" aria-busy={loading} style={loading ? { pointerEvents: "none" } : undefined}>
-    <header className="event-settings-index-head"><div><small>赛事管理</small><h1>赛事设置</h1><p>这里是所有后续业务的起点：先创建赛事，再进入本站的内容发布、报名审核、球员管理与竞赛执行。创建赛事本身不受“当前赛事”切换影响。</p></div><div className="event-settings-index-head-actions"><Link className="event-settings-create" href="/admin/events/new">＋ 创建新赛事</Link><span>{loading ? "— 场赛事" : `${events.length} 场赛事`}</span></div></header>
+  const activeCount = loading ? 0 : events.filter((event) => event.status !== "archived").length;
+  const archivedCount = loading ? 0 : events.filter((event) => event.status === "archived").length;
+
+  return <main className="event-v2-index" aria-busy={loading} style={loading ? { pointerEvents: "none" } : undefined}>
+    <section className="event-v2-page-head">
+      <div>
+        <small>EVENT MANAGEMENT</small>
+        <h2>赛事管理</h2>
+        <p>创建赛事并维护赛事的基础主数据。只有赛事创建完成后，赛事运营和竞赛执行才会出现这场赛事。</p>
+      </div>
+      <div className="event-v2-head-actions">
+        <div className="event-v2-head-count"><strong>{loading ? "—" : activeCount}</strong><span>当前赛事</span>{!loading && archivedCount > 0 && <em>{archivedCount} 场已归档</em>}</div>
+        <Link className="event-v2-create" href="/admin/events/new">＋ 创建新赛事</Link>
+      </div>
+    </section>
+
     <EventListClient events={events ?? []} canDelete={canDelete} loading={loading} />
   </main>;
 }
