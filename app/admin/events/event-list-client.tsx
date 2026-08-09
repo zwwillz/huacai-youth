@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAdminActionDialog } from "../admin-action-dialog";
 import { eventStatusLabel } from "../admin-status";
 
@@ -22,6 +22,8 @@ export type EventRow = {
   groupNames: string;
 };
 
+type LifecycleAction = "hide" | "show" | "archive" | "restore";
+
 function LoadingCard({ index }: { index: number }) {
   return <article className="event-v2-card loading" aria-busy="true"><div className="event-v2-card-top"><span>第 — 站</span><b>读取中</b></div><h3>赛事名称正在读取</h3><p>城市 · 比赛日期 · 参赛组别</p><div className="event-v2-card-actions"><span>赛事设置</span><span>赛事运营</span><span>竞赛执行</span></div><span hidden>{index}</span></article>;
 }
@@ -30,16 +32,35 @@ export default function EventListClient({ events, canDelete, loading = false }: 
   const router = useRouter();
   const [workingId, setWorkingId] = useState("");
   const [message, setMessage] = useState("");
+  const [openMoreId, setOpenMoreId] = useState("");
   const { ask, dialog } = useAdminActionDialog();
 
-  const lifecycle = async (event: EventRow, action: "hide" | "show" | "archive") => {
+  useEffect(() => {
+    const close = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest(".event-v2-more")) setOpenMoreId("");
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
+
+  const lifecycle = async (event: EventRow, action: LifecycleAction) => {
     if (loading || workingId) return;
+    setOpenMoreId("");
     if (action === "archive") {
       const ok = await ask({
         title: `归档“${event.shortTitle}”`,
-        description: "归档后赛事进入历史只读状态，赛事管理、赛事运营和竞赛结果都不能继续修改，且不能删除。",
+        description: "归档后赛事进入历史只读状态，不能继续修改，也不能删除。系统管理员可以在需要时撤回归档。",
         confirmLabel: "确认归档",
         tone: "danger",
+      });
+      if (!ok) return;
+    }
+    if (action === "restore") {
+      const ok = await ask({
+        title: `撤回“${event.shortTitle}”归档`,
+        description: "撤回后赛事恢复为“已结束”状态，可重新进入赛事管理和赛事运营进行维护。",
+        confirmLabel: "撤回归档",
       });
       if (!ok) return;
     }
@@ -52,7 +73,7 @@ export default function EventListClient({ events, canDelete, loading = false }: 
       });
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error || "赛事状态修改失败。");
-      setMessage(action === "hide" ? "赛事已标记为前端隐藏。" : action === "show" ? "赛事已恢复前端显示。" : "赛事已归档为只读状态。");
+      setMessage(action === "hide" ? "赛事已从公众前端隐藏。" : action === "show" ? "赛事已恢复公众前端显示。" : action === "restore" ? "赛事已撤回归档，恢复为已结束状态。" : "赛事已归档为历史只读状态。");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "赛事状态修改失败。");
@@ -61,6 +82,7 @@ export default function EventListClient({ events, canDelete, loading = false }: 
 
   const remove = async (event: EventRow) => {
     if (loading || workingId) return;
+    setOpenMoreId("");
     const ok = await ask({
       title: `删除“${event.shortTitle}”`,
       description: "删除只用于误建赛事。已开始执行、已有报名或比赛数据、以及已归档赛事都不能删除。这个操作不可撤销。",
@@ -83,6 +105,7 @@ export default function EventListClient({ events, canDelete, loading = false }: 
   const cards = loading ? Array.from({ length: 3 }, (_, index) => <LoadingCard key={index} index={index} />) : events.map((event) => {
     const archived = event.status === "archived";
     const busy = workingId === event.id;
+    const moreOpen = openMoreId === event.id;
     return <article className={archived ? "event-v2-card archived" : "event-v2-card"} key={event.id}>
       <div className="event-v2-card-top">
         <div className="event-v2-card-tags"><span>第 {event.stationNo} 站</span><small>{event.year}赛季</small></div>
@@ -96,15 +119,16 @@ export default function EventListClient({ events, canDelete, loading = false }: 
           <Link className="primary" href={`/admin/events/${event.id}`}>{archived ? "查看赛事" : "编辑赛事"}</Link>
           {!archived && <Link href={`/admin/content/${event.id}`}>赛事运营</Link>}
           {!archived && <Link href={`/admin/competition?event=${encodeURIComponent(event.id)}`}>竞赛执行</Link>}
+          {archived && canDelete && <button className="event-v2-restore" type="button" disabled={busy} onClick={() => lifecycle(event, "restore")}>撤回归档</button>}
         </div>
-        {!archived && <details className="event-v2-more">
-          <summary>更多</summary>
-          <div>
+        {!archived && <div className={moreOpen ? "event-v2-more open" : "event-v2-more"}>
+          <button className="event-v2-more-trigger" type="button" aria-expanded={moreOpen} onClick={() => setOpenMoreId((current) => current === event.id ? "" : event.id)}>更多</button>
+          {moreOpen && <div>
             <button type="button" disabled={busy} onClick={() => lifecycle(event, event.isHidden ? "show" : "hide")}>{event.isHidden ? "恢复前端显示" : "隐藏赛事"}</button>
             <button type="button" disabled={busy || event.status !== "finished"} title={event.status !== "finished" ? "只有已结束赛事可以归档" : undefined} onClick={() => lifecycle(event, "archive")}>归档赛事</button>
             {canDelete && <button className="danger" type="button" disabled={busy} onClick={() => remove(event)}>删除误建赛事</button>}
-          </div>
-        </details>}
+          </div>}
+        </div>}
       </div>
     </article>;
   });
