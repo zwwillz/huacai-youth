@@ -8,7 +8,7 @@ type Props = { events: EventRow[] | null; canDelete: boolean };
 export default function EventSettingsIndexView({ events, canDelete }: Props) {
   const loading = events === null;
   const rows = events ?? [];
-  const currentCount = loading ? 0 : rows.filter((event) => event.status !== "finished" && event.status !== "archived").length;
+  const currentCount = loading ? 0 : rows.filter((event) => event.status !== "archived").length;
   const finishedCount = loading ? 0 : rows.filter((event) => event.status === "finished").length;
   const archivedCount = loading ? 0 : rows.filter((event) => event.status === "archived").length;
   const hiddenCount = loading ? 0 : rows.filter((event) => event.isHidden && event.status !== "archived").length;
@@ -35,7 +35,7 @@ export default function EventSettingsIndexView({ events, canDelete }: Props) {
           <div><dt>已归档</dt><dd>{loading ? "—" : archivedCount}</dd></div>
           <div><dt>前端隐藏</dt><dd>{loading ? "—" : hiddenCount}</dd></div>
         </dl>
-        <div className="event-v2-summary-note"><strong>生命周期说明</strong><p>隐藏只影响公众前端；已结束赛事仍可维护；归档后进入历史只读，系统管理员可以撤回归档。</p></div>
+        <div className="event-v2-summary-note"><strong>生命周期说明</strong><p>“当前赛事”指所有未归档赛事；隐藏只影响公众前端；已结束赛事仍可维护；归档后进入历史只读，系统管理员可以撤回归档。</p></div>
       </aside>
     </div>
   </main>;
