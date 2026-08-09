@@ -1,20 +1,43 @@
 import { desc } from "drizzle-orm";
-import { getDb } from "./index";
-import { events, publications } from "./schema";
+import { getDb, getSqlClient } from "./index";
+import { events } from "./schema";
 import { getAdminNavigationEvents } from "./admin-ui";
 
+type EventIndexMetaRow = {
+  id: string;
+  fullTitle: string;
+  isHidden: boolean;
+  groupNames: string;
+};
+
 export async function getEventIndexData(username: string) {
-  const db = getDb();
-  const [eventRows, publicationRows] = await Promise.all([
-    getAdminNavigationEvents(username),
-    db.select({ eventId: publications.eventId, status: publications.status }).from(publications),
-  ]);
-  const publishedCounts = new Map<string, number>();
-  for (const row of publicationRows) {
-    if (row.status !== "published") continue;
-    publishedCounts.set(row.eventId, (publishedCounts.get(row.eventId) ?? 0) + 1);
-  }
-  return eventRows.map((event) => ({ ...event, publicationCount: publishedCounts.get(event.id) ?? 0 }));
+  const navEvents = await getAdminNavigationEvents(username);
+  if (!navEvents.length) return [];
+
+  const sql = getSqlClient();
+  const metaRows = await sql<EventIndexMetaRow[]>`
+    select
+      e.id,
+      e.full_title as "fullTitle",
+      coalesce(e.is_hidden, false) as "isHidden",
+      coalesce((
+        select string_agg(g.name, ' · ' order by g.code)
+        from public.event_groups g
+        where g.event_id = e.id and g.status = 'active'
+      ), '') as "groupNames"
+    from public.events e
+  `;
+  const metaById = new Map(metaRows.map((row) => [row.id, row]));
+
+  return navEvents.map((event) => {
+    const meta = metaById.get(event.id);
+    return {
+      ...event,
+      fullTitle: meta?.fullTitle || event.shortTitle,
+      isHidden: Boolean(meta?.isHidden),
+      groupNames: meta?.groupNames || "",
+    };
+  });
 }
 
 export async function getNewEventDefaults(username: string) {
