@@ -1,15 +1,14 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import type { PlayerPointsDetail, PlayerPointsListItem, PlayerPointsPageData, PlayerPointsRule } from "@/db/player-points";
 import { updatePointsRuleAction } from "./actions";
 
 type PointsState = { event: string; scope: "event" | "all"; group: "all" | "少年组" | "青年组"; q: string; page: number };
 type EventOption = { id: string; shortTitle: string; stationNo: number; status: string; startDate: string; endDate: string; city: string };
-type CachedPage = { data: PlayerPointsPageData; at: number };
-type CachedDetail = { data: PlayerPointsDetail; at: number };
+type CachedPage = { data: PlayerPointsPageData };
+type CachedDetail = { data: PlayerPointsDetail };
 
-const CACHE_TTL = 60_000;
 const pageCache = new Map<string, CachedPage>();
 const detailCache = new Map<string, CachedDetail>();
 const detailRequests = new Map<string, Promise<PlayerPointsDetail>>();
@@ -43,7 +42,8 @@ function detailApiHref(state: PointsState, playerId: string) {
   return `/api/admin/points/${encodeURIComponent(playerId)}?${params.toString()}`;
 }
 function replaceUrl(state: PointsState, playerId = "") {
-  if (typeof window !== "undefined") window.history.replaceState(window.history.state, "", hrefFor(state, playerId));
+  if (typeof window === "undefined") return;
+  window.history.replaceState(window.history.state, "", hrefFor(state, playerId));
 }
 function money(cents: number) {
   return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 0 }).format(cents / 100);
@@ -114,55 +114,63 @@ export function PointsRankingWorkspace({ viewerRole, events, initialState, initi
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState("");
   const [searchText, setSearchText] = useState(initialState.q);
-  const [selectedId, setSelectedId] = useState(initialPlayerId);
+  const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<PlayerPointsDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
-  const requestId = useRef(0);
+  const listRequestId = useRef(0);
+  const detailRequestId = useRef(0);
 
   useEffect(() => {
-    pageCache.set(stateKey(initialState), { data: initialPageData, at: Date.now() });
+    pageCache.set(stateKey(initialState), { data: initialPageData });
   }, [initialState, initialPageData]);
 
   const totalPages = Math.max(1, Math.ceil(pageData.filteredTotal / pageData.pageSize));
   const currentEvent = events.find((event) => event.id === state.event);
   const selectedSummary = pageData.items.find((item) => item.id === selectedId) || null;
 
-  const loadList = async (next: PointsState) => {
+  const loadList = async (next: PointsState, force = false) => {
     const key = stateKey(next);
     const cached = pageCache.get(key);
+    const requestId = ++listRequestId.current;
+    detailRequestId.current += 1;
     setState(next);
     setSearchText(next.q);
     setListError("");
+    setSelectedId("");
+    setDetail(null);
+    setDetailError("");
     replaceUrl(next);
-    if (cached && Date.now() - cached.at < CACHE_TTL) {
+    if (cached && !force) {
       setPageData(cached.data);
       setListLoading(false);
       return;
     }
-    const id = ++requestId.current;
     setListLoading(true);
     try {
       const response = await fetch(listApiHref(next), { cache: "no-store" });
       const payload = await response.json() as { data?: PlayerPointsPageData; error?: string };
       if (!response.ok || !payload.data) throw new Error(payload.error || "积分排名读取失败。");
-      if (id !== requestId.current) return;
-      pageCache.set(key, { data: payload.data, at: Date.now() });
+      pageCache.set(key, { data: payload.data });
+      if (requestId !== listRequestId.current) return;
       setPageData(payload.data);
     } catch (error) {
-      if (id === requestId.current) setListError(error instanceof Error ? error.message : "积分排名读取失败。");
+      if (requestId !== listRequestId.current) return;
+      setListError(error instanceof Error ? error.message : "积分排名读取失败。");
     } finally {
-      if (id === requestId.current) setListLoading(false);
+      if (requestId === listRequestId.current) setListLoading(false);
     }
   };
 
   const loadDetail = async (playerId: string, force = false) => {
+    if (!playerId) return;
+    const requestId = ++detailRequestId.current;
     const cacheKey = `${state.scope}|${state.event}|${playerId}`;
     setSelectedId(playerId);
     setDetailError("");
     replaceUrl(state, playerId);
     const cached = detailCache.get(cacheKey);
-    if (!force && cached && Date.now() - cached.at < CACHE_TTL) {
+    if (cached && !force) {
       setDetail(cached.data);
       setDetailLoading(false);
       return;
@@ -170,54 +178,49 @@ export function PointsRankingWorkspace({ viewerRole, events, initialState, initi
     setDetail(cached?.data || null);
     setDetailLoading(true);
     try {
-      let request = detailRequests.get(cacheKey);
-      if (!request || force) {
+      let request = !force ? detailRequests.get(cacheKey) : undefined;
+      if (!request) {
         request = fetch(detailApiHref(state, playerId), { cache: "no-store" }).then(async (response) => {
           const payload = await response.json() as { data?: PlayerPointsDetail; error?: string };
           if (!response.ok || !payload.data) throw new Error(payload.error || "积分详情读取失败。");
           return payload.data;
         });
-        detailRequests.set(cacheKey, request);
+        if (!force) detailRequests.set(cacheKey, request);
       }
       const data = await request;
-      detailCache.set(cacheKey, { data, at: Date.now() });
+      detailCache.set(cacheKey, { data });
+      if (requestId !== detailRequestId.current) return;
       setDetail(data);
     } catch (error) {
+      if (requestId !== detailRequestId.current) return;
       setDetailError(error instanceof Error ? error.message : "积分详情读取失败。");
     } finally {
       detailRequests.delete(cacheKey);
-      setDetailLoading(false);
+      if (requestId === detailRequestId.current) setDetailLoading(false);
     }
   };
 
   useEffect(() => {
-    if (initialPlayerId) void loadDetail(initialPlayerId);
+    if (!initialPlayerId) return;
+    const timer = window.setTimeout(() => { void loadDetail(initialPlayerId); }, 0);
+    return () => window.clearTimeout(timer);
+    // Direct-link detail hydration only runs on the first mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const switchScope = (scope: "all" | "event", event = "") => {
-    setSelectedId(""); setDetail(null);
-    void loadList({ ...state, scope, event: scope === "all" ? "" : event, page: 1 });
-  };
-  const switchGroup = (group: PointsState["group"]) => {
-    setSelectedId(""); setDetail(null);
-    void loadList({ ...state, group, page: 1 });
-  };
-  const submitSearch = (event: FormEvent) => {
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSelectedId(""); setDetail(null);
     void loadList({ ...state, q: searchText.trim(), page: 1 });
   };
-  const clearSearch = () => {
-    setSearchText("");
-    void loadList({ ...state, q: "", page: 1 });
-  };
   const closeDetail = () => {
-    setSelectedId(""); setDetail(null); setDetailError("");
+    detailRequestId.current += 1;
+    setSelectedId("");
+    setDetail(null);
+    setDetailError("");
+    setDetailLoading(false);
     replaceUrl(state);
   };
-
-  const ruleDescription = useMemo(() => `每站 +${pageData.rule.participationPoints} 分 · 每 ${pageData.rule.prizeUnitYuan} 元奖金 +${pageData.rule.prizePointsPerUnit} 分`, [pageData.rule]);
+  const ruleDescription = `每站 +${pageData.rule.participationPoints} 分 · 每 ${pageData.rule.prizeUnitYuan} 元奖金 +${pageData.rule.prizePointsPerUnit} 分`;
 
   return <main className="points-admin">
     <section className="points-admin-head">
@@ -230,25 +233,25 @@ export function PointsRankingWorkspace({ viewerRole, events, initialState, initi
     {listError && <div className="points-notice error">{listError}</div>}
 
     <nav className="points-event-tabs" aria-label="积分总览与分站切换">
-      {viewerRole === "system_admin" && <button type="button" className={state.scope === "all" ? "active" : ""} onClick={() => switchScope("all")}>积分总览</button>}
-      {events.map((event) => <button type="button" key={event.id} className={state.scope === "event" && state.event === event.id ? "active" : ""} onClick={() => switchScope("event", event.id)}>第{event.stationNo}站 · {event.city}</button>)}
+      {viewerRole === "system_admin" && <button type="button" className={state.scope === "all" ? "active" : ""} onClick={() => { if (state.scope !== "all") void loadList({ ...state, scope: "all", event: "", page: 1 }); }}>积分总览</button>}
+      {events.map((event) => <button type="button" key={event.id} className={state.scope === "event" && state.event === event.id ? "active" : ""} onClick={() => { if (state.scope !== "event" || state.event !== event.id) void loadList({ ...state, scope: "event", event: event.id, page: 1 }); }}>第{event.stationNo}站 · {event.city}</button>)}
     </nav>
 
     <section className="points-list-card">
       <div className="points-list-toolbar">
         <nav className="points-group-tabs" aria-label="组别筛选">
-          {(["all", "少年组", "青年组"] as const).map((group) => <button type="button" key={group} className={state.group === group ? "active" : ""} onClick={() => switchGroup(group)}>{group === "all" ? "全部球员" : group}</button>)}
+          {(["all", "少年组", "青年组"] as const).map((group) => <button type="button" key={group} className={state.group === group ? "active" : ""} onClick={() => { if (state.group !== group) void loadList({ ...state, group, page: 1 }); }}>{group === "all" ? "全部球员" : group}</button>)}
         </nav>
-        <form className="points-search" onSubmit={submitSearch}><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="搜索球员姓名 / 球员编号" /><button type="submit">搜索</button>{state.q && <button type="button" className="clear" onClick={clearSearch}>清除</button>}</form>
+        <form className="points-search" onSubmit={submitSearch}><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="搜索球员姓名 / 球员编号" /><button type="submit" disabled={listLoading && searchText.trim() === state.q}>搜索</button>{state.q && <button type="button" className="clear" onClick={() => { setSearchText(""); void loadList({ ...state, q: "", page: 1 }); }}>清除</button>}</form>
       </div>
-      <div className="points-list-meta"><span>{state.q ? "搜索结果" : state.scope === "all" ? "积分总览" : currentEvent?.shortTitle} · 共 <b>{pageData.filteredTotal}</b> 人</span><small>{listLoading ? "正在更新…" : `每页 ${pageData.pageSize} 人`}</small></div>
+      <div className="points-list-meta"><span>{state.q ? "搜索结果" : state.scope === "all" ? "积分总览" : currentEvent?.shortTitle} · 共 <b>{pageData.filteredTotal}</b> 人</span><small>{listLoading ? "正在更新…" : `每页 ${pageData.pageSize} 人 · 已读取结果保留在当前会话`}</small></div>
       <div className={listLoading ? "points-table-wrap refreshing" : "points-table-wrap"}><table className="points-table"><thead><tr><th>序号</th><th>排名</th><th>球员姓名</th><th>组别</th><th>参加赛事</th><th>奖金</th><th>积分</th><th>查看</th></tr></thead><tbody>
-        {pageData.items.map((player, index) => <tr key={player.id}><td>{(state.page - 1) * pageData.pageSize + index + 1}</td><td><b className="points-rank">{player.rank}</b></td><td><strong>{player.displayName}</strong></td><td>{value(player.groupName)}</td><td>{player.eventCount} 站</td><td>{money(player.prizeCents)}</td><td><b className="points-value">{player.points}</b></td><td><button type="button" className="points-open" onClick={() => void loadDetail(player.id)}>查看</button></td></tr>)}
+        {pageData.items.map((player, index) => <tr key={player.id}><td>{(state.page - 1) * pageData.pageSize + index + 1}</td><td><b className="points-rank">{player.rank}</b></td><td><strong>{player.displayName}</strong></td><td>{value(player.groupName)}</td><td>{player.eventCount} 站</td><td>{money(player.prizeCents)}</td><td><b className="points-value">{player.points}</b></td><td><button type="button" className="points-open" disabled={listLoading} onClick={() => { void loadDetail(player.id); }}>查看</button></td></tr>)}
         {!pageData.items.length && <tr><td colSpan={8}><div className="points-empty">没有找到符合当前条件的积分记录。</div></td></tr>}
       </tbody></table></div>
-      {totalPages > 1 && <nav className="points-pagination" aria-label="积分排名分页"><button type="button" disabled={state.page <= 1 || listLoading} onClick={() => void loadList({ ...state, page: Math.max(1, state.page - 1) })}>上一页</button><span>第 {Math.min(state.page, totalPages)} / {totalPages} 页</span><button type="button" disabled={state.page >= totalPages || listLoading} onClick={() => void loadList({ ...state, page: Math.min(totalPages, state.page + 1) })}>下一页</button></nav>}
+      {totalPages > 1 && <nav className="points-pagination" aria-label="积分排名分页"><button type="button" disabled={state.page <= 1 || listLoading} onClick={() => { void loadList({ ...state, page: Math.max(1, state.page - 1) }); }}>上一页</button><span>第 {Math.min(state.page, totalPages)} / {totalPages} 页</span><button type="button" disabled={state.page >= totalPages || listLoading} onClick={() => { void loadList({ ...state, page: Math.min(totalPages, state.page + 1) }); }}>下一页</button></nav>}
     </section>
 
-    {selectedId && <DetailFrame summary={selectedSummary} detail={detail} loading={detailLoading} error={detailError} onClose={closeDetail} onRetry={() => void loadDetail(selectedId, true)} />}
+    {selectedId && <DetailFrame summary={selectedSummary} detail={detail} loading={detailLoading} error={detailError} onClose={closeDetail} onRetry={() => { void loadDetail(selectedId, true); }} />}
   </main>;
 }
