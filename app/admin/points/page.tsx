@@ -5,6 +5,7 @@ import AdminWorkspaceShell from "../admin-workspace-shell";
 import { getAdminViewer } from "../admin-viewer";
 import { PointsRankingWorkspace } from "./points-client";
 import "./points.css";
+import "./points-rule-extra.css";
 
 export const dynamic = "force-dynamic";
 
