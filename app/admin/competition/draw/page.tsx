@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
-import { getAdminNavigationEvents } from "@/db/admin-ui";
+import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
 import { type DrawPhaseCode } from "@/db/draw-engine";
 import { getCompetitionDrawWorkspaceData } from "@/db/competition-draw-workspace";
 import { getMainStageWorkspaceData, isMainPhase } from "@/db/main-stage-engine";
@@ -29,11 +29,11 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
   const viewer = await getAdminViewer();
   if (!viewer) redirect("/admin/login");
   const query = await searchParams;
-  const events = await getAdminNavigationEvents(viewer.username);
+  const events = await getAdminNavigationEventsForPrincipal(viewer);
   const eventId = events.some((event) => event.id === query.event) ? String(query.event) : events[0]?.id;
   if (!eventId) redirect("/admin/events");
   const phaseCode = (["qualifier-one", "qualifier-two", "main-one", "main-two"].includes(String(query.phase)) ? query.phase : "qualifier-one") as DrawPhaseCode;
-  const context = await getCompetitionContextData(viewer.username, eventId);
+  const context = await getCompetitionContextData(viewer, eventId);
 
   const shell = (child: ReactNode, groupId: string, phaseTitle: string) => <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="抽签与签表" pageHint="竞赛执行 · 当前组别与阶段" currentEventId={eventId} eventScoped competitionTool="overview">
     <CompetitionContextBar eventId={eventId} eventTitle={context.event.shortTitle} groups={context.groups} selectedGroupId={groupId} basePath="/admin/competition/draw" phases={PHASES} selectedPhase={phaseCode} eyebrow="抽签与签表" title={`${context.groups.find((group) => group.id === groupId)?.name || "当前组别"} · ${phaseTitle}`} description="抽签草稿只保存在后台；用户端始终保持上一版正式签表，直到再次点击发布更新。四个阶段使用同一套组别、阶段切换逻辑。" />
