@@ -6,22 +6,112 @@ import { useState } from "react";
 import { useAdminActionDialog } from "../admin-action-dialog";
 import { eventStatusLabel } from "../admin-status";
 
-export type EventRow = { id: string; stationNo: number; shortTitle: string; city: string; venueName: string; startDate: string; endDate: string; status: string; publishStatus: string; publicationCount: number };
-function LoadingEventCard({ index }: { index: number }) { return <article aria-busy="true"><header><span>第 — 站</span><b>状态读取中</b></header><h2>赛事名称正在读取</h2><p>城市 · 场馆正在读取</p><dl><div><dt>比赛时间</dt><dd>—</dd></div><div><dt>前端状态</dt><dd>正在读取</dd></div><div><dt>发布模块</dt><dd>— / 6</dd></div></dl><div className="event-settings-card-actions"><Link href="/admin/events" tabIndex={-1}>赛事设置 →</Link><Link href="/admin/content" tabIndex={-1}>内容发布 →</Link><Link href="/admin/competition" tabIndex={-1}>竞赛执行 →</Link></div><span hidden>{index}</span></article>; }
+export type EventRow = {
+  id: string;
+  stationNo: number;
+  shortTitle: string;
+  fullTitle: string;
+  city: string;
+  venueName: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  publishStatus: string;
+  isHidden: boolean;
+  groupNames: string;
+};
+
+function LoadingCard({ index }: { index: number }) {
+  return <article className="event-v2-card loading" aria-busy="true"><div className="event-v2-card-top"><span>第 — 站</span><b>读取中</b></div><h3>赛事名称正在读取</h3><p>城市 · 比赛日期 · 参赛组别</p><div className="event-v2-card-actions"><span>赛事设置</span><span>赛事运营</span><span>竞赛执行</span></div><span hidden>{index}</span></article>;
+}
 
 export default function EventListClient({ events, canDelete, loading = false }: { events: EventRow[]; canDelete: boolean; loading?: boolean }) {
   const router = useRouter();
   const [workingId, setWorkingId] = useState("");
   const [message, setMessage] = useState("");
   const { ask, dialog } = useAdminActionDialog();
+
+  const lifecycle = async (event: EventRow, action: "hide" | "show" | "archive") => {
+    if (loading || workingId) return;
+    if (action === "archive") {
+      const ok = await ask({
+        title: `归档“${event.shortTitle}”`,
+        description: "归档后赛事进入历史只读状态，赛事管理、赛事运营和竞赛结果都不能继续修改，且不能删除。",
+        confirmLabel: "确认归档",
+        tone: "danger",
+      });
+      if (!ok) return;
+    }
+    setWorkingId(event.id); setMessage("");
+    try {
+      const response = await fetch(`/api/admin/events/${encodeURIComponent(event.id)}/lifecycle`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "赛事状态修改失败。");
+      setMessage(action === "hide" ? "赛事已标记为前端隐藏。" : action === "show" ? "赛事已恢复前端显示。" : "赛事已归档为只读状态。");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "赛事状态修改失败。");
+    } finally { setWorkingId(""); }
+  };
+
   const remove = async (event: EventRow) => {
-    if (loading) return;
-    const ok = await ask({ title: `删除“${event.shortTitle}”`, description: "只有没有报名和比赛数据的误建赛事可以直接删除。这个操作不可撤销。", confirmLabel: "确认删除赛事", tone: "danger" });
+    if (loading || workingId) return;
+    const ok = await ask({
+      title: `删除“${event.shortTitle}”`,
+      description: "删除只用于误建赛事。已开始执行、已有报名或比赛数据、以及已归档赛事都不能删除。这个操作不可撤销。",
+      confirmLabel: "确认删除赛事",
+      tone: "danger",
+    });
     if (!ok) return;
     setWorkingId(event.id); setMessage("");
-    try { const response = await fetch(`/api/admin/events/${encodeURIComponent(event.id)}`, { method: "DELETE" }); const payload = await response.json() as { error?: string }; if (!response.ok) throw new Error(payload.error || "赛事删除失败。"); setMessage("赛事已删除。"); router.refresh(); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "赛事删除失败。"); }
-    finally { setWorkingId(""); }
+    try {
+      const response = await fetch(`/api/admin/events/${encodeURIComponent(event.id)}`, { method: "DELETE" });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "赛事删除失败。");
+      setMessage("误建赛事已删除。");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "赛事删除失败。");
+    } finally { setWorkingId(""); }
   };
-  return <>{message && <div className="event-settings-message">{message}</div>}<section className="event-settings-index-grid">{loading ? Array.from({ length: 4 }, (_, index) => <LoadingEventCard key={index} index={index} />) : events.map((event) => <article key={event.id}><header><span>第 {event.stationNo} 站</span><b>{eventStatusLabel(event.status)}</b></header><h2>{event.shortTitle}</h2><p>{event.city} · {event.venueName || "场馆待设置"}</p><dl><div><dt>比赛时间</dt><dd>{event.startDate} — {event.endDate}</dd></div><div><dt>前端状态</dt><dd>{event.publishStatus === "published" ? "已发布" : "草稿"}</dd></div><div><dt>发布模块</dt><dd>{event.publicationCount} / 6</dd></div></dl><div className="event-settings-card-actions"><Link href={`/admin/events/${event.id}`}>赛事设置 →</Link><Link href={`/admin/content/${event.id}`}>内容发布 →</Link><Link href={`/admin/competition?event=${encodeURIComponent(event.id)}`}>竞赛执行 →</Link></div>{canDelete && <div className="event-settings-danger"><button type="button" disabled={workingId === event.id} onClick={() => remove(event)}>{workingId === event.id ? "正在删除…" : "删除误建赛事"}</button><span>已有报名或比赛数据的赛事会被系统阻止删除。</span></div>}</article>)}</section>{!loading && dialog}</>;
+
+  const cards = loading ? Array.from({ length: 3 }, (_, index) => <LoadingCard key={index} index={index} />) : events.map((event) => {
+    const archived = event.status === "archived";
+    const busy = workingId === event.id;
+    return <article className={archived ? "event-v2-card archived" : "event-v2-card"} key={event.id}>
+      <div className="event-v2-card-top">
+        <div className="event-v2-card-tags"><span>第 {event.stationNo} 站</span><small>2026赛季</small></div>
+        <div className="event-v2-card-state"><b>{eventStatusLabel(event.status)}</b>{event.isHidden && <em>前端隐藏</em>}</div>
+      </div>
+      <h3>{event.fullTitle || event.shortTitle}</h3>
+      <p className="event-v2-meta"><span>{event.city}</span><i /> <span>{event.startDate} — {event.endDate}</span>{event.groupNames && <><i /><span>{event.groupNames}</span></>}</p>
+
+      <div className="event-v2-card-bottom">
+        <div className="event-v2-card-actions">
+          <Link className="primary" href={`/admin/events/${event.id}`}>{archived ? "查看赛事" : "编辑赛事"}</Link>
+          {!archived && <Link href={`/admin/content/${event.id}`}>赛事运营</Link>}
+          {!archived && <Link href={`/admin/competition?event=${encodeURIComponent(event.id)}`}>竞赛执行</Link>}
+        </div>
+        {!archived && <details className="event-v2-more">
+          <summary>更多</summary>
+          <div>
+            <button type="button" disabled={busy} onClick={() => lifecycle(event, event.isHidden ? "show" : "hide")}>{event.isHidden ? "恢复前端显示" : "隐藏赛事"}</button>
+            <button type="button" disabled={busy || event.status !== "finished"} title={event.status !== "finished" ? "只有已结束赛事可以归档" : undefined} onClick={() => lifecycle(event, "archive")}>归档赛事</button>
+            {canDelete && <button className="danger" type="button" disabled={busy} onClick={() => remove(event)}>删除误建赛事</button>}
+          </div>
+        </details>}
+      </div>
+    </article>;
+  });
+
+  return <>
+    {message && <div className="event-v2-message">{message}</div>}
+    <section className="event-v2-list">{cards}</section>
+    {!loading && !events.length && <section className="event-v2-empty"><strong>还没有赛事</strong><p>创建第一场赛事后，赛事运营和竞赛执行才会建立对应工作空间。</p><Link href="/admin/events/new">创建新赛事</Link></section>}
+    {!loading && dialog}
+  </>;
 }
