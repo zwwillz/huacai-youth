@@ -31,7 +31,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // Structure first: the dashboard itself has no blocking business-data read.
   // Its real frame renders immediately and only the live metrics/recent events
   // are filled by a small private endpoint after paint.
-  if (section === "dashboard") return <DashboardClient viewerRole={viewer.role} />;
+  if (section === "dashboard") return <DashboardClient viewerKey={viewer.id} viewerRole={viewer.role} />;
 
   // These legacy secondary sections still use their existing server payload.
   // They can be migrated to the same structure-first pattern when their UI is
