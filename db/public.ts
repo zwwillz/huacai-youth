@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql as drizzleSql } from "drizzle-orm";
 import { getDb, getSqlClient } from "./index";
 import {
   eventDetails,
@@ -75,7 +75,9 @@ function locationPrefix(parts: Array<string | null | undefined>) {
 }
 
 function asStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && !item.startsWith("@@rule-standard:") && !item.startsWith("@@prize-note:"))
+    : [];
 }
 
 function asStringRows(value: unknown): string[][] {
@@ -101,7 +103,7 @@ export async function getPublishedEventIds(): Promise<string[]> {
   const rows = await db
     .select({ id: events.id })
     .from(events)
-    .where(eq(events.publishStatus, "published"))
+    .where(and(eq(events.publishStatus, "published"), drizzleSql`coalesce(is_hidden, false) = false`))
     .orderBy(desc(events.year), desc(events.stationNo));
   return rows.map((row) => row.id);
 }
@@ -144,7 +146,7 @@ export async function getPublicSiteData(): Promise<EventData> {
     .from(events)
     .leftJoin(venues, eq(events.venueId, venues.id))
     .leftJoin(eventDetails, eq(events.id, eventDetails.eventId))
-    .where(eq(events.publishStatus, "published"))
+    .where(and(eq(events.publishStatus, "published"), drizzleSql`coalesce(is_hidden, false) = false`))
     .orderBy(desc(events.year), desc(events.stationNo));
 
   if (!eventRows.length) return { stations: [], matches: [], players: [] };
