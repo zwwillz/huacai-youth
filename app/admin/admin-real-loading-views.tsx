@@ -1,12 +1,10 @@
 "use client";
 
-import type { ContentManagementData } from "@/db/content-management";
 import type { EventManagementData } from "@/db/event-management";
 import type { AccountManagementRow } from "@/db/account-admin";
 import type { PlayerPointsPageData } from "@/db/player-points";
 import EventSettingsIndexView from "./events/event-settings-index-view";
 import EventManagementClient from "./events/event-management-client";
-import ContentManagementClient from "./content/content-management-client";
 import { PlayerManagementWorkspace } from "./players/player-management-client";
 import { PointsRankingWorkspace } from "./points/points-client";
 import AccountManagementClient from "./accounts/account-management-client";
@@ -34,30 +32,6 @@ function placeholderEvent(eventId: string): EventManagementData {
   };
 }
 
-function placeholderContent(eventId: string): ContentManagementData {
-  const modules = [
-    ["overview", "赛事概览"], ["regulation", "竞赛规程"], ["documents", "赛事文件"],
-    ["schedule", "赛程"], ["matches", "对阵与比分"], ["rankings", "排名"],
-  ];
-  return {
-    event: { id: eventId, shortTitle: "当前赛事", fullTitle: "赛事名称正在读取", city: "城市读取中", status: "draft", publishStatus: "draft", summary: "赛事简介正在读取…" },
-    publications: modules.map(([moduleType, moduleTitle], index) => ({ id: `loading-${index}`, moduleType, moduleTitle, versionNo: 0, status: "draft", publishedAt: "" })),
-    details: {
-      competitionFormat: [["资格赛第一场", "正在读取", "—", "—"], ["资格赛第二场", "正在读取", "—", "—"], ["正赛第一阶段", "正在读取", "—", "—"], ["正赛第二阶段", "正在读取", "—", "—"]],
-      drawRules: ["抽签规则正在读取…", "种子与递补规则正在读取…"],
-      prizes: { 少年组: [["冠军", "—"], ["亚军", "—"], ["季军", "—"]], 青年组: [["冠军", "—"], ["亚军", "—"], ["季军", "—"]] },
-    },
-    documents: [
-      { id: "loading-regulation", documentType: "regulation", title: "竞赛规程", url: "", isPublished: false },
-      { id: "loading-referee", documentType: "referee_list", title: "裁判员名单", url: "", isPublished: false },
-    ],
-    guides: [
-      { id: "loading-transport", guideType: "transport", title: "交通住宿攻略", body: "", publishStatus: "draft" },
-      { id: "loading-clothing", guideType: "clothing", title: "服装要求", body: "", publishStatus: "draft" },
-    ],
-  };
-}
-
 export function EventsLoadingView({ canDelete = false }: { canDelete?: boolean }) {
   return <EventSettingsIndexView events={null} canDelete={canDelete} />;
 }
@@ -67,7 +41,19 @@ export function EventSettingsLoadingView({ eventId = "" }: { eventId?: string })
 }
 
 export function ContentLoadingView({ eventId = "" }: { eventId?: string }) {
-  return <div aria-busy="true" style={{ pointerEvents: "none" }}><ContentManagementClient initialData={placeholderContent(eventId)} initialEventData={placeholderEvent(eventId)} /></div>;
+  return <main className="content-workspace" aria-busy="true" style={{ pointerEvents: "none" }}>
+    <div className="content-layout">
+      <aside className="content-sidebar">
+        <small>当前赛事</small><h1>赛事内容正在读取</h1><p>{eventId ? "正在同步当前赛事资料" : "正在进入内容发布"}</p>
+        <dl className="content-side-status"><div><dt>赛事概览</dt><dd>读取中</dd></div><div><dt>竞赛规程</dt><dd>读取中</dd></div></dl>
+        <div className="content-side-note"><strong>内容发布</strong><p>页面结构已就绪，赛事资料会在读取完成后直接填入当前页面，不再切换旧版编辑界面。</p></div>
+      </aside>
+      <section className="content-main">
+        <section className="content-head-card content-publishing-head"><div><small>CONTENT PUBLISHING</small><h2>内容发布</h2><p>赛事概览与竞赛规程正在读取。</p><div className="content-top-tabs"><button className="active" type="button">赛事概览</button><button type="button">竞赛规程</button></div></div><span className="draft">读取中</span></section>
+        {[0,1,2].map((item) => <section className="content-card content-loading-card" key={item}><div className="content-loading-lines"><i /><i /><i /></div></section>)}
+      </section>
+    </div>
+  </main>;
 }
 
 export function PlayersLoadingView({ viewerRole = "committee", eventId = "" }: { viewerRole?: string; eventId?: string }) {
