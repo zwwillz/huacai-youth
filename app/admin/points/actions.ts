@@ -16,7 +16,7 @@ export async function updatePointsRuleAction(formData: FormData) {
   const year = Math.trunc(number(formData, "year", new Date().getFullYear()));
   let errorMessage = "";
   try {
-    await updatePlayerPointsRule(viewer.username, {
+    await updatePlayerPointsRule(viewer, {
       year,
       participationPoints: number(formData, "participationPoints", 10),
       prizeUnitYuan: number(formData, "prizeUnitYuan", 100),
