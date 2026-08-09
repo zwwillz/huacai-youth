@@ -2,30 +2,32 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { eventStatusLabel } from "./admin-status";
 import type { AdminDashboardSummary } from "@/db/admin-structure-first";
 
-type Props = { viewerRole: string };
+type Props = { viewerKey: string; viewerRole: string };
 
 type CachedSummary = { data: AdminDashboardSummary; at: number };
-let persistedSummary: CachedSummary | null = null;
-let summaryRequest: Promise<AdminDashboardSummary> | null = null;
+const persistedSummaries = new Map<string, CachedSummary>();
+const summaryRequests = new Map<string, Promise<AdminDashboardSummary>>();
 
-async function loadSummary() {
-  if (summaryRequest) return summaryRequest;
-  summaryRequest = fetch("/api/admin/dashboard-summary", { cache: "no-store" })
+async function loadSummary(viewerKey: string) {
+  const existing = summaryRequests.get(viewerKey);
+  if (existing) return existing;
+  const request = fetch("/api/admin/dashboard-summary", { cache: "no-store" })
     .then(async (response) => {
       const payload = await response.json() as { data?: AdminDashboardSummary; error?: string };
       if (response.status === 401) {
+        persistedSummaries.delete(viewerKey);
         window.location.assign("/admin/login");
         throw new Error("登录状态已失效，请重新登录。");
       }
       if (!response.ok || !payload.data) throw new Error(payload.error || "工作台数据读取失败。");
-      persistedSummary = { data: payload.data, at: Date.now() };
+      persistedSummaries.set(viewerKey, { data: payload.data, at: Date.now() });
       return payload.data;
     })
-    .finally(() => { summaryRequest = null; });
-  return summaryRequest;
+    .finally(() => { summaryRequests.delete(viewerKey); });
+  summaryRequests.set(viewerKey, request);
+  return request;
 }
 
 function Metric({ label, value, hint, loading }: { label: string; value?: number; hint: string; loading: boolean }) {
@@ -36,19 +38,21 @@ function Metric({ label, value, hint, loading }: { label: string; value?: number
   </article>;
 }
 
-export default function DashboardClient({ viewerRole }: Props) {
-  const [summary, setSummary] = useState<AdminDashboardSummary | null>(() => persistedSummary?.data ?? null);
-  const [loading, setLoading] = useState(!persistedSummary);
+export default function DashboardClient({ viewerKey, viewerRole }: Props) {
+  const cached = persistedSummaries.get(viewerKey)?.data ?? null;
+  const [summary, setSummary] = useState<AdminDashboardSummary | null>(() => cached);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
-      setError("");
-      if (!persistedSummary) setLoading(true);
       try {
-        const next = await loadSummary();
-        if (!cancelled) setSummary(next);
+        const next = await loadSummary(viewerKey);
+        if (!cancelled) {
+          setSummary(next);
+          setError("");
+        }
       } catch (failure) {
         if (!cancelled) setError(failure instanceof Error ? failure.message : "工作台数据读取失败。");
       } finally {
@@ -57,7 +61,7 @@ export default function DashboardClient({ viewerRole }: Props) {
     };
     void refresh();
     return () => { cancelled = true; };
-  }, []);
+  }, [viewerKey]);
 
   const recentEvents = summary?.recentEvents ?? [];
   const currentEventId = recentEvents[0]?.id;
@@ -92,7 +96,7 @@ export default function DashboardClient({ viewerRole }: Props) {
           <span>{event.stationNo}</span>
           <div><strong>{event.shortTitle}</strong><small>{event.city} · {event.venueName || "场馆待设置"} · {event.startDate} — {event.endDate}</small></div>
           <Link prefetch={false} href={eventHref(event.id)}>{viewerRole === "referee" ? "录入比分" : "继续处理"}</Link>
-        </div>) : loading ? <div className="admin-home-event-loading" aria-label="正在读取最近赛事">{Array.from({ length: 3 }, (_, index) => <i key={index} />)}</div> : <div className="admin-simple-empty">{viewerRole === "system_admin" ? "尚未创建赛事。" : "当前账号尚未分配赛事，请联系系统管理员。"}</div>}
+        </div>) : !summary && loading ? <div className="admin-home-event-loading" aria-label="正在读取最近赛事">{Array.from({ length: 3 }, (_, index) => <i key={index} />)}</div> : !summary ? <div className="admin-simple-empty">最近赛事暂未读取，常用入口仍可直接使用。</div> : <div className="admin-simple-empty">{viewerRole === "system_admin" ? "尚未创建赛事。" : "当前账号尚未分配赛事，请联系系统管理员。"}</div>}
       </article>
 
       <article className="admin-home-panel">
