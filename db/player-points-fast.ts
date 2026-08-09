@@ -59,7 +59,7 @@ async function loadRule(requestedYear?: number): Promise<PlayerPointsRule> {
   const row = rows[0];
   return row
     ? { year: row.year, participationPoints: row.participation_points, prizeUnitYuan: row.prize_unit_yuan, prizePointsPerUnit: row.prize_points_per_unit }
-    : { year, participationPoints: 10, prizeUnitYuan: 100, prizePointsPerUnit: 1 };
+    : { year, participationPoints: 1, prizeUnitYuan: 100, prizePointsPerUnit: 1 };
 }
 
 async function resolveWorkspace(inputPrincipal: AdminPrincipalInput, requestedEventId?: string | null, requestedScope?: string, knownEvents?: AdminNavEvent[]) {
@@ -110,7 +110,7 @@ export async function getPlayerPointsPageFast(inputPrincipal: AdminPrincipalInpu
           p.id,p.full_name,
           case when nc.name_count>1 then p.full_name || ' ' || coalesce(p.identity_no_last4,upper(right(nullif(p.identity_no_masked,''),4)),'待补') else p.full_name end as display_name,
           eg.name as group_name,1::int as event_count,coalesce(ps.prize_cents,0)::bigint as prize_cents,
-          (${rule.participationPoints} + floor(coalesce(ps.prize_cents,0)::numeric / ${unitCents})::int * ${rule.prizePointsPerUnit})::int as total_points,
+          (${rule.participationPoints} + (coalesce(ps.prize_cents,0)::numeric / ${unitCents}) * ${rule.prizePointsPerUnit}) as total_points,
           coalesce(p.player_code,'') as player_code
         from public.registrations r
         join public.players p on p.id=r.player_id and p.merged_into_player_id is null
@@ -134,7 +134,7 @@ export async function getPlayerPointsPageFast(inputPrincipal: AdminPrincipalInpu
   }
 
   const rows = await sql<PointsRow[]>`
-    with scoped_regs as (
+    with scoped_regs as materialized (
       select r.player_id,r.event_id,r.group_id,e.start_date
       from public.registrations r join public.events e on e.id=r.event_id
       where r.status='approved' and e.year=${rule.year}
@@ -155,7 +155,7 @@ export async function getPlayerPointsPageFast(inputPrincipal: AdminPrincipalInpu
       select p.id,p.full_name,
         case when nc.name_count>1 then p.full_name || ' ' || coalesce(p.identity_no_last4,upper(right(nullif(p.identity_no_masked,''),4)),'待补') else p.full_name end as display_name,
         lg.group_name,rs.event_count,coalesce(ps.prize_cents,0)::bigint as prize_cents,
-        (rs.event_count * ${rule.participationPoints} + floor(coalesce(ps.prize_cents,0)::numeric / ${unitCents})::int * ${rule.prizePointsPerUnit})::int as total_points,
+        (rs.event_count * ${rule.participationPoints} + (coalesce(ps.prize_cents,0)::numeric / ${unitCents}) * ${rule.prizePointsPerUnit}) as total_points,
         coalesce(p.player_code,'') as player_code
       from reg_stats rs
       join public.players p on p.id=rs.player_id and p.merged_into_player_id is null
@@ -232,7 +232,7 @@ export async function getPlayerPointsDetailFast(inputPrincipal: AdminPrincipalIn
       groupName: row.group_name,
       placementLabel: row.placement_label,
       prizeCents,
-      points: rule.participationPoints + Math.floor(prizeCents / unitCents) * rule.prizePointsPerUnit,
+      points: rule.participationPoints + (prizeCents / unitCents) * rule.prizePointsPerUnit,
       displayOrder: row.display_order,
     };
   });
