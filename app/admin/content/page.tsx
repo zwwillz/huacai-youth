@@ -1,9 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
 import { getAdminViewer } from "../admin-viewer";
 import AdminWorkspaceShell from "../admin-workspace-shell";
-import "../events/event-settings-index.css";
 
 export const dynamic = "force-dynamic";
 
@@ -15,20 +13,10 @@ export default async function ContentPublishingIndexPage() {
   }
 
   const events = await getAdminNavigationEventsForPrincipal(viewer);
+  const target = events.find((event) => event.status !== "archived") ?? events[0];
+  if (target) redirect(`/admin/content/${target.id}`);
 
-  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="content" pageTitle="内容发布" pageHint="赛事运营 · 请选择赛事" eventScoped>
-    <main className="event-settings-index">
-      <header className="event-settings-index-head">
-        <div><small>静态内容发布</small><h1>选择赛事</h1><p>赛事创建后，才会进入本站的内容发布。这里维护赛事简介、竞赛规程、赛事文件和参赛友好提示；赛程签表、对阵、比分和排名交给“竞赛执行”。</p></div>
-        <span>{events.length} 场赛事</span>
-      </header>
-      <section className="event-settings-index-grid">{events.map((event) => <article key={event.id}>
-        <header><span>第 {event.stationNo} 站</span><b>{event.publishStatus === "published" ? "赛事已公开" : "赛事草稿"}</b></header>
-        <h2>{event.shortTitle}</h2>
-        <p>{event.city} · {event.venueName || "场馆待设置"}</p>
-        <dl><div><dt>比赛时间</dt><dd>{event.startDate} — {event.endDate}</dd></div><div><dt>赛事状态</dt><dd>{event.status}</dd></div><div><dt>前端状态</dt><dd>{event.publishStatus === "published" ? "已发布" : "草稿"}</dd></div></dl>
-        <div className="event-settings-card-actions"><Link href={`/admin/content/${event.id}`}>进入内容发布 →</Link><Link href={`/admin/content/${event.id}/guides`}>参赛提示 →</Link><Link href={`/admin/events/${event.id}`}>赛事设置 →</Link></div>
-      </article>)}</section>
-    </main>
+  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="content" pageTitle="内容发布" pageHint="赛事运营" eventScoped>
+    <main className="backend-state"><div className="backend-state-logo">赛</div><small>内容发布</small><h1>还没有可以维护的赛事</h1><p>请先在“赛事管理”中创建赛事，之后会直接进入对应赛事的内容发布页面。</p><a href="/admin/events/new">创建新赛事</a></main>
   </AdminWorkspaceShell>;
 }
