@@ -14,6 +14,17 @@ const EVENT_STATUS: Record<string, string> = {
   cancelled: "已取消",
 };
 
+const ACTIVE_PRIORITY: Record<string, number> = {
+  in_progress: 50,
+  registration_open: 40,
+  upcoming: 30,
+  registration_closed: 25,
+  finished: 20,
+  archived: 10,
+  draft: 0,
+  cancelled: -10,
+};
+
 function visualId(eventId: string) {
   return eventId.replace(/^event_/, "").replace(/_\d{4}$/, "");
 }
@@ -51,7 +62,7 @@ function locationPrefix(parts: Array<string | null | undefined>) {
   return [...new Set(values)].join("");
 }
 
-function loadingStation(row: {
+type HomeEventRow = {
   id: string;
   year: number;
   stationNo: number;
@@ -67,7 +78,30 @@ function loadingStation(row: {
   venueCity: string | null;
   venueDistrict: string | null;
   venueAddress: string | null;
-}, index: number): Station {
+};
+
+function activeEventIds(rows: HomeEventRow[]) {
+  const byYear = new Map<number, HomeEventRow[]>();
+  for (const row of rows) byYear.set(row.year, [...(byYear.get(row.year) ?? []), row]);
+  const ids = new Set<string>();
+  for (const yearRows of byYear.values()) {
+    const selected = [...yearRows].sort((a, b) => {
+      const priority = (ACTIVE_PRIORITY[b.status] ?? -20) - (ACTIVE_PRIORITY[a.status] ?? -20);
+      if (priority) return priority;
+      if (a.status === "finished" || a.status === "archived") {
+        const dateOrder = b.endDate.localeCompare(a.endDate);
+        if (dateOrder) return dateOrder;
+      }
+      const startOrder = b.startDate.localeCompare(a.startDate);
+      if (startOrder) return startOrder;
+      return b.stationNo - a.stationNo;
+    })[0];
+    if (selected) ids.add(selected.id);
+  }
+  return ids;
+}
+
+function loadingStation(row: HomeEventRow, active: boolean): Station {
   const id = visualId(row.id);
   const prefix = locationPrefix([row.venueProvince, row.venueCity, row.venueDistrict]);
   const venuePrefix = row.venueDistrict?.includes("/") ? row.city : prefix;
@@ -80,7 +114,7 @@ function loadingStation(row: {
     city: `${row.city}站`,
     shortCity: shortCity(row.city),
     status: EVENT_STATUS[row.status] ?? "状态待确认",
-    active: index === 0,
+    active,
     title: row.title,
     sponsor: "中国华彩十六球青少年系列赛",
     coverImage: row.coverImage || "",
@@ -132,8 +166,9 @@ export async function getPublicHomeData(): Promise<EventData> {
     .where(and(eq(events.publishStatus, "published"), sql`coalesce(is_hidden, false) = false`))
     .orderBy(desc(events.year), desc(events.stationNo));
 
+  const activeIds = activeEventIds(rows);
   return {
-    stations: rows.map((row, index) => loadingStation(row, index)),
+    stations: rows.map((row) => loadingStation(row, activeIds.has(row.id))),
     matches: [],
     players: [],
   };
