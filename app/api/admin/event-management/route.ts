@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     revalidateTag("admin-navigation-events", { expire: 0 });
     revalidateTag("public-site", { expire: 0 });
     revalidateTag("public-content", { expire: 0 });
+    revalidateTag(`public-event-detail-${input.eventId}`, { expire: 0 });
     revalidatePath("/");
     return Response.json({ data });
   } catch (error) {
