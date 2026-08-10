@@ -155,9 +155,13 @@ function detailedSnapshotHasContent(value: string | null) {
 export function parseMasterScheduleSnapshot(value: string | null): MasterScheduleSnapshot | null {
   if (!value) return null;
   try {
-    const parsed = JSON.parse(value) as { masterSchedule?: Partial<MasterScheduleSnapshot> } | Partial<MasterScheduleSnapshot>;
-    const master = "masterSchedule" in parsed ? parsed.masterSchedule : parsed;
-    if (!master || !Array.isArray(master.stages)) return null;
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+    const parsedRecord = parsed as Record<string, unknown>;
+    const candidate = "masterSchedule" in parsedRecord ? parsedRecord.masterSchedule : parsedRecord;
+    if (!candidate || typeof candidate !== "object") return null;
+    const master = candidate as Partial<MasterScheduleSnapshot>;
+    if (!Array.isArray(master.stages)) return null;
     const stages = master.stages.flatMap((raw) => {
       if (!raw || typeof raw !== "object") return [];
       const row = raw as Partial<MasterScheduleStage>;
