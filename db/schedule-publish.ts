@@ -42,6 +42,7 @@ export type SchedulePublishData = {
   detailedSchedule: {
     status: "draft" | "published";
     hasSnapshot: boolean;
+    hasContent: boolean;
   };
   stages: MasterScheduleStage[];
 };
@@ -141,6 +142,16 @@ function cleanTags(value: unknown): string[] {
   return [...unique].slice(0, 8);
 }
 
+function detailedSnapshotHasContent(value: string | null) {
+  if (!value) return false;
+  try {
+    const snapshot = JSON.parse(value) as { matches?: unknown[] };
+    return Array.isArray(snapshot.matches) && snapshot.matches.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export function parseMasterScheduleSnapshot(value: string | null): MasterScheduleSnapshot | null {
   if (!value) return null;
   try {
@@ -190,16 +201,22 @@ function mergeFallbackStages(phases: PhaseRow[], competitionFormat: unknown): Ma
   });
 }
 
-function validateStages(stages: MasterScheduleStage[]) {
-  if (stages.length !== MASTER_SCHEDULE_CODES.length) throw new Error("主赛程需要保留资格赛两场和正赛两个阶段。\n");
+function validateStructure(stages: MasterScheduleStage[]) {
+  if (stages.length !== MASTER_SCHEDULE_CODES.length) throw new Error("主赛程需要保留资格赛两场和正赛两个阶段。");
   const seen = new Set<string>();
   for (const stage of stages) {
     if (!isCode(stage.code) || seen.has(stage.code)) throw new Error("赛程阶段结构不正确，请刷新后重试。");
     seen.add(stage.code);
-    if (!stage.title.trim()) throw new Error("请填写每个阶段的名称。");
-    if (!stage.dateLabel.trim()) throw new Error(`请填写“${stage.title}”的比赛时间。`);
-    if (!stage.advancementText.trim()) throw new Error(`请填写“${stage.title}”的晋级人数说明。`);
-    if (!stage.u16RaceLabel.trim() || !stage.u20RaceLabel.trim()) throw new Error(`请填写“${stage.title}”少年组和青年组的局数标签。`);
+    if (!stage.title.trim()) throw new Error("请填写每个阶段的名称后再保存。");
+  }
+}
+
+function validatePublishReady(stages: MasterScheduleStage[]) {
+  validateStructure(stages);
+  for (const stage of stages) {
+    if (!stage.dateLabel.trim()) throw new Error(`请填写“${stage.title}”的比赛时间后再发布。`);
+    if (!stage.advancementText.trim()) throw new Error(`请填写“${stage.title}”的晋级人数说明后再发布。`);
+    if (!stage.u16RaceLabel.trim() || !stage.u20RaceLabel.trim()) throw new Error(`请填写“${stage.title}”少年组和青年组的局数标签后再发布。`);
   }
 }
 
@@ -213,7 +230,7 @@ async function bundle(inputPrincipal: AdminPrincipalInput, eventId: string) {
   const [eventRows, phases, publicationRows, detailRows] = await Promise.all([
     sql<EventRow[]>`select id,full_title as "fullTitle",short_title as "shortTitle",city,station_no as "stationNo",status from public.events where id=${eventId} limit 1`,
     sql<PhaseRow[]>`select id,code,phase_number as "phaseNumber",title,date_label as "dateLabel",status,sort_order as "sortOrder" from public.event_phases where event_id=${eventId} order by sort_order,code`,
-    sql<PublicationRow[]>`select id,module_type as "moduleType",status,version_no as "versionNo",published_at as "publishedAt",snapshot_json as "snapshotJson",(snapshot_json is not null) as "hasSnapshot" from public.publications where event_id=${eventId} and module_type in (${MASTER_SCHEDULE_MODULE},'schedule')`,
+    sql<PublicationRow[]>`select id,module_type as "moduleType",status,version_no as "versionNo",published_at as "publishedAt",snapshot_json as "snapshotJson",(snapshot_json is not null) as "hasSnapshot" from public.publications where event_id=${eventId} and module_type = any(${[MASTER_SCHEDULE_MODULE, "schedule"]}::text[])`,
     sql<Array<{ competitionFormat: unknown }>>`select competition_format as "competitionFormat" from public.event_details where event_id=${eventId} limit 1`,
   ]);
   const event = eventRows[0];
@@ -239,6 +256,7 @@ export async function getSchedulePublishData(inputPrincipal: AdminPrincipalInput
     detailedSchedule: {
       status: data.detailedPublication?.status === "published" ? "published" : "draft",
       hasSnapshot: Boolean(data.detailedPublication?.hasSnapshot),
+      hasContent: detailedSnapshotHasContent(data.detailedPublication?.snapshotJson ?? null),
     },
     stages: data.stages,
   };
@@ -256,9 +274,10 @@ export async function saveSchedulePublishData(inputPrincipal: AdminPrincipalInpu
     u20RaceLabel: stage.u20RaceLabel.trim().slice(0, 40),
     qualificationNote: stage.qualificationNote.trim().slice(0, 500),
   }));
-  validateStages(stages);
+  validateStructure(stages);
   const data = await bundle(inputPrincipal, input.eventId);
   if (data.event.status === "archived") throw new Error("已归档赛事为历史只读状态，不能继续修改主赛程。");
+  if (data.masterPublication?.status === "published") validatePublishReady(stages);
   const sql = getSqlClient();
   const timestamp = new Date().toISOString();
   const publicationId = data.masterPublication?.id ?? `${input.eventId}_publication_${MASTER_SCHEDULE_MODULE}`;
@@ -289,6 +308,7 @@ export async function saveSchedulePublishData(inputPrincipal: AdminPrincipalInpu
 export async function setSchedulePublishStatus(inputPrincipal: AdminPrincipalInput, eventId: string, status: "draft" | "published"): Promise<SchedulePublishData> {
   const data = await bundle(inputPrincipal, eventId);
   if (data.event.status === "archived") throw new Error("已归档赛事为历史只读状态，不能修改发布状态。");
+  if (status === "published") validatePublishReady(data.stages);
   const sql = getSqlClient();
   const timestamp = new Date().toISOString();
   const publicationId = data.masterPublication?.id ?? `${eventId}_publication_${MASTER_SCHEDULE_MODULE}`;
