@@ -16,6 +16,7 @@ import "./content/content-management.css";
 import "./content/content-extensions.css";
 import "./content/[eventId]/guides/guide-management.css";
 import "./schedule-publish/schedule-publish.css";
+import "./participants/participants.css";
 import "./players/player-management.css";
 import "./players/player-management-performance.css";
 import "./points/points.css";

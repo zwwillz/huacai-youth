@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
-import { getSchedulePublishData } from "@/db/schedule-publish";
+import { getSchedulePublishData, type SchedulePublishData } from "@/db/schedule-publish";
 import AdminWorkspaceShell from "../admin-workspace-shell";
 import { getAdminViewer } from "../admin-viewer";
 import SchedulePublishClient from "./schedule-publish-client";
@@ -22,22 +22,29 @@ export default async function SchedulePublishPage({ searchParams }: { searchPara
   }
 
   const currentEventId = events.some((event) => event.id === query.event) ? String(query.event) : events[0].id;
+  let data: SchedulePublishData | null = null;
+  let loadError = "";
   try {
-    const data = await getSchedulePublishData(viewer, currentEventId);
-    return <AdminWorkspaceShell
-      viewer={{ displayName: viewer.displayName, role: viewer.role }}
-      events={events}
-      active="schedulePublish"
-      pageTitle="赛程发布"
-      pageHint="赛事运营 · 对外主赛程"
-      currentEventId={currentEventId}
-      eventScoped
-    >
-      <SchedulePublishClient initialData={data} />
-    </AdminWorkspaceShell>;
+    data = await getSchedulePublishData(viewer, currentEventId);
   } catch (error) {
+    loadError = error instanceof Error ? error.message : "主赛程读取失败。";
+  }
+
+  if (!data) {
     return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="schedulePublish" pageTitle="赛程发布" pageHint="赛事运营 · 对外主赛程" currentEventId={currentEventId} eventScoped>
-      <main className="backend-state backend-denied"><div className="backend-state-logo">赛</div><small>赛程发布</small><h1>暂时不能打开本站主赛程</h1><p>{error instanceof Error ? error.message : "主赛程读取失败。"}</p><Link href="/admin/events">返回赛事管理</Link></main>
+      <main className="backend-state backend-denied"><div className="backend-state-logo">赛</div><small>赛程发布</small><h1>暂时不能打开本站主赛程</h1><p>{loadError}</p><Link href="/admin/events">返回赛事管理</Link></main>
     </AdminWorkspaceShell>;
   }
+
+  return <AdminWorkspaceShell
+    viewer={{ displayName: viewer.displayName, role: viewer.role }}
+    events={events}
+    active="schedulePublish"
+    pageTitle="赛程发布"
+    pageHint="赛事运营 · 对外主赛程"
+    currentEventId={currentEventId}
+    eventScoped
+  >
+    <SchedulePublishClient initialData={data} />
+  </AdminWorkspaceShell>;
 }

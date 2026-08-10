@@ -4,6 +4,7 @@ import { getCompetitionDrawWorkspaceData } from "@/db/competition-draw-workspace
 import { createQualificationDrawFast } from "@/db/draw-engine-write";
 import { createMainStageDraw, getMainStageWorkspaceData, isMainPhase } from "@/db/main-stage-engine";
 import { assertMainRosterLocked } from "@/db/main-roster-lock-check";
+import { assertParticipantRosterLocked } from "@/db/participant-roster";
 import { markCompetitionModuleDirty } from "@/db/competition-context";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
       const phaseCode = String(body.phaseCode || "qualifier-one") as DrawPhaseCode;
       if (!eventId || !groupId) throw new Error("缺少赛事或组别参数。");
       if (phaseCode === "main-one") await assertMainRosterLocked(eventId, groupId);
+      if (!isMainPhase(phaseCode)) await assertParticipantRosterLocked(eventId, groupId);
       const data = isMainPhase(phaseCode)
         ? await createMainStageDraw(viewer.username, { eventId, groupId, phaseCode })
         : await createQualificationDrawFast(viewer.username, { eventId, groupId, phaseCode, bracketSize: Number(body.bracketSize || 512), divisionSize: Number(body.divisionSize || 32), rateQualifierCount: Number(body.rateQualifierCount || 0), seedsEnabled: Boolean(body.seedsEnabled), seedTargetCount: Number(body.seedTargetCount || 0), seedFillRule: String(body.seedFillRule || "game_win_rate") });
