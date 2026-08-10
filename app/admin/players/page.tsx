@@ -1,15 +1,16 @@
 import { redirect } from "next/navigation";
 import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
-import { getPlayerAdminPageFast } from "@/db/player-admin-fast";
+import { getPlayerArchivePage } from "@/db/player-archive";
 import AdminWorkspaceShell from "../admin-workspace-shell";
 import { getAdminViewer } from "../admin-viewer";
-import { PlayerManagementWorkspace } from "./player-management-client";
+import { PlayerArchiveWorkspace } from "./player-archive-client";
 import "./player-management.css";
 import "./player-management-performance.css";
+import "./player-archive-fixes.css";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = { event?: string; scope?: string; group?: string; q?: string; page?: string; player?: string; success?: string; error?: string };
+type SearchParams = { event?: string; scope?: string; group?: string; q?: string; page?: string; player?: string };
 type QueryState = { event: string; scope: "event" | "all"; group: "all" | "少年组" | "青年组"; q: string; page: number };
 
 function asGroup(value?: string): QueryState["group"] {
@@ -37,7 +38,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     page: pageNumber(query.page),
   };
 
-  const pageData = await getPlayerAdminPageFast(viewer, {
+  const pageData = await getPlayerArchivePage(viewer, {
     eventId: state.event || null,
     scope: state.scope,
     group: state.group,
@@ -63,14 +64,12 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     pageTitle="球员档案"
     pageHint="球员 · 档案管理"
   >
-    <PlayerManagementWorkspace
+    <PlayerArchiveWorkspace
       viewerRole={viewer.role}
       events={eventOptions}
       initialState={state}
       initialPageData={pageData}
       initialPlayerId={query.player || ""}
-      initialSuccess={query.success || ""}
-      initialError={query.error || ""}
     />
   </AdminWorkspaceShell>;
 }
