@@ -3,6 +3,8 @@ import { getSqlClient } from "./index";
 import { requireEventAccess, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 
 export const MASTER_SCHEDULE_MODULE = "master_schedule";
+export const SCHEDULE_GROUPS = ["少年组", "青年组"] as const;
+export type ScheduleGroup = (typeof SCHEDULE_GROUPS)[number];
 export const MASTER_SCHEDULE_CODES = ["qualifier-one", "qualifier-two", "main-one", "main-two"] as const;
 export type MasterScheduleCode = (typeof MASTER_SCHEDULE_CODES)[number];
 
@@ -13,14 +15,19 @@ export type MasterScheduleStage = {
   dateLabel: string;
   advancementText: string;
   tags: string[];
-  u16RaceLabel: string;
-  u20RaceLabel: string;
+  raceLabel: string;
   qualificationNote: string;
 };
 
-export type MasterScheduleSnapshot = {
-  version: 1;
+export type MasterScheduleGroupSnapshot = {
+  published: boolean;
+  publishedAt: string | null;
   stages: MasterScheduleStage[];
+};
+
+export type MasterScheduleSnapshot = {
+  version: 2;
+  groups: Record<ScheduleGroup, MasterScheduleGroupSnapshot>;
 };
 
 export type SchedulePublishData = {
@@ -33,22 +40,20 @@ export type SchedulePublishData = {
     stationNo: number;
     status: string;
   };
-  publication: {
-    id: string | null;
+  groups: Record<ScheduleGroup, {
     status: "draft" | "published";
-    versionNo: number;
     publishedAt: string | null;
-  };
+    stages: MasterScheduleStage[];
+  }>;
   detailedSchedule: {
     status: "draft" | "published";
     hasSnapshot: boolean;
-    hasContent: boolean;
   };
-  stages: MasterScheduleStage[];
 };
 
 export type SchedulePublishInput = {
   eventId: string;
+  group: ScheduleGroup;
   stages: MasterScheduleStage[];
 };
 
@@ -81,15 +86,18 @@ type PhaseRow = {
   sortOrder: number;
 };
 
-const defaultByCode: Record<MasterScheduleCode, Omit<MasterScheduleStage, "code">> = {
+type LegacyStage = Partial<MasterScheduleStage> & {
+  u16RaceLabel?: string;
+  u20RaceLabel?: string;
+};
+
+const sharedDefaults: Record<MasterScheduleCode, Omit<MasterScheduleStage, "code" | "raceLabel">> = {
   "qualifier-one": {
     phaseNumber: "01",
     title: "资格赛第一场",
     dateLabel: "",
     advancementText: "N人 → 晋级24人",
     tags: ["一次抽签到底", "16区", "单败"],
-    u16RaceLabel: "9局5胜",
-    u20RaceLabel: "13局7胜",
     qualificationNote: "16名分区冠军直接晋级；其余决胜负者按局胜率取前8，共晋级24人。",
   },
   "qualifier-two": {
@@ -98,8 +106,6 @@ const defaultByCode: Record<MasterScheduleCode, Omit<MasterScheduleStage, "code"
     dateLabel: "",
     advancementText: "N人 → 晋级24人",
     tags: ["一次抽签到底", "16区", "单败"],
-    u16RaceLabel: "9局5胜",
-    u20RaceLabel: "13局7胜",
     qualificationNote: "16名分区冠军直接晋级；其余决胜负者按局胜率取前8，共晋级24人。",
   },
   "main-one": {
@@ -108,8 +114,6 @@ const defaultByCode: Record<MasterScheduleCode, Omit<MasterScheduleStage, "code"
     dateLabel: "",
     advancementText: "64进32",
     tags: ["8组", "双败"],
-    u16RaceLabel: "13局7胜",
-    u20RaceLabel: "17局9胜",
     qualificationNote: "64人分为8组，每组8人采用双败赛制，每组晋级4人，共32人进入第二阶段。",
   },
   "main-two": {
@@ -118,9 +122,22 @@ const defaultByCode: Record<MasterScheduleCode, Omit<MasterScheduleStage, "code"
     dateLabel: "",
     advancementText: "32进1",
     tags: ["重新抽签", "32强", "单败"],
-    u16RaceLabel: "17局9胜",
-    u20RaceLabel: "21局11胜",
     qualificationNote: "32强重新抽签，采用单败淘汰赛制直至产生冠军。",
+  },
+};
+
+const raceDefaults: Record<ScheduleGroup, Record<MasterScheduleCode, string>> = {
+  少年组: {
+    "qualifier-one": "9局5胜",
+    "qualifier-two": "9局5胜",
+    "main-one": "13局7胜",
+    "main-two": "17局9胜",
+  },
+  青年组: {
+    "qualifier-one": "13局7胜",
+    "qualifier-two": "13局7胜",
+    "main-one": "17局9胜",
+    "main-two": "21局11胜",
   },
 };
 
@@ -130,6 +147,10 @@ function newId(prefix: string) {
 
 function isCode(value: string): value is MasterScheduleCode {
   return MASTER_SCHEDULE_CODES.includes(value as MasterScheduleCode);
+}
+
+function isGroup(value: string): value is ScheduleGroup {
+  return SCHEDULE_GROUPS.includes(value as ScheduleGroup);
 }
 
 function cleanTags(value: unknown): string[] {
@@ -142,65 +163,94 @@ function cleanTags(value: unknown): string[] {
   return [...unique].slice(0, 8);
 }
 
-function detailedSnapshotHasContent(value: string | null) {
-  if (!value) return false;
-  try {
-    const snapshot = JSON.parse(value) as { matches?: unknown[] };
-    return Array.isArray(snapshot.matches) && snapshot.matches.length > 0;
-  } catch {
-    return false;
-  }
+function defaultStage(code: MasterScheduleCode, group: ScheduleGroup, phase?: PhaseRow): MasterScheduleStage {
+  const fallback = sharedDefaults[code];
+  return {
+    code,
+    phaseNumber: phase?.phaseNumber || fallback.phaseNumber,
+    title: phase?.title || fallback.title,
+    dateLabel: phase?.dateLabel || fallback.dateLabel,
+    advancementText: fallback.advancementText,
+    tags: [...fallback.tags],
+    raceLabel: raceDefaults[group][code],
+    qualificationNote: fallback.qualificationNote,
+  };
 }
 
-export function parseMasterScheduleSnapshot(value: string | null): MasterScheduleSnapshot | null {
+function parseStage(raw: unknown, group: ScheduleGroup): MasterScheduleStage | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as LegacyStage;
+  if (!row.code || !isCode(String(row.code))) return null;
+  const code = row.code as MasterScheduleCode;
+  const fallback = sharedDefaults[code];
+  const legacyRace = group === "少年组" ? row.u16RaceLabel : row.u20RaceLabel;
+  return {
+    code,
+    phaseNumber: String(row.phaseNumber || fallback.phaseNumber),
+    title: String(row.title || fallback.title),
+    dateLabel: String(row.dateLabel || ""),
+    advancementText: String(row.advancementText || fallback.advancementText),
+    tags: cleanTags(row.tags).length ? cleanTags(row.tags) : [...fallback.tags],
+    raceLabel: String(row.raceLabel || legacyRace || raceDefaults[group][code]),
+    qualificationNote: String(row.qualificationNote || fallback.qualificationNote),
+  };
+}
+
+function normalizeStages(value: unknown, group: ScheduleGroup, phases: PhaseRow[] = []): MasterScheduleStage[] {
+  const source = Array.isArray(value) ? value : [];
+  const parsed = source.map((item) => parseStage(item, group)).filter((item): item is MasterScheduleStage => Boolean(item));
+  return MASTER_SCHEDULE_CODES.map((code) => parsed.find((item) => item.code === code) ?? defaultStage(code, group, phases.find((phase) => phase.code === code)));
+}
+
+export function parseMasterScheduleSnapshot(value: string | null, legacyPublished = false, phases: PhaseRow[] = []): MasterScheduleSnapshot | null {
   if (!value) return null;
   try {
     const parsed = JSON.parse(value) as unknown;
     if (!parsed || typeof parsed !== "object") return null;
-    const parsedRecord = parsed as Record<string, unknown>;
-    const candidate = "masterSchedule" in parsedRecord ? parsedRecord.masterSchedule : parsedRecord;
-    if (!candidate || typeof candidate !== "object") return null;
-    const master = candidate as Partial<MasterScheduleSnapshot>;
-    if (!Array.isArray(master.stages)) return null;
-    const stages = master.stages.flatMap((raw) => {
-      if (!raw || typeof raw !== "object") return [];
-      const row = raw as Partial<MasterScheduleStage>;
-      if (!row.code || !isCode(String(row.code))) return [];
-      const fallback = defaultByCode[row.code as MasterScheduleCode];
-      return [{
-        code: row.code as MasterScheduleCode,
-        phaseNumber: String(row.phaseNumber || fallback.phaseNumber),
-        title: String(row.title || fallback.title),
-        dateLabel: String(row.dateLabel || ""),
-        advancementText: String(row.advancementText || fallback.advancementText),
-        tags: cleanTags(row.tags),
-        u16RaceLabel: String(row.u16RaceLabel || fallback.u16RaceLabel),
-        u20RaceLabel: String(row.u20RaceLabel || fallback.u20RaceLabel),
-        qualificationNote: String(row.qualificationNote || fallback.qualificationNote),
-      }];
-    });
-    return stages.length ? { version: 1, stages } : null;
+    const root = parsed as Record<string, unknown>;
+    const candidate = "masterSchedule" in root && root.masterSchedule && typeof root.masterSchedule === "object"
+      ? root.masterSchedule as Record<string, unknown>
+      : root;
+
+    if (candidate.groups && typeof candidate.groups === "object") {
+      const rawGroups = candidate.groups as Record<string, unknown>;
+      const groups = {} as MasterScheduleSnapshot["groups"];
+      for (const group of SCHEDULE_GROUPS) {
+        const raw = rawGroups[group];
+        const record = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+        groups[group] = {
+          published: Boolean(record.published),
+          publishedAt: typeof record.publishedAt === "string" ? record.publishedAt : null,
+          stages: normalizeStages(record.stages, group, phases),
+        };
+      }
+      return { version: 2, groups };
+    }
+
+    if (Array.isArray(candidate.stages)) {
+      const publishedAt = typeof candidate.publishedAt === "string" ? candidate.publishedAt : null;
+      return {
+        version: 2,
+        groups: {
+          少年组: { published: legacyPublished, publishedAt, stages: normalizeStages(candidate.stages, "少年组", phases) },
+          青年组: { published: legacyPublished, publishedAt, stages: normalizeStages(candidate.stages, "青年组", phases) },
+        },
+      };
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
-function mergeFallbackStages(phases: PhaseRow[]): MasterScheduleStage[] {
-  return MASTER_SCHEDULE_CODES.map((code) => {
-    const fallback = defaultByCode[code];
-    const phase = phases.find((item) => item.code === code);
-    return {
-      code,
-      phaseNumber: phase?.phaseNumber || fallback.phaseNumber,
-      title: phase?.title || fallback.title,
-      dateLabel: phase?.dateLabel || "",
-      advancementText: fallback.advancementText,
-      tags: [...fallback.tags],
-      u16RaceLabel: fallback.u16RaceLabel,
-      u20RaceLabel: fallback.u20RaceLabel,
-      qualificationNote: fallback.qualificationNote,
-    };
-  });
+function makeDefaultSnapshot(phases: PhaseRow[]): MasterScheduleSnapshot {
+  return {
+    version: 2,
+    groups: {
+      少年组: { published: false, publishedAt: null, stages: normalizeStages([], "少年组", phases) },
+      青年组: { published: false, publishedAt: null, stages: normalizeStages([], "青年组", phases) },
+    },
+  };
 }
 
 function validateStructure(stages: MasterScheduleStage[]) {
@@ -218,8 +268,12 @@ function validatePublishReady(stages: MasterScheduleStage[]) {
   for (const stage of stages) {
     if (!stage.dateLabel.trim()) throw new Error(`请填写“${stage.title}”的比赛时间后再发布。`);
     if (!stage.advancementText.trim()) throw new Error(`请填写“${stage.title}”的晋级人数说明后再发布。`);
-    if (!stage.u16RaceLabel.trim() || !stage.u20RaceLabel.trim()) throw new Error(`请填写“${stage.title}”少年组和青年组的局数标签后再发布。`);
+    if (!stage.raceLabel.trim()) throw new Error(`请填写“${stage.title}”的局数标签后再发布。`);
   }
+}
+
+function overallStatus(snapshot: MasterScheduleSnapshot): "draft" | "published" {
+  return SCHEDULE_GROUPS.some((group) => snapshot.groups[group].published) ? "published" : "draft";
 }
 
 async function bundle(inputPrincipal: AdminPrincipalInput, eventId: string) {
@@ -238,32 +292,40 @@ async function bundle(inputPrincipal: AdminPrincipalInput, eventId: string) {
   if (!event) throw new Error("没有找到这场赛事。");
   const masterPublication = publicationRows.find((row) => row.moduleType === MASTER_SCHEDULE_MODULE);
   const detailedPublication = publicationRows.find((row) => row.moduleType === "schedule");
-  const saved = parseMasterScheduleSnapshot(masterPublication?.snapshotJson ?? null);
-  const stages = saved?.stages ?? mergeFallbackStages(phases);
-  return { principal, viewer, event, phases, masterPublication, detailedPublication, stages };
+  const snapshot = parseMasterScheduleSnapshot(masterPublication?.snapshotJson ?? null, masterPublication?.status === "published", phases) ?? makeDefaultSnapshot(phases);
+  return { principal, viewer, event, phases, masterPublication, detailedPublication, snapshot };
+}
+
+function toData(viewerRole: string, event: EventRow, detailedPublication: PublicationRow | undefined, snapshot: MasterScheduleSnapshot): SchedulePublishData {
+  return {
+    viewerRole,
+    event,
+    groups: {
+      少年组: {
+        status: snapshot.groups.少年组.published ? "published" : "draft",
+        publishedAt: snapshot.groups.少年组.publishedAt,
+        stages: snapshot.groups.少年组.stages,
+      },
+      青年组: {
+        status: snapshot.groups.青年组.published ? "published" : "draft",
+        publishedAt: snapshot.groups.青年组.publishedAt,
+        stages: snapshot.groups.青年组.stages,
+      },
+    },
+    detailedSchedule: {
+      status: detailedPublication?.status === "published" ? "published" : "draft",
+      hasSnapshot: Boolean(detailedPublication?.hasSnapshot),
+    },
+  };
 }
 
 export async function getSchedulePublishData(inputPrincipal: AdminPrincipalInput, eventId: string): Promise<SchedulePublishData> {
   const data = await bundle(inputPrincipal, eventId);
-  return {
-    viewerRole: data.viewer.role,
-    event: data.event,
-    publication: {
-      id: data.masterPublication?.id ?? null,
-      status: data.masterPublication?.status === "published" ? "published" : "draft",
-      versionNo: Number(data.masterPublication?.versionNo ?? 0),
-      publishedAt: data.masterPublication?.publishedAt ?? null,
-    },
-    detailedSchedule: {
-      status: data.detailedPublication?.status === "published" ? "published" : "draft",
-      hasSnapshot: Boolean(data.detailedPublication?.hasSnapshot),
-      hasContent: detailedSnapshotHasContent(data.detailedPublication?.snapshotJson ?? null),
-    },
-    stages: data.stages,
-  };
+  return toData(data.viewer.role, data.event, data.detailedPublication, data.snapshot);
 }
 
 export async function saveSchedulePublishData(inputPrincipal: AdminPrincipalInput, input: SchedulePublishInput): Promise<SchedulePublishData> {
+  if (!isGroup(input.group)) throw new Error("赛程组别不正确。");
   const stages = input.stages.map((stage) => ({
     ...stage,
     phaseNumber: stage.phaseNumber.trim().slice(0, 8),
@@ -271,58 +333,72 @@ export async function saveSchedulePublishData(inputPrincipal: AdminPrincipalInpu
     dateLabel: stage.dateLabel.trim().slice(0, 80),
     advancementText: stage.advancementText.trim().slice(0, 120),
     tags: cleanTags(stage.tags),
-    u16RaceLabel: stage.u16RaceLabel.trim().slice(0, 40),
-    u20RaceLabel: stage.u20RaceLabel.trim().slice(0, 40),
+    raceLabel: stage.raceLabel.trim().slice(0, 40),
     qualificationNote: stage.qualificationNote.trim().slice(0, 500),
   }));
   validateStructure(stages);
   const data = await bundle(inputPrincipal, input.eventId);
   if (data.event.status === "archived") throw new Error("已归档赛事为历史只读状态，不能继续修改主赛程。");
-  if (data.masterPublication?.status === "published") validatePublishReady(stages);
+  if (data.snapshot.groups[input.group].published) validatePublishReady(stages);
+
+  const nextSnapshot: MasterScheduleSnapshot = {
+    ...data.snapshot,
+    groups: {
+      ...data.snapshot.groups,
+      [input.group]: { ...data.snapshot.groups[input.group], stages },
+    },
+  };
   const sql = getSqlClient();
   const timestamp = new Date().toISOString();
   const publicationId = data.masterPublication?.id ?? `${input.eventId}_publication_${MASTER_SCHEDULE_MODULE}`;
   const versionNo = Number(data.masterPublication?.versionNo ?? 0) + 1;
-  const snapshot: MasterScheduleSnapshot = { version: 1, stages };
+  const status = overallStatus(nextSnapshot);
+  const publishedAt = SCHEDULE_GROUPS.map((group) => nextSnapshot.groups[group].publishedAt).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
 
   await sql.begin(async (tx) => {
-    for (const [index, stage] of stages.entries()) {
-      const existing = data.phases.find((phase) => phase.code === stage.code);
-      const phaseId = existing?.id ?? `${input.eventId}_phase_${stage.code.replaceAll("-", "_")}`;
-      await tx`
-        insert into public.event_phases (id,event_id,code,phase_number,title,date_label,status,sort_order,created_at,updated_at)
-        values (${phaseId},${input.eventId},${stage.code},${stage.phaseNumber},${stage.title},${stage.dateLabel},${existing?.status ?? "pending"},${index + 1},${timestamp},${timestamp})
-        on conflict (event_id,code) do update set phase_number=excluded.phase_number,title=excluded.title,date_label=excluded.date_label,sort_order=excluded.sort_order,updated_at=excluded.updated_at
-      `;
-    }
     await tx`
       insert into public.publications (id,event_id,module_type,module_title,version_no,snapshot_json,status,published_by,published_at,created_at,updated_at)
-      values (${publicationId},${input.eventId},${MASTER_SCHEDULE_MODULE},'赛事主赛程',${versionNo},${JSON.stringify(snapshot)},${data.masterPublication?.status === "published" ? "published" : "draft"},${data.masterPublication?.status === "published" ? data.viewer.id : null},${data.masterPublication?.status === "published" ? (data.masterPublication.publishedAt ?? timestamp) : null},${timestamp},${timestamp})
-      on conflict (event_id,module_type) do update set module_title=excluded.module_title,version_no=excluded.version_no,snapshot_json=excluded.snapshot_json,updated_at=excluded.updated_at
+      values (${publicationId},${input.eventId},${MASTER_SCHEDULE_MODULE},'赛事主赛程',${versionNo},${JSON.stringify(nextSnapshot)},${status},${status === "published" ? data.viewer.id : null},${publishedAt},${timestamp},${timestamp})
+      on conflict (event_id,module_type) do update set module_title=excluded.module_title,version_no=excluded.version_no,snapshot_json=excluded.snapshot_json,status=excluded.status,published_by=excluded.published_by,published_at=excluded.published_at,updated_at=excluded.updated_at
     `;
     await tx`insert into public.audit_logs (id,actor_user_id,event_id,module_type,target_type,target_id,action,after_json,created_at)
-      values (${newId("log")},${data.viewer.id},${input.eventId},'schedule_publish','master_schedule',${publicationId},'save_master_schedule',${JSON.stringify({ versionNo, stages: stages.length })},${timestamp})`;
+      values (${newId("log")},${data.viewer.id},${input.eventId},'schedule_publish','master_schedule',${publicationId},'save_master_schedule_group',${JSON.stringify({ group: input.group, versionNo, stages: stages.length })},${timestamp})`;
   });
   return getSchedulePublishData(data.principal, input.eventId);
 }
 
-export async function setSchedulePublishStatus(inputPrincipal: AdminPrincipalInput, eventId: string, status: "draft" | "published"): Promise<SchedulePublishData> {
+export async function setSchedulePublishStatus(inputPrincipal: AdminPrincipalInput, eventId: string, group: ScheduleGroup, status: "draft" | "published"): Promise<SchedulePublishData> {
+  if (!isGroup(group)) throw new Error("赛程组别不正确。");
   const data = await bundle(inputPrincipal, eventId);
   if (data.event.status === "archived") throw new Error("已归档赛事为历史只读状态，不能修改发布状态。");
-  if (status === "published") validatePublishReady(data.stages);
-  const sql = getSqlClient();
+  if (status === "published") validatePublishReady(data.snapshot.groups[group].stages);
+
   const timestamp = new Date().toISOString();
+  const nextSnapshot: MasterScheduleSnapshot = {
+    ...data.snapshot,
+    groups: {
+      ...data.snapshot.groups,
+      [group]: {
+        ...data.snapshot.groups[group],
+        published: status === "published",
+        publishedAt: status === "published" ? timestamp : null,
+      },
+    },
+  };
+  const overall = overallStatus(nextSnapshot);
+  const overallPublishedAt = SCHEDULE_GROUPS.map((item) => nextSnapshot.groups[item].publishedAt).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
+  const sql = getSqlClient();
   const publicationId = data.masterPublication?.id ?? `${eventId}_publication_${MASTER_SCHEDULE_MODULE}`;
   const versionNo = Number(data.masterPublication?.versionNo ?? 0) + 1;
-  const snapshot: MasterScheduleSnapshot = { version: 1, stages: data.stages };
+
   await sql.begin(async (tx) => {
     await tx`
       insert into public.publications (id,event_id,module_type,module_title,version_no,snapshot_json,status,published_by,published_at,created_at,updated_at)
-      values (${publicationId},${eventId},${MASTER_SCHEDULE_MODULE},'赛事主赛程',${versionNo},${JSON.stringify(snapshot)},${status},${status === "published" ? data.viewer.id : null},${status === "published" ? timestamp : null},${timestamp},${timestamp})
+      values (${publicationId},${eventId},${MASTER_SCHEDULE_MODULE},'赛事主赛程',${versionNo},${JSON.stringify(nextSnapshot)},${overall},${overall === "published" ? data.viewer.id : null},${overallPublishedAt},${timestamp},${timestamp})
       on conflict (event_id,module_type) do update set module_title=excluded.module_title,version_no=excluded.version_no,snapshot_json=excluded.snapshot_json,status=excluded.status,published_by=excluded.published_by,published_at=excluded.published_at,updated_at=excluded.updated_at
     `;
     await tx`insert into public.audit_logs (id,actor_user_id,event_id,module_type,target_type,target_id,action,before_json,after_json,created_at)
-      values (${newId("log")},${data.viewer.id},${eventId},'schedule_publish','publication',${publicationId},${status === "published" ? "publish_master_schedule" : "unpublish_master_schedule"},${JSON.stringify({ status: data.masterPublication?.status ?? "draft" })},${JSON.stringify({ status, versionNo })},${timestamp})`;
+      values (${newId("log")},${data.viewer.id},${eventId},'schedule_publish','publication',${publicationId},${status === "published" ? "publish_master_schedule_group" : "unpublish_master_schedule_group"},${JSON.stringify({ group, status: data.snapshot.groups[group].published ? "published" : "draft" })},${JSON.stringify({ group, status, versionNo })},${timestamp})`;
   });
   return getSchedulePublishData(data.principal, eventId);
 }
