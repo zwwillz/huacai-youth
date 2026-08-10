@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
-import { assertAdminRole, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
+import { assertAdminRole, requireEventAccess, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 import { prepareMain32AdvancementFast } from "./main-advancement-fast";
 import { prepareFinalRankingDraftIfReadyFast } from "./final-ranking-trigger-fast";
 import { markCompetitionModuleDirty } from "./competition-context";
@@ -58,6 +58,11 @@ export async function submitMatchResultFast(inputPrincipal: AdminPrincipalInput,
   `;
   const match = rows[0];
   if (!match) throw new Error("没有找到这场比赛，或当前账号未被分配到本站。");
+  await requireEventAccess(viewer, match.eventId, {
+    write: true,
+    allowedRoles: ["system_admin", "committee", "referee"],
+    deniedMessage: "当前账号没有比分录入权限。",
+  });
   if (viewer.role === "referee" && match.refereeUserId !== viewer.id) throw new Error("这场比赛没有分配给当前裁判账号。");
   if (match.resultStatus === "confirmed") throw new Error("赛果已经确认。如需更正，请由组委会在后续更正流程中处理。");
   const resultType = String(input.resultType || "normal");
@@ -100,6 +105,11 @@ export async function confirmMatchResultFast(inputPrincipal: AdminPrincipalInput
   `;
   const match = rows[0];
   if (!match) throw new Error("没有找到这场比赛，或当前账号未被分配到本站。");
+  await requireEventAccess(viewer, match.eventId, {
+    write: true,
+    allowedRoles: ["system_admin", "committee"],
+    deniedMessage: "赛果确认需要系统管理员或组委会权限。",
+  });
   if (match.resultStatus !== "submitted" || !match.winnerPlayerId || !match.winnerPlayerName) throw new Error("请先提交赛果，再进行确认。");
   const loser = match.playerAId === match.winnerPlayerId ? { id: match.playerBId, name: match.playerBName } : { id: match.playerAId, name: match.playerAName };
   if (!loser.id || !loser.name) throw new Error("无法识别负方球员，请检查本场对阵。");
