@@ -72,6 +72,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ eve
     revalidateTag("public-content", { expire: 0 });
     revalidateTag(`public-event-detail-${eventId}`, { expire: 0 });
     revalidatePath("/");
+    revalidatePath(`/api/public/events/${eventId}/detail`);
     return Response.json({ data: { ok: true } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "赛事状态修改失败。" }, { status: 400 });
