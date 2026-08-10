@@ -1,5 +1,6 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
-import { createPlayerArchive, getPlayerArchivePage } from "@/db/player-archive";
+import { createPlayerArchive } from "@/db/player-archive";
+import { getFormalPlayerArchivePage } from "@/db/player-archive-formal";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
 
   try {
     const url = new URL(request.url);
-    const data = await getPlayerArchivePage(viewer, {
+    const data = await getFormalPlayerArchivePage(viewer, {
       eventId: url.searchParams.get("event"),
       scope: url.searchParams.get("scope") || undefined,
       group: group(url.searchParams.get("group")),
