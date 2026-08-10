@@ -313,6 +313,7 @@ export async function getDrawWorkspaceData(username: string, eventId: string, gr
   return { viewerRole: viewer.role, event, groups: groupRows, selectedGroupId, selectedPhase: phaseCode, phaseTitle: PHASE_TITLES[phaseCode], settings, plan, latestSession: sessionRows[0] ?? null };
 }
 
+/** @deprecated Use createQualificationDrawFast from draw-engine-write.ts. This legacy first-version path must not be used for q1/q2 production draws. */
 export async function createQualificationDraw(username: string, input: { eventId: string; groupId: string; phaseCode: DrawPhaseCode; bracketSize: number; divisionSize: number; rateQualifierCount: number; seedsEnabled?: boolean; seedTargetCount?: number; seedFillRule?: string }) {
   const viewer = await requireViewer(username);
   await requireEventAccess(username, input.eventId, { write: true });
