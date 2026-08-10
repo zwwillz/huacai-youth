@@ -75,6 +75,29 @@ function guideIcon(title: string, guideType: string) {
   return title.slice(0, 1) || "提";
 }
 
+const PARTNER_TYPE_LABELS: Record<string, string> = {
+  title: "冠名赞助",
+  sponsor: "合作伙伴",
+  equipment: "指定器材",
+  support: "支持品牌",
+};
+
+function PartnerSection({ station }: { station: Station }) {
+  const partners = (station.partners ?? []).filter((partner) => partner.name && partner.logo);
+  if (partners.length) {
+    return <section className="card sponsor-section"><header><div><small>赛事支持</small><h2>合作伙伴</h2></div></header><div className="partner-logo-grid">{partners.map((partner, index) => {
+      const content = <><img src={partner.logo} alt={`${partner.name} Logo`} /><strong>{partner.name}</strong><small>{PARTNER_TYPE_LABELS[partner.type] ?? "合作伙伴"}</small></>;
+      return partner.website
+        ? <a className="partner-logo-card" href={partner.website} target="_blank" rel="noreferrer" key={`${partner.name}-${index}`}>{content}</a>
+        : <article className="partner-logo-card" key={`${partner.name}-${index}`}>{content}</article>;
+    })}</div></section>;
+  }
+  if (station.id === "langfang") {
+    return <section className="card sponsor-section"><header><div><small>赛事支持</small><h2>合作伙伴</h2></div></header><img src="/langfang-sponsors.jpg" alt="河北廊坊站合作伙伴标识" width="1242" height="367" /></section>;
+  }
+  return null;
+}
+
 function StationOverview({station,contentState,openRules,openSchedule,openGuide}:{station:Station;contentState?:PublicContentState;openRules:()=>void;openSchedule:()=>void;openGuide:(kind:GuideKind)=>void}) {
   const isLangfang = station.id === "langfang";
   const guides = contentState?.guides ?? [];
@@ -92,7 +115,7 @@ function StationOverview({station,contentState,openRules,openSchedule,openGuide}
     </section>
     <section className="card organizers"><div><small>官方信息</small><h2>赛事组织</h2></div><dl>{station.organizers.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}<div><dt>比赛地点</dt><dd>{station.venueDetail}</dd></div></dl></section>
     <section className="card participant-tips"><header><div><small>参赛提示</small><h2>参赛友好提示</h2></div><b>信息将持续更新</b></header><div className="tip-links">{guides.length ? guides.map((guide) => <a href={`/guide/${encodeURIComponent(guide.id)}`} className="dynamic-guide-link" key={guide.id}><span>{guideIcon(guide.title, guide.guideType)}</span><div><strong>{guide.title}</strong><small>查看组委会发布的参赛提示</small></div><b>查看 ›</b></a>) : <><button onClick={() => openGuide("transport")}><span>行</span><div><strong>交通住宿攻略</strong><small>路线、场馆周边及住宿信息</small></div><b>查看 ›</b></button><button onClick={() => openGuide("clothing")}><span>装</span><div><strong>服装要求</strong><small>查看参赛着装相关提示</small></div><b>查看 ›</b></button></>}</div></section>
-    {isLangfang && <section className="card sponsor-section"><header><div><small>赛事支持</small><h2>合作伙伴</h2></div></header><img src="/langfang-sponsors.jpg" alt="河北廊坊站合作伙伴标识" width="1242" height="367" /></section>}
+    <PartnerSection station={station} />
   </div>;
 }
 
