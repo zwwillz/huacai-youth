@@ -13,7 +13,7 @@ function replaceUrl(eventId: string) {
 }
 
 export default function ContentEventWorkspaceClient({ initialData, initialEventData }: { initialData: ContentManagementData; initialEventData: EventManagementData }) {
-  const [bundle, setBundle] = useState<Bundle>({ content: initialData, event: initialEventData, at: Date.now() });
+  const [bundle, setBundle] = useState<Bundle>({ content: initialData, event: initialEventData, at: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const requestId = useRef(0);
