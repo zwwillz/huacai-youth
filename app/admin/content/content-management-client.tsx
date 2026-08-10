@@ -120,18 +120,54 @@ export default function ContentManagementClient({ initialData, initialEventData 
   };
 
   const saveOverview = async (publication?: "published" | "draft") => {
-    if (archived) return;
-    setWorking(true); setNotice(""); setError("");
-    try {
-      const publishStatus = publication ?? eventDraft.publishStatus;
-      const nextEvent = { ...eventDraft, publishStatus };
-      await Promise.all([syncEventSave(nextEvent), syncContentSave({ ...contentDraft, summary: eventDraft.summary ?? "" })]);
-      if (publication === "published") setNotice("赛事概览已保存并发布到公众端。");
-      else if (publication === "draft") setNotice("赛事概览已取消发布，公众前端将不再显示本站；已填写内容仍保存在后台。");
-      else setNotice("赛事概览已保存。");
-    } catch (failure) { setError(failure instanceof Error ? failure.message : "赛事概览保存失败。"); }
-    finally { setWorking(false); }
-  };
+  if (archived) return;
+  setWorking(true); setNotice(""); setError("");
+  try {
+    const publishStatus = publication ?? eventDraft.publishStatus;
+    const response = await fetch("/api/admin/event-overview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        eventId: eventDraft.eventId,
+        shortTitle: eventDraft.shortTitle,
+        summary: eventDraft.summary ?? "",
+        publishStatus,
+        coverImageKey: eventDraft.coverImageKey ?? "",
+        venue: { ...eventDraft.venue },
+        details: {
+          sponsorLabel: eventDraft.details.sponsorLabel ?? "",
+          durationLabel: eventDraft.details.durationLabel ?? "",
+          qualifierDateLabel: eventDraft.details.qualifierDateLabel ?? "",
+          mainDateLabel: eventDraft.details.mainDateLabel ?? "",
+          totalPrizeLabel: eventDraft.details.totalPrizeLabel ?? "",
+          mainSizeLabel: eventDraft.details.mainSizeLabel ?? "",
+        },
+        sponsors: sponsors.map((sponsor) => ({
+          name: sponsor.name,
+          sponsorType: sponsor.sponsorType,
+          logoKey: sponsor.logoKey ?? "",
+          websiteUrl: sponsor.websiteUrl ?? "",
+          isPublished: Boolean(sponsor.isPublished),
+        })),
+        guides: contentDraft.guides.map((guide) => ({
+          guideType: guide.guideType,
+          title: guide.title,
+          body: guide.body,
+          publishStatus: guide.publishStatus,
+        })),
+      }),
+    });
+    const payload = await response.json() as { data?: { event: EventManagementData; content: ContentManagementData }; error?: string };
+    if (!response.ok || !payload.data) throw new Error(payload.error || "赛事概览保存失败。");
+    setEventDraft(toEventDraft(payload.data.event));
+    setData(payload.data.content);
+    setContentDraft(toContentDraft(payload.data.content));
+    if (publication === "published") setNotice("赛事概览已保存并发布到公众端。");
+    else if (publication === "draft") setNotice("赛事概览已取消发布，公众前端将不再显示本站；已填写内容仍保存在后台。");
+    else setNotice("赛事概览已保存。");
+  } catch (failure) { setError(failure instanceof Error ? failure.message : "赛事概览保存失败。"); }
+  finally { setWorking(false); }
+};
 
   const saveRegulation = async () => {
     if (archived) return;
