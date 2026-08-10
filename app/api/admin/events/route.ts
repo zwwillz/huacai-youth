@@ -20,6 +20,18 @@ function id(prefix: string) {
   return prefix + "_" + crypto.randomUUID().replaceAll("-", "");
 }
 
+async function normalizeEventJson(eventId: string) {
+  const sql = getSqlClient();
+  await sql`
+    update public.event_details set
+      age_rules=case when jsonb_typeof(age_rules)='string' then (age_rules #>> '{}')::jsonb else age_rules end,
+      competition_format=case when jsonb_typeof(competition_format)='string' then (competition_format #>> '{}')::jsonb else competition_format end,
+      draw_rules=case when jsonb_typeof(draw_rules)='string' then (draw_rules #>> '{}')::jsonb else draw_rules end,
+      prizes=case when jsonb_typeof(prizes)='string' then (prizes #>> '{}')::jsonb else prizes end
+    where event_id=${eventId}
+  `;
+}
+
 export async function POST(request: Request) {
   const viewer = await getAdminViewer();
   if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
@@ -91,9 +103,11 @@ export async function POST(request: Request) {
             await sql`delete from public.venues where id=${placeholderVenueId}`;
           }
         }
+        await normalizeEventJson(created.id);
         await syncEventOverviewPublication(created.id, input.publishStatus === "published");
       }
     } else {
+      await normalizeEventJson(input.id);
       await syncEventOverviewPublication(input.id, input.publishStatus === "published");
     }
     revalidateTag("admin-navigation-events", { expire: 0 });
