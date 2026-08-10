@@ -11,6 +11,14 @@ test("archived events are rejected by the common write boundary", () => {
   assert.match(code, /if \(options\.write\) assertEventWritable/);
 });
 
+test("event management and main roster mutations use archived write guards", () => {
+  const eventManagement = source("db/event-management.ts");
+  assert.match(eventManagement, /requireEventEditor\(username, input\.eventId, true\)/);
+  const rosterRoute = source("app/api/admin/competition/main-roster/route.ts");
+  assert.match(rosterRoute, /requireEventAccess\(viewer, targetEventId/);
+  assert.match(rosterRoute, /write: true/);
+});
+
 test("event asset upload requires assigned committee/admin event access", () => {
   const code = source("db/assets.ts");
   assert.match(code, /requireEventAccess\(username, input\.eventId/);
@@ -32,6 +40,13 @@ test("new public competition data is snapshot-only while legacy fallback is expl
   assert.match(code, /m\.source like 'static_%'/);
   assert.match(code, /m\.source like 'pdf_static_%'/);
   assert.match(code, /Never read live Competition-engine results/);
+});
+
+test("registration public data is also published snapshot-only", () => {
+  const code = source("db/registration-publishing.ts");
+  assert.match(code, /module_type='registration' and p\.status='published'/);
+  assert.match(code, /p\.snapshot_json/);
+  assert.match(code, /coalesce\(e\.is_hidden,false\)=false/);
 });
 
 test("qualification draw API uses q1/q2 fast implementation", () => {
@@ -84,6 +99,13 @@ test("public matches initially render forty cards and load forty more", () => {
   assert.match(competition, /useState\(40\)/);
   assert.match(competition, /matches\.slice\(0, visibleCount\)/);
   assert.match(competition, /count \+ 40/);
+});
+
+test("drizzle events schema tracks test and registration migration fields", () => {
+  const schema = source("db/schema.ts");
+  assert.match(schema, /registrationState: text\("registration_state"\)/);
+  assert.match(schema, /registrationUrl: text\("registration_url"\)/);
+  assert.match(schema, /isTest: boolean\("is_test"\)/);
 });
 
 test("test-only performance items remain untouched in this stability round", () => {
