@@ -1,5 +1,5 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
-import { getSchedulePublishData, saveSchedulePublishData, setSchedulePublishStatus, type SchedulePublishInput } from "@/db/schedule-publish";
+import { getSchedulePublishData, saveSchedulePublishData, setSchedulePublishStatus, type ScheduleGroup, type SchedulePublishInput } from "@/db/schedule-publish";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   try {
     const payload = await request.json() as
       | { action: "save"; data: SchedulePublishInput }
-      | { action: "publication"; eventId: string; status: "draft" | "published" };
+      | { action: "publication"; eventId: string; group: ScheduleGroup; status: "draft" | "published" };
 
     if (payload.action === "save") {
       const data = await saveSchedulePublishData(viewer, payload.data);
@@ -42,8 +42,8 @@ export async function POST(request: Request) {
       return Response.json({ data }, { headers: { "Cache-Control": "private, no-store" } });
     }
 
-    if (!payload.eventId || !["draft", "published"].includes(payload.status)) throw new Error("发布状态不正确。");
-    const data = await setSchedulePublishStatus(viewer, payload.eventId, payload.status);
+    if (!payload.eventId || !["少年组", "青年组"].includes(payload.group) || !["draft", "published"].includes(payload.status)) throw new Error("发布状态不正确。");
+    const data = await setSchedulePublishStatus(viewer, payload.eventId, payload.group, payload.status);
     refreshPublicSchedule(payload.eventId);
     return Response.json({ data }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
