@@ -3,32 +3,12 @@
 import type { EventManagementData } from "@/db/event-management";
 import EventManagementClient from "./events/event-management-client";
 import EventSettingsIndexView from "./events/event-settings-index-view";
-import type { ContentManagementData } from "@/db/content-management";
 import type { AccountManagementRow } from "@/db/account-management";
 import AccountManagementClient from "./accounts/account-management-client";
 import OperationLogClient from "./logs/operation-log-client";
 import PlayerManagementWorkspace from "./players/player-management-workspace";
 import PointsRankingWorkspace from "./points/points-ranking-workspace";
 import type { PlayerPointsPageData } from "@/db/player-points-fast";
-
-function placeholderContent(eventId: string): ContentManagementData {
-  return {
-    event: { id: eventId, shortTitle: "当前赛事", city: "赛事资料读取中", summary: "" },
-    details: { competitionFormat: [], drawRules: [], ruleStandard: "", prizeNote: "", prizes: { 少年组: [], 青年组: [] } },
-    publications: [
-      { id: `${eventId}_loading-overview`, moduleType: "overview", moduleTitle: "赛事概览", status: "draft", versionNo: 1, updatedAt: "" },
-      { id: `${eventId}_loading-regulation`, moduleType: "regulation", moduleTitle: "竞赛规程", status: "draft", versionNo: 1, updatedAt: "" },
-    ],
-    documents: [
-      { id: "loading-regulation", documentType: "regulation", title: "完整竞赛规程", url: "", isPublished: false },
-      { id: "loading-referee", documentType: "referee_list", title: "裁判组名单", url: "", isPublished: false },
-    ],
-    guides: [
-      { id: "loading-transport", guideType: "transport", title: "交通住宿攻略", body: "", publishStatus: "draft" },
-      { id: "loading-clothing", guideType: "clothing", title: "服装要求", body: "", publishStatus: "draft" },
-    ],
-  };
-}
 
 function placeholderEvent(eventId: string): EventManagementData {
   return {
