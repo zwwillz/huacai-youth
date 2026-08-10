@@ -112,32 +112,30 @@ function DirectScheduleDetail({ station, contentState, group, phaseId, onBack, o
   </div>;
 }
 
-export default function PublicMasterSchedule({ station, contentState }: { station: Station; contentState?: PublicContentState }) {
+function PublicMasterScheduleView({ station, contentState }: { station: Station; contentState?: PublicContentState }) {
   const [group, setGroup] = useState<ScheduleGroup>("少年组");
   const [selectedPhase, setSelectedPhase] = useState<MasterScheduleCode | null>(null);
-  const resolvedEventRef = useRef("");
-
   const u16Published = Boolean(contentState?.masterSchedule?.groups.少年组.published);
   const u20Published = Boolean(contentState?.masterSchedule?.groups.青年组.published);
-
-  useEffect(() => {
-    if (!contentState || resolvedEventRef.current === station.eventId) return;
-    resolvedEventRef.current = station.eventId;
-    setSelectedPhase(null);
-    if (u16Published) setGroup("少年组");
-    else if (u20Published) setGroup("青年组");
-    else setGroup("少年组");
-  }, [contentState, station.eventId, u16Published, u20Published]);
+  const effectiveGroup: ScheduleGroup = group === "少年组" && !u16Published && u20Published
+    ? "青年组"
+    : group === "青年组" && !u20Published && u16Published
+      ? "少年组"
+      : group;
 
   if (selectedPhase && contentState) {
-    return <DirectScheduleDetail station={station} contentState={contentState} group={group} phaseId={selectedPhase} onBack={() => setSelectedPhase(null)} onGroupChange={setGroup} />;
+    return <DirectScheduleDetail station={station} contentState={contentState} group={effectiveGroup} phaseId={selectedPhase} onBack={() => setSelectedPhase(null)} onGroupChange={setGroup} />;
   }
 
   if (!contentState) return <><style>{css}</style><section className="public-master-empty"><div><span>…</span><h2>正在读取本站赛程</h2><p>赛事页面已经打开，分阶段主赛程正在后台补齐。</p></div></section></>;
 
-  const groupSchedule = contentState.masterSchedule?.groups[group];
+  const groupSchedule = contentState.masterSchedule?.groups[effectiveGroup];
   const published = Boolean(groupSchedule?.published);
   const stages = groupSchedule?.stages ?? [];
 
-  return <div className="schedule-page stack public-master-schedule"><style>{css}</style><section className="schedule-head with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>赛程</h1><p>按组别查看阶段主赛程；详细签表直接从对应阶段进入。</p></div><GroupSwitch group={group} setGroup={(next) => { setGroup(next); setSelectedPhase(null); }} /></section>{!published ? <section className="public-master-empty"><div><span>赛</span><h2>{group}赛程待组委会发布</h2><p>{group === "少年组" ? "U16少年组" : "U20青年组"}的阶段时间、赛制与晋级说明确认后会在这里发布；另一组别可独立发布，不受影响。</p></div></section> : <><div className="master-schedule-note"><strong>{group}主赛程：</strong>阶段时间、赛制与晋级规则由组委会发布；点击某一阶段的“查看赛程表”，会直接进入该阶段已经发布的详细签表。</div><section className="phase-schedule compact-phases">{stages.map((stage) => { const phase = station.phases.find((item) => item.id === stage.code); const status = phase?.status || "待开始"; return <article className="phase-card compact-phase" key={`${group}-${stage.code}`}><div className="phase-status-line"><b className={`phase-status status-${status}`}>{status}</b><time>{stage.dateLabel || phase?.date || "时间待定"}</time></div><h2>{stage.title}</h2><h3>{stage.advancementText}</h3><div className="phase-meta">{stage.tags.map((tag) => <span key={tag}>{tag}</span>)}{stage.raceLabel && <span>{stage.raceLabel}</span>}</div>{stage.qualificationNote && <div className="master-qualification"><strong>晋级说明</strong>{stage.qualificationNote}</div>}<footer><small>详细赛程、签表、球台与对阵读取竞赛执行已发布内容</small><div className="public-phase-actions"><button type="button" onClick={() => setSelectedPhase(stage.code)}>查看赛程表 <i>›</i></button></div></footer></article>; })}</section></>}</div>;
+  return <div className="schedule-page stack public-master-schedule"><style>{css}</style><section className="schedule-head with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>赛程</h1><p>按组别查看阶段主赛程；详细签表直接从对应阶段进入。</p></div><GroupSwitch group={effectiveGroup} setGroup={(next) => { setGroup(next); setSelectedPhase(null); }} /></section>{!published ? <section className="public-master-empty"><div><span>赛</span><h2>{effectiveGroup}赛程待组委会发布</h2><p>{effectiveGroup === "少年组" ? "U16少年组" : "U20青年组"}的阶段时间、赛制与晋级说明确认后会在这里发布；另一组别可独立发布，不受影响。</p></div></section> : <><div className="master-schedule-note"><strong>{effectiveGroup}主赛程：</strong>阶段时间、赛制与晋级规则由组委会发布；点击某一阶段的“查看赛程表”，会直接进入该阶段已经发布的详细签表。</div><section className="phase-schedule compact-phases">{stages.map((stage) => { const phase = station.phases.find((item) => item.id === stage.code); const status = phase?.status || "待开始"; return <article className="phase-card compact-phase" key={`${effectiveGroup}-${stage.code}`}><div className="phase-status-line"><b className={`phase-status status-${status}`}>{status}</b><time>{stage.dateLabel || phase?.date || "时间待定"}</time></div><h2>{stage.title}</h2><h3>{stage.advancementText}</h3><div className="phase-meta">{stage.tags.map((tag) => <span key={tag}>{tag}</span>)}{stage.raceLabel && <span>{stage.raceLabel}</span>}</div>{stage.qualificationNote && <div className="master-qualification"><strong>晋级说明</strong>{stage.qualificationNote}</div>}<footer><small>详细赛程、签表、球台与对阵读取竞赛执行已发布内容</small><div className="public-phase-actions"><button type="button" onClick={() => setSelectedPhase(stage.code)}>查看赛程表 <i>›</i></button></div></footer></article>; })}</section></>}</div>;
+}
+
+export default function PublicMasterSchedule({ station, contentState }: { station: Station; contentState?: PublicContentState }) {
+  return <PublicMasterScheduleView key={station.eventId} station={station} contentState={contentState} />;
 }
