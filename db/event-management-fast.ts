@@ -38,7 +38,7 @@ type BundleRow = {
   mainSizeLabel: string | null;
   minimumAgeNote: string | null;
   signupNote: string | null;
-  ageRules: Record<string, unknown> | null;
+  ageRules: unknown;
   groups: FastGroup[] | null;
   organizations: FastOrganization[] | null;
   memberIds: string[] | null;
@@ -46,6 +46,14 @@ type BundleRow = {
   publications: FastPublication[] | null;
   accounts: FastAccount[] | null;
 };
+
+function asRecord(value: unknown): Record<string, unknown> {
+  let normalized = value;
+  if (typeof normalized === "string") {
+    try { normalized = JSON.parse(normalized); } catch { return {}; }
+  }
+  return normalized && typeof normalized === "object" && !Array.isArray(normalized) ? normalized as Record<string, unknown> : {};
+}
 
 /** One bridge request for the complete event-settings editor after session authentication. */
 export async function getEventManagementDataFast(input: AdminPrincipalInput, eventId: string): Promise<EventManagementData> {
@@ -90,7 +98,7 @@ export async function getEventManagementDataFast(input: AdminPrincipalInput, eve
   `;
   const row = rows[0];
   if (!row) throw new Error("没有找到这场赛事，或当前账号未被分配到本站。");
-  const ageRules = row.ageRules && typeof row.ageRules === "object" && !Array.isArray(row.ageRules) ? row.ageRules : {};
+  const ageRules = asRecord(row.ageRules);
   const organizations: EventManagementData["event"]["organizations"] = { host: "", support: "", operator: "", cooperator: "" };
   for (const item of row.organizations ?? []) organizations[item.organizationType] = item.organizationName;
   return {
