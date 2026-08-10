@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
-import { getPlayerArchivePage } from "@/db/player-archive";
+import { getFormalPlayerArchivePage } from "@/db/player-archive-formal";
 import AdminWorkspaceShell from "../admin-workspace-shell";
 import { getAdminViewer } from "../admin-viewer";
 import { PlayerArchiveWorkspace } from "./player-archive-client";
@@ -38,7 +38,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     page: pageNumber(query.page),
   };
 
-  const pageData = await getPlayerArchivePage(viewer, {
+  const pageData = await getFormalPlayerArchivePage(viewer, {
     eventId: state.event || null,
     scope: state.scope,
     group: state.group,
