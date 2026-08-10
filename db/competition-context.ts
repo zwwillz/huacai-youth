@@ -100,6 +100,7 @@ const publicationTitles: Record<CompetitionPublicationModule, string> = { schedu
 export async function setCompetitionPublicationStatus(input: AdminPrincipalInput, eventId: string, moduleType: CompetitionPublicationModule, status: "draft" | "published") {
   const principal = await resolveAdminPrincipal(input);
   const viewer = await requireEventAccess(principal, eventId, {
+    write: true,
     allowedRoles: ["system_admin", "committee"],
     deniedMessage: "发布到用户端需要系统管理员或组委会权限。",
   });
