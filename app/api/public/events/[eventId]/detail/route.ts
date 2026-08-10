@@ -25,7 +25,7 @@ function getCachedEventDetail(eventId: string) {
       { id: station.id, eventId: station.eventId, title: station.title },
     ]);
     return { station, contentState: contentState ?? null };
-  }, ["public-event-detail-v2", eventId], {
+  }, ["public-event-detail-v3", eventId], {
     revalidate: 300,
     tags: ["public-site", "public-content", `public-event-detail-${eventId}`],
   })();
