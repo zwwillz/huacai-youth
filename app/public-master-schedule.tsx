@@ -69,8 +69,8 @@ export default function PublicMasterSchedule({ station, contentState }: { statio
     } finally { setLoading(false); }
   };
 
-  if (!contentState) return <section className="public-master-empty"><div><span>…</span><h2>正在读取本站赛程</h2><p>赛事页面已经打开，分阶段主赛程正在后台补齐。</p></div></section>;
-  if (!masterPublished) return <section className="public-master-empty"><div><span>赛</span><h2>本站赛程正在编排中</h2><p>待组委会确认后，将在这里发布资格赛和正赛的阶段时间、赛制与晋级说明。</p></div></section>;
+  if (!contentState) return <><style>{css}</style><section className="public-master-empty"><div><span>…</span><h2>正在读取本站赛程</h2><p>赛事页面已经打开，分阶段主赛程正在后台补齐。</p></div></section></>;
+  if (!masterPublished) return <><style>{css}</style><section className="public-master-empty"><div><span>赛</span><h2>本站赛程正在编排中</h2><p>待组委会确认后，将在这里发布资格赛和正赛的阶段时间、赛制与晋级说明。</p></div></section></>;
 
   if (detailCode) {
     if (!detailedPublished) return <div className="public-master-schedule"><style>{css}</style><button className="draw-back" onClick={() => setDetailCode(null)}>‹ 返回赛程阶段</button><section className="public-master-empty"><div><span>编</span><h2>{detailStage?.title || "本阶段"}详细赛程正在编排中</h2><p>阶段时间和赛制已经公布；具体签表、比赛场次、球台和对阵将在竞赛执行确认并发布后显示。</p><button onClick={() => setDetailCode(null)}>返回阶段赛程</button></div></section></div>;
