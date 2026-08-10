@@ -17,6 +17,7 @@ type EventDetail = { station: Station; contentState: PublicContentState | null }
 type CompetitionWarmIntent = "entry" | PublicCompetitionTab;
 
 const PublicCompetitionLiveV2 = dynamic(() => import("./public-competition-live-v2"), { ssr: false });
+const PublicMasterSchedule = dynamic(() => import("./public-master-schedule"), { ssr: false });
 const PlayerDbView = dynamic(() => import("./player-db-view"), { ssr: false, loading: () => <PlayerLoadingShell /> });
 
 const eventDetailCache = new Map<string, { data: EventDetail; loadedAt: number }>();
@@ -153,7 +154,7 @@ export default function EventApp({ data }: { data: EventData }) {
   const detail = baseStation ? eventDetails.get(baseStation.eventId) : undefined;
   const station = detail?.station ?? baseStation;
   const contentState = detail?.contentState ?? undefined;
-  const requestedCompetitionTab = tab === "schedule" || tab === "matches" || tab === "rankings" ? tab as PublicCompetitionTab : null;
+  const requestedCompetitionTab = tab === "matches" || tab === "rankings" ? tab as PublicCompetitionTab : null;
   const activeCompetitionTab = requestedCompetitionTab && contentState ? requestedCompetitionTab : null;
 
   const hydrateEvent = (eventId: string) => {
@@ -179,8 +180,8 @@ export default function EventApp({ data }: { data: EventData }) {
   const openGuide = (kind: GuideKind) => { setGuideKind(kind); setTab("guide"); if (station) void warmCompetition(station.eventId, "entry"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const changeTab = (nextTab: EventTab) => {
     if (station) {
-      const intent: CompetitionWarmIntent = nextTab === "schedule" || nextTab === "matches" || nextTab === "rankings" ? nextTab : "entry";
-      void warmCompetition(station.eventId, intent);
+      const intent: CompetitionWarmIntent = nextTab === "matches" || nextTab === "rankings" ? nextTab : "entry";
+      if (nextTab !== "schedule") void warmCompetition(station.eventId, intent);
     }
     setTab(nextTab);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -215,6 +216,7 @@ export default function EventApp({ data }: { data: EventData }) {
           {tab === "overview" && <StationOverview station={station} contentState={contentState} openRules={() => changeTab("rules")} openSchedule={() => changeTab("schedule")} openGuide={openGuide} />}
           {tab === "guide" && <ParticipantGuide kind={guideKind} onBack={() => changeTab("overview")} />}
           {tab === "rules" && (!contentState ? <PublicModuleEmpty icon="…" title="正在读取竞赛规程" description="赛事页面已经打开，详细规程正在后台补齐。" /> : contentState.publishedModules.includes("regulation") ? <CompetitionRules station={station} contentState={contentState} /> : <PublicModuleEmpty icon="规" title="本站竞赛规程正在完善中" description="待组委会确认后，将在这里发布正式规程、参赛要求和相关文件。" />)}
+          {tab === "schedule" && <PublicMasterSchedule station={station} contentState={contentState} />}
           {requestedCompetitionTab && !contentState ? <PublicModuleEmpty icon="…" title="正在准备本站比赛数据" description="页面框架已打开，本站公开数据正在后台按优先级补齐。" /> : null}
           <PublicCompetitionLiveV2 station={station} contentState={contentState} activeTab={activeCompetitionTab} />
         </>}
