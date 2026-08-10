@@ -49,7 +49,9 @@ async function loadRule(requestedYear?: number): Promise<PlayerPointsRule> {
   const sql = getSqlClient();
   let year = requestedYear;
   if (!year) {
-    const years = await sql<Array<{ year: number | null }>>`select max(year)::int as year from public.events`;
+    const years = await sql<Array<{ year: number | null }>>`
+      select max(year)::int as year from public.events where coalesce(is_test,false)=false
+    `;
     year = Number(years[0]?.year || new Date().getFullYear());
   }
   const rows = await sql<Array<{ year: number; participation_points: number; prize_unit_yuan: number; prize_points_per_unit: number }>>`
@@ -94,6 +96,7 @@ export async function getPlayerPointsPageFast(inputPrincipal: AdminPrincipalInpu
   const sql = getSqlClient();
   const unitCents = rule.prizeUnitYuan * 100;
 
+  // Event scope intentionally includes test events so Luoyang remains usable for regression work.
   if (scope === "event") {
     if (!eventId) return { items: [], filteredTotal: 0, page, pageSize, year: rule.year, scope, eventId: null, rule };
     const rows = await sql<PointsRow[]>`
@@ -137,7 +140,7 @@ export async function getPlayerPointsPageFast(inputPrincipal: AdminPrincipalInpu
     with scoped_regs as materialized (
       select r.player_id,r.event_id,r.group_id,e.start_date
       from public.registrations r join public.events e on e.id=r.event_id
-      where r.status='approved' and e.year=${rule.year}
+      where r.status='approved' and e.year=${rule.year} and coalesce(e.is_test,false)=false
     ), reg_stats as (
       select player_id,count(distinct event_id)::int as event_count from scoped_regs group by player_id
     ), latest_group as (
@@ -147,7 +150,7 @@ export async function getPlayerPointsPageFast(inputPrincipal: AdminPrincipalInpu
     ), prize_stats as (
       select er.player_id,coalesce(sum(er.prize_amount_cents),0)::bigint as prize_cents
       from public.event_rankings er join public.events e on e.id=er.event_id
-      where e.year=${rule.year} and er.status='published' and er.player_id is not null
+      where e.year=${rule.year} and er.status='published' and er.player_id is not null and coalesce(e.is_test,false)=false
       group by er.player_id
     ), name_counts as (
       select full_name,count(*)::int as name_count from public.players where merged_into_player_id is null group by full_name
@@ -218,7 +221,7 @@ export async function getPlayerPointsDetailFast(inputPrincipal: AdminPrincipalIn
         join public.events e on e.id=r.event_id
         join public.event_groups eg on eg.id=r.group_id
         left join public.event_rankings er on er.event_id=r.event_id and er.group_id=r.group_id and er.player_id=r.player_id and er.status='published'
-        where r.player_id=${playerId} and r.status='approved' and e.year=${rule.year}
+        where r.player_id=${playerId} and r.status='approved' and e.year=${rule.year} and coalesce(e.is_test,false)=false
         order by e.start_date desc,r.event_id desc
       `;
 
