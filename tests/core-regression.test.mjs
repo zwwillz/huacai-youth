@@ -42,6 +42,11 @@ test("qualification draw API uses q1/q2 fast implementation", () => {
   assert.match(writer, /\["qualifier-one", "qualifier-two"\]/);
 });
 
+test("legacy qualification draw entry is explicitly deprecated", () => {
+  const legacy = source("db/draw-engine.ts");
+  assert.match(legacy, /@deprecated Use createQualificationDrawFast/);
+});
+
 test("seed source requires prior finished published event with complete top16", () => {
   const code = source("db/seed-initialization.ts");
   assert.match(code, /e\.status in \('finished','archived'\)/);
@@ -62,6 +67,23 @@ test("unpublished competition writes remain dirty drafts until explicit publish"
   assert.match(context, /has_unpublished_changes=true/);
   assert.match(context, /'draft',true/);
   assert.match(context, /write: true/);
+});
+
+test("event overview save is one client request backed by a server transaction", () => {
+  const client = source("app/admin/content/content-management-client.tsx");
+  const saveStart = client.indexOf("const saveOverview");
+  const saveEnd = client.indexOf("const saveRegulation", saveStart);
+  const overviewSave = client.slice(saveStart, saveEnd);
+  assert.match(overviewSave, /fetch\("\/api\/admin\/event-overview"/);
+  assert.doesNotMatch(overviewSave, /Promise\.all/);
+  assert.match(source("db/event-overview.ts"), /db\.transaction/);
+});
+
+test("public matches initially render forty cards and load forty more", () => {
+  const competition = source("app/public-competition-live-v2.tsx");
+  assert.match(competition, /useState\(40\)/);
+  assert.match(competition, /matches\.slice\(0, visibleCount\)/);
+  assert.match(competition, /count \+ 40/);
 });
 
 test("test-only performance items remain untouched in this stability round", () => {
