@@ -51,6 +51,7 @@ export async function POST(request: Request) {
     revalidateTag("public-content", { expire: 0 });
     revalidateTag(`public-event-detail-${input.eventId}`, { expire: 0 });
     revalidatePath("/");
+    revalidatePath(`/api/public/events/${input.eventId}/detail`);
     return Response.json({ data });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "赛事资料保存失败。" }, { status: 400 });
