@@ -3,8 +3,6 @@
 import type { EventManagementData } from "@/db/event-management";
 import EventManagementClient from "./events/event-management-client";
 import EventSettingsIndexView from "./events/event-settings-index-view";
-import type { AccountManagementRow } from "@/db/account-management";
-import AccountManagementClient from "./accounts/account-management-client";
 
 function placeholderEvent(eventId: string): EventManagementData {
   return {
@@ -61,12 +59,7 @@ export function PointsLoadingView({ eventId = "" }: { viewerRole?: string; event
 }
 
 export function AccountsLoadingView() {
-  const accounts: AccountManagementRow[] = [
-    { id: "loading-admin", username: "admin", displayName: "系统管理员", role: "system_admin", roleLabel: "系统管理员", status: "active", lastLoginAt: null, createdAt: "", assignedEvents: [] },
-    { id: "loading-committee", username: "—", displayName: "组委会账号读取中", role: "committee", roleLabel: "组委会", status: "active", lastLoginAt: null, createdAt: "", assignedEvents: [] },
-    { id: "loading-referee", username: "—", displayName: "裁判账号读取中", role: "referee", roleLabel: "裁判", status: "active", lastLoginAt: null, createdAt: "", assignedEvents: [] },
-  ];
-  return <div aria-busy="true" style={{ pointerEvents: "none" }}><AccountManagementClient initialAccounts={accounts} /></div>;
+  return <SimpleWorkspaceLoading kicker="ACCOUNT & ACCESS" title="账号与权限" description="系统管理员、组委会与裁判账号正在读取，角色和赛事权限会在原位置补齐。" rows={5} />;
 }
 
 export function LogsLoadingView() {
