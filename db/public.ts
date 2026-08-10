@@ -15,11 +15,13 @@ const GROUPS: Group[] = ["少年组", "青年组"];
 const PHASE_IDS: PhaseId[] = ["qualifier-one", "qualifier-two", "main-one", "main-two"];
 
 const EVENT_STATUS: Record<string, string> = {
+  draft: "筹备中",
   registration_open: "报名中",
   registration_closed: "报名结束",
   upcoming: "即将开始",
   in_progress: "进行中",
   finished: "已结束",
+  archived: "已结束",
   cancelled: "已取消",
 };
 
@@ -187,11 +189,16 @@ export async function getPublicSiteData(): Promise<EventData> {
     organizationsByEvent.set(row.eventId, current);
   }
 
-  const sponsorsByEvent = new Map<string, string[]>();
+  const sponsorsByEvent = new Map<string, NonNullable<Station["partners"]>>();
   for (const row of sponsorRows) {
     if (!row.isPublished) continue;
     const current = sponsorsByEvent.get(row.eventId) ?? [];
-    current.push(row.name);
+    current.push({
+      name: row.name,
+      type: row.sponsorType,
+      logo: row.logoKey ?? "",
+      website: row.websiteUrl ?? "",
+    });
     sponsorsByEvent.set(row.eventId, current);
   }
 
@@ -211,6 +218,7 @@ export async function getPublicSiteData(): Promise<EventData> {
     const venuePrefix = row.venueDistrict?.includes("/") ? row.city : prefix;
     const format = asStringRows(row.competitionFormat);
     const prizes = asPrizeMap(row.prizes);
+    const partners = sponsorsByEvent.get(row.id) ?? [];
     if (!format.length) format.push(["待公布", "待公布", "待公布", "待公布"]);
     for (const group of GROUPS) if (!prizes[group].length) prizes[group] = [["冠军", "待公布"]];
     return {
@@ -220,10 +228,10 @@ export async function getPublicSiteData(): Promise<EventData> {
       stop: `第${chineseNumber(row.stationNo)}站`,
       city: `${row.city}站`,
       shortCity: shortCity(row.city),
-      status: EVENT_STATUS[row.status] ?? row.status,
+      status: EVENT_STATUS[row.status] ?? "状态待确认",
       active: index === 0,
       title: row.title,
-      sponsor: row.sponsorLabel || (sponsorsByEvent.get(row.id) ?? []).join(" · ") || "赛事信息待公布",
+      sponsor: row.sponsorLabel || partners.map((item) => item.name).join(" · ") || "赛事信息待公布",
       coverImage: row.coverImage || "",
       date: formatRange(row.startDate, row.endDate),
       duration: row.durationLabel || "待公布",
@@ -247,6 +255,7 @@ export async function getPublicSiteData(): Promise<EventData> {
       signup: row.signupNote || "报名信息待组委会发布。",
       prizes,
       phases: phasesByEvent.get(row.id) ?? [],
+      partners,
       publicPlayerCount: id === "langfang" ? Number(publicCounts?.playerCount) || 0 : undefined,
       publicMatchCount: id === "langfang" ? Number(publicCounts?.matchCount) || 0 : undefined,
     };
