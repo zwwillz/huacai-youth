@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import { requireEventAccess } from "./permissions";
 import {
@@ -87,19 +87,27 @@ function id(prefix: string) {
   return prefix + "_" + crypto.randomUUID().replaceAll("-", "");
 }
 
+function parseJsonValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try { return JSON.parse(value); } catch { return value; }
+}
+
 function asRows(value: unknown): string[][] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(Array.isArray).map((row) => (row as unknown[]).map((item) => String(item ?? "")));
+  const normalized = parseJsonValue(value);
+  if (!Array.isArray(normalized)) return [];
+  return normalized.filter(Array.isArray).map((row) => (row as unknown[]).map((item) => String(item ?? "")));
 }
 
 function asStrings(value: unknown): string[] {
-  return Array.isArray(value) ? value.map((item) => String(item ?? "")).filter(Boolean) : [];
+  const normalized = parseJsonValue(value);
+  return Array.isArray(normalized) ? normalized.map((item) => String(item ?? "")).filter(Boolean) : [];
 }
 
 function prizeMap(value: unknown) {
+  const normalized = parseJsonValue(value);
   const result: Record<"少年组" | "青年组", string[][]> = { 少年组: [], 青年组: [] };
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const record = value as Record<string, unknown>;
+  if (normalized && typeof normalized === "object" && !Array.isArray(normalized)) {
+    const record = normalized as Record<string, unknown>;
     result.少年组 = asRows(record.少年组);
     result.青年组 = asRows(record.青年组);
   }
@@ -194,31 +202,31 @@ export async function saveContentManagementData(username: string, input: Content
   if (!event) throw new Error("没有找到这场赛事。");
   const updatedAt = now();
   const cleanDrawRules = (input.drawRules ?? []).map((item) => item.trim()).filter(Boolean);
+  const competitionFormatJson = JSON.stringify(input.competitionFormat ?? []);
+  const drawRulesJson = JSON.stringify(cleanDrawRules);
+  const prizesJson = JSON.stringify(input.prizes ?? { 少年组: [], 青年组: [] });
 
   await db.transaction(async (tx) => {
     await tx.update(events).set({ summary: input.summary.trim() || null, updatedBy: account.id, updatedAt }).where(eq(events.id, input.eventId));
 
-    await tx.insert(eventDetails).values({
-      eventId: input.eventId,
-      ageRules: {},
-      competitionFormat: input.competitionFormat ?? [],
-      ruleStandard: input.ruleStandard.trim() || null,
-      drawRules: cleanDrawRules,
-      prizeNote: input.prizeNote.trim() || null,
-      prizes: input.prizes ?? { 少年组: [], 青年组: [] },
-      createdAt: updatedAt,
-      updatedAt,
-    }).onConflictDoUpdate({
-      target: eventDetails.eventId,
-      set: {
-        competitionFormat: input.competitionFormat ?? [],
-        ruleStandard: input.ruleStandard.trim() || null,
-        drawRules: cleanDrawRules,
-        prizeNote: input.prizeNote.trim() || null,
-        prizes: input.prizes ?? { 少年组: [], 青年组: [] },
-        updatedAt,
-      },
-    });
+    // The HTTPS database bridge does not expose postgres.js JSON serializers.
+    // Use explicit ::jsonb casts here so arrays/objects are stored as JSON values,
+    // not as JSON strings inside a jsonb column.
+    await tx.execute(sql`
+      insert into public.event_details (
+        event_id,age_rules,competition_format,rule_standard,draw_rules,prize_note,prizes,created_at,updated_at
+      ) values (
+        ${input.eventId},'{}'::jsonb,${competitionFormatJson}::jsonb,${input.ruleStandard.trim() || null},
+        ${drawRulesJson}::jsonb,${input.prizeNote.trim() || null},${prizesJson}::jsonb,${updatedAt},${updatedAt}
+      )
+      on conflict (event_id) do update set
+        competition_format=excluded.competition_format,
+        rule_standard=excluded.rule_standard,
+        draw_rules=excluded.draw_rules,
+        prize_note=excluded.prize_note,
+        prizes=excluded.prizes,
+        updated_at=excluded.updated_at
+    `);
 
     for (const document of input.documents ?? []) {
       const [existing] = await tx.select().from(eventDocuments).where(and(eq(eventDocuments.eventId, input.eventId), eq(eventDocuments.documentType, document.documentType))).limit(1);
