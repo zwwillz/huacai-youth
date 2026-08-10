@@ -9,7 +9,7 @@ export const revalidate = 1800;
 
 const getCachedPublicHomeData = unstable_cache(
   getPublicHomeData,
-  ["public-home-data-v1"],
+  ["public-home-data-v2"],
   { revalidate: 1800, tags: ["public-site"] },
 );
 
@@ -48,7 +48,14 @@ export default async function Home() {
     <style>{`
       .tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;grid-template-columns:none!important;width:max-content!important;max-width:100%!important;gap:5px!important;padding:5px!important}
       .tabs.public-five-tabs button,.tabs.public-unified-tabs button{min-width:0!important;padding:8px 14px!important;font-size:11px!important}
-      @media(max-width:900px){.tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;width:max-content!important}.tabs.public-five-tabs button,.tabs.public-unified-tabs button{padding:8px 14px!important;font-size:11px!important}}
+      .partner-logo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+      .partner-logo-card{min-height:124px;padding:14px;border:1px solid #e9e4ef;border-radius:14px;color:inherit;background:#fbfafe;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;text-decoration:none;transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease}
+      a.partner-logo-card:hover{border-color:#d9ccec;box-shadow:0 10px 25px #40226f12;transform:translateY(-1px)}
+      .sponsor-section .partner-logo-card img{width:100%!important;height:58px!important;max-width:180px!important;object-fit:contain!important;border-radius:0!important;display:block!important}
+      .partner-logo-card strong{margin-top:10px;font-size:11px;line-height:1.45}
+      .partner-logo-card small{margin-top:4px;color:#817789;font-size:8px;letter-spacing:0}
+      @media(max-width:900px){.tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;width:max-content!important}.tabs.public-five-tabs button,.tabs.public-unified-tabs button{padding:8px 14px!important;font-size:11px!important}.partner-logo-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+      @media(max-width:620px){.partner-logo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.partner-logo-card{min-height:108px;padding:11px}.sponsor-section .partner-logo-card img{height:50px!important}}
     `}</style>
     <EventApp data={data} />
   </>;
