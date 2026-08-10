@@ -181,21 +181,19 @@ export function parseMasterScheduleSnapshot(value: string | null): MasterSchedul
   }
 }
 
-function mergeFallbackStages(phases: PhaseRow[], competitionFormat: unknown): MasterScheduleStage[] {
-  const formatRows = Array.isArray(competitionFormat) ? competitionFormat : [];
-  return MASTER_SCHEDULE_CODES.map((code, index) => {
+function mergeFallbackStages(phases: PhaseRow[]): MasterScheduleStage[] {
+  return MASTER_SCHEDULE_CODES.map((code) => {
     const fallback = defaultByCode[code];
     const phase = phases.find((item) => item.code === code);
-    const format = Array.isArray(formatRows[index]) ? formatRows[index] as unknown[] : [];
     return {
       code,
       phaseNumber: phase?.phaseNumber || fallback.phaseNumber,
-      title: phase?.title || (typeof format[0] === "string" && format[0].trim() ? String(format[0]) : fallback.title),
+      title: phase?.title || fallback.title,
       dateLabel: phase?.dateLabel || "",
-      advancementText: typeof format[1] === "string" && format[1].trim() ? String(format[1]) : fallback.advancementText,
+      advancementText: fallback.advancementText,
       tags: [...fallback.tags],
-      u16RaceLabel: typeof format[2] === "string" && format[2].trim() ? String(format[2]) : fallback.u16RaceLabel,
-      u20RaceLabel: typeof format[3] === "string" && format[3].trim() ? String(format[3]) : fallback.u20RaceLabel,
+      u16RaceLabel: fallback.u16RaceLabel,
+      u20RaceLabel: fallback.u20RaceLabel,
       qualificationNote: fallback.qualificationNote,
     };
   });
@@ -227,18 +225,17 @@ async function bundle(inputPrincipal: AdminPrincipalInput, eventId: string) {
     deniedMessage: "当前账号没有维护本站主赛程的权限。",
   });
   const sql = getSqlClient();
-  const [eventRows, phases, publicationRows, detailRows] = await Promise.all([
+  const [eventRows, phases, publicationRows] = await Promise.all([
     sql<EventRow[]>`select id,full_title as "fullTitle",short_title as "shortTitle",city,station_no as "stationNo",status from public.events where id=${eventId} limit 1`,
     sql<PhaseRow[]>`select id,code,phase_number as "phaseNumber",title,date_label as "dateLabel",status,sort_order as "sortOrder" from public.event_phases where event_id=${eventId} order by sort_order,code`,
     sql<PublicationRow[]>`select id,module_type as "moduleType",status,version_no as "versionNo",published_at as "publishedAt",snapshot_json as "snapshotJson",(snapshot_json is not null) as "hasSnapshot" from public.publications where event_id=${eventId} and module_type = any(${[MASTER_SCHEDULE_MODULE, "schedule"]}::text[])`,
-    sql<Array<{ competitionFormat: unknown }>>`select competition_format as "competitionFormat" from public.event_details where event_id=${eventId} limit 1`,
   ]);
   const event = eventRows[0];
   if (!event) throw new Error("没有找到这场赛事。");
   const masterPublication = publicationRows.find((row) => row.moduleType === MASTER_SCHEDULE_MODULE);
   const detailedPublication = publicationRows.find((row) => row.moduleType === "schedule");
   const saved = parseMasterScheduleSnapshot(masterPublication?.snapshotJson ?? null);
-  const stages = saved?.stages ?? mergeFallbackStages(phases, detailRows[0]?.competitionFormat);
+  const stages = saved?.stages ?? mergeFallbackStages(phases);
   return { principal, viewer, event, phases, masterPublication, detailedPublication, stages };
 }
 
