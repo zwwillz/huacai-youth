@@ -2,7 +2,7 @@ export const eventStatusLabels: Record<string, string> = {
   draft: "筹备中",
   registration_open: "报名中",
   registration_closed: "报名已截止",
-  in_progress: "比赛进行中",
+  in_progress: "进行中",
   finished: "已结束",
   archived: "已归档",
 };
