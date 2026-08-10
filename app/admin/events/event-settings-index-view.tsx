@@ -8,8 +8,9 @@ type Props = { events: EventRow[] | null; canDelete: boolean };
 export default function EventSettingsIndexView({ events, canDelete }: Props) {
   const loading = events === null;
   const rows = events ?? [];
+  const totalCount = loading ? 0 : rows.length;
   const currentCount = loading ? 0 : rows.filter((event) => event.status !== "archived").length;
-  const finishedCount = loading ? 0 : rows.filter((event) => event.status === "finished").length;
+  const finishedCount = loading ? 0 : rows.filter((event) => event.status === "finished" || event.status === "archived").length;
   const archivedCount = loading ? 0 : rows.filter((event) => event.status === "archived").length;
   const hiddenCount = loading ? 0 : rows.filter((event) => event.isHidden && event.status !== "archived").length;
 
@@ -27,15 +28,16 @@ export default function EventSettingsIndexView({ events, canDelete }: Props) {
       <section className="event-v2-index-main"><EventListClient events={rows} canDelete={canDelete} loading={loading} /></section>
       <aside className="event-v2-index-summary">
         <small>赛事概况</small>
-        <h3>当前赛事状态</h3>
-        <p>这里仅统计赛事生命周期，不统计内容发布模块。</p>
+        <h3>赛事状态概览</h3>
+        <p>总赛事包含全部历史记录；当前赛事不包含已归档赛事。</p>
         <dl>
+          <div><dt>赛事总数</dt><dd>{loading ? "—" : totalCount}</dd></div>
           <div><dt>当前赛事</dt><dd>{loading ? "—" : currentCount}</dd></div>
           <div><dt>已结束</dt><dd>{loading ? "—" : finishedCount}</dd></div>
           <div><dt>已归档</dt><dd>{loading ? "—" : archivedCount}</dd></div>
           <div><dt>前端隐藏</dt><dd>{loading ? "—" : hiddenCount}</dd></div>
         </dl>
-        <div className="event-v2-summary-note"><strong>生命周期说明</strong><p>“当前赛事”指所有未归档赛事；隐藏只影响公众前端；已结束赛事仍可维护；归档后进入历史只读，系统管理员可以撤回归档。</p></div>
+        <div className="event-v2-summary-note"><strong>生命周期说明</strong><p>“当前赛事”指所有未归档赛事；已归档赛事仍计入赛事总数和已结束赛事，但不再计入当前赛事。隐藏只影响公众前端。</p></div>
       </aside>
     </div>
   </main>;
