@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { getPublicPlayerDetail } from "@/db/player-data";
+import { getFormalPublicPlayerDetail } from "@/db/player-data-formal";
 import { publicJson } from "../../response";
 
 export const dynamic = "force-static";
@@ -8,8 +8,8 @@ export const revalidate = 300;
 export const runtime = "nodejs";
 
 const getCachedPlayerDetail = unstable_cache(
-  getPublicPlayerDetail,
-  ["public-player-detail-v3"],
+  getFormalPublicPlayerDetail,
+  ["public-player-detail-v4"],
   { revalidate: 300, tags: ["public-players"] },
 );
 
