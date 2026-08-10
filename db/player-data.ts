@@ -112,6 +112,7 @@ function prizePoints(prizeAmountCents: number) {
   return prizeAmountCents > 0 ? prizeAmountCents / 10_000 : 0;
 }
 
+/** Legacy public player reader kept aligned with the formal eligibility boundary. */
 export async function getPublicPlayerSummaries(): Promise<PublicPlayerSummary[]> {
   const sql = getSqlClient();
   const result = await sql`
@@ -122,7 +123,9 @@ export async function getPublicPlayerSummaries(): Promise<PublicPlayerSummary[]>
       from registrations r
       join events e on e.id = r.event_id
       join event_groups eg on eg.id = r.group_id
-      where r.status <> 'withdrawn' and e.publish_status = 'published'
+      where r.status = 'approved'
+        and e.publish_status = 'published'
+        and coalesce(e.is_test, false) = false
     ),
     latest_reg as (
       select distinct on (player_id)
@@ -140,9 +143,13 @@ export async function getPublicPlayerSummaries(): Promise<PublicPlayerSummary[]>
              er.player_id, er.placement_label
       from event_rankings er
       join events e on e.id = er.event_id
+      join registrations r
+        on r.event_id=er.event_id and r.group_id=er.group_id and r.player_id=er.player_id
       where er.player_id is not null
         and er.status = 'published'
+        and r.status = 'approved'
         and e.publish_status = 'published'
+        and coalesce(e.is_test, false) = false
       order by er.player_id, er.display_order asc, er.event_id desc
     ),
     points_total as (
@@ -213,8 +220,9 @@ export async function getPublicPlayerDetail(playerId: string): Promise<PublicPla
         join events e on e.id = r.event_id
         join event_groups eg on eg.id = r.group_id
         where r.player_id = ${playerId}
-          and r.status <> 'withdrawn'
+          and r.status = 'approved'
           and e.publish_status = 'published'
+          and coalesce(e.is_test, false) = false
         order by e.start_date desc, r.event_id desc
         limit 1
       ),
@@ -224,6 +232,14 @@ export async function getPublicPlayerDetail(playerId: string): Promise<PublicPla
         join players target on target.id = ${playerId}
         where same_name.full_name = target.full_name
           and same_name.merged_into_player_id is null
+          and exists (
+            select 1 from registrations formal_r
+            join events formal_e on formal_e.id=formal_r.event_id
+            where formal_r.player_id=same_name.id
+              and formal_r.status='approved'
+              and formal_e.publish_status='published'
+              and coalesce(formal_e.is_test, false)=false
+          )
       )
       select p.id, p.full_name,
              case
@@ -253,8 +269,9 @@ export async function getPublicPlayerDetail(playerId: string): Promise<PublicPla
        and er.player_id = r.player_id
        and er.status = 'published'
       where r.player_id = ${playerId}
-        and r.status <> 'withdrawn'
+        and r.status = 'approved'
         and e.publish_status = 'published'
+        and coalesce(e.is_test, false) = false
       order by e.year desc, e.start_date desc, r.event_id desc
     `,
     sql`
@@ -263,6 +280,13 @@ export async function getPublicPlayerDetail(playerId: string): Promise<PublicPla
       join events e on e.id = m.event_id
       where (m.player_a_id = ${playerId} or m.player_b_id = ${playerId})
         and e.publish_status = 'published'
+        and coalesce(e.is_test, false) = false
+        and exists (
+          select 1 from registrations formal_r
+          where formal_r.player_id=${playerId}
+            and formal_r.event_id=m.event_id
+            and formal_r.status='approved'
+        )
       order by m.match_date asc, m.match_time asc, m.order_no asc, m.id asc
     `,
   ]);
