@@ -12,6 +12,7 @@ function refreshPublicEvent(eventId: string) {
   revalidateTag("public-content", { expire: 0 });
   revalidateTag(`public-event-detail-${eventId}`, { expire: 0 });
   revalidatePath("/");
+  revalidatePath(`/api/public/events/${eventId}/detail`);
 }
 
 export async function GET(request: Request) {
