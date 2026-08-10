@@ -70,7 +70,7 @@ export default function EventListClient({ events, canDelete, loading = false }: 
     if (action === "archive") {
       const ok = await ask({
         title: `归档“${event.shortTitle}”`,
-        description: "归档后赛事进入历史只读状态，不能继续修改，也不能删除。系统管理员可以在需要时撤回归档。",
+        description: "归档后赛事进入后台历史只读状态，不能继续修改，也不能删除。归档本身不等于前端隐藏：如果赛事概览已经发布，归档后仍会在公众端作为“已结束”赛事显示；若当前处于前端隐藏，归档时会恢复公众显示。",
         confirmLabel: "确认归档",
         tone: "danger",
       });
@@ -93,7 +93,7 @@ export default function EventListClient({ events, canDelete, loading = false }: 
       });
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error || "赛事状态修改失败。");
-      setMessage(action === "hide" ? "赛事已从公众前端隐藏。" : action === "show" ? "赛事已恢复公众前端显示。" : action === "restore" ? "赛事已撤回归档，恢复为已结束状态。" : "赛事已归档为历史只读状态。");
+      setMessage(action === "hide" ? "赛事已从公众前端隐藏。" : action === "show" ? "赛事已恢复公众前端显示。" : action === "restore" ? "赛事已撤回归档，恢复为已结束状态。" : "赛事已归档为后台历史只读状态；已发布赛事仍会在公众端显示。" );
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "赛事状态修改失败。");
