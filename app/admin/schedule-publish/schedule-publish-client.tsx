@@ -1,28 +1,43 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { MasterScheduleStage, SchedulePublishData } from "@/db/schedule-publish";
+import { SCHEDULE_GROUPS, type MasterScheduleStage, type ScheduleGroup, type SchedulePublishData } from "@/db/schedule-publish";
 
 function cloneStages(stages: MasterScheduleStage[]) {
   return stages.map((stage) => ({ ...stage, tags: [...stage.tags] }));
 }
 
+function groupCode(group: ScheduleGroup) {
+  return group === "少年组" ? "U16" : "U20";
+}
+
 export default function SchedulePublishClient({ initialData }: { initialData: SchedulePublishData }) {
   const [data, setData] = useState(initialData);
-  const [stages, setStages] = useState(() => cloneStages(initialData.stages));
-  const [tagDrafts, setTagDrafts] = useState<Record<number, string>>({});
+  const [activeGroup, setActiveGroup] = useState<ScheduleGroup>("少年组");
+  const [stageDrafts, setStageDrafts] = useState<Record<ScheduleGroup, MasterScheduleStage[]>>(() => ({
+    少年组: cloneStages(initialData.groups.少年组.stages),
+    青年组: cloneStages(initialData.groups.青年组.stages),
+  }));
+  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
   const archived = data.event.status === "archived";
-  const published = data.publication.status === "published";
-  const detailedPublished = data.detailedSchedule.status === "published" && data.detailedSchedule.hasContent;
-  const completion = useMemo(() => stages.filter((stage) => stage.title.trim() && stage.dateLabel.trim() && stage.advancementText.trim() && stage.u16RaceLabel.trim() && stage.u20RaceLabel.trim()).length, [stages]);
+  const currentState = data.groups[activeGroup];
+  const published = currentState.status === "published";
+  const stages = stageDrafts[activeGroup];
+  const detailedPublished = data.detailedSchedule.status === "published";
+  const completion = useMemo(() => stages.filter((stage) => stage.title.trim() && stage.dateLabel.trim() && stage.advancementText.trim() && stage.raceLabel.trim()).length, [stages]);
 
   const updateStage = (index: number, patch: Partial<MasterScheduleStage>) => {
-    setStages((current) => current.map((stage, rowIndex) => rowIndex === index ? { ...stage, ...patch } : stage));
+    setStageDrafts((current) => ({
+      ...current,
+      [activeGroup]: current[activeGroup].map((stage, rowIndex) => rowIndex === index ? { ...stage, ...patch } : stage),
+    }));
   };
+
+  const tagKey = (index: number) => `${activeGroup}-${index}`;
 
   const removeTag = (index: number, tagIndex: number) => {
     const stage = stages[index];
@@ -31,23 +46,24 @@ export default function SchedulePublishClient({ initialData }: { initialData: Sc
   };
 
   const addTag = (index: number) => {
-    const value = (tagDrafts[index] || "").trim();
+    const key = tagKey(index);
+    const value = (tagDrafts[key] || "").trim();
     const stage = stages[index];
     if (!value || !stage || stage.tags.includes(value) || stage.tags.length >= 8) return;
     updateStage(index, { tags: [...stage.tags, value] });
-    setTagDrafts((current) => ({ ...current, [index]: "" }));
+    setTagDrafts((current) => ({ ...current, [key]: "" }));
   };
 
-  const syncSave = async () => {
+  const syncSave = async (group: ScheduleGroup) => {
     const response = await fetch("/api/admin/schedule-publish", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "save", data: { eventId: data.event.id, stages } }),
+      body: JSON.stringify({ action: "save", data: { eventId: data.event.id, group, stages: stageDrafts[group] } }),
     });
     const payload = await response.json() as { data?: SchedulePublishData; error?: string };
-    if (!response.ok || !payload.data) throw new Error(payload.error || "主赛程保存失败。");
+    if (!response.ok || !payload.data) throw new Error(payload.error || `${group}主赛程保存失败。`);
     setData(payload.data);
-    setStages(cloneStages(payload.data.stages));
+    setStageDrafts((current) => ({ ...current, [group]: cloneStages(payload.data!.groups[group].stages) }));
     return payload.data;
   };
 
@@ -55,31 +71,32 @@ export default function SchedulePublishClient({ initialData }: { initialData: Sc
     if (archived || working) return;
     setWorking(true); setNotice(""); setError("");
     try {
-      const next = await syncSave();
-      setNotice(next.publication.status === "published" ? "主赛程已保存，公众端已同步更新。" : "主赛程已保存为后台草稿。");
+      const next = await syncSave(activeGroup);
+      setNotice(next.groups[activeGroup].status === "published" ? `${activeGroup}主赛程已保存，公众端已同步更新。` : `${activeGroup}主赛程已保存为后台草稿。`);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "主赛程保存失败。");
+      setError(failure instanceof Error ? failure.message : `${activeGroup}主赛程保存失败。`);
     } finally { setWorking(false); }
   };
 
   const togglePublication = async () => {
     if (archived || working) return;
     setWorking(true); setNotice(""); setError("");
-    const nextStatus = published ? "draft" : "published";
+    const group = activeGroup;
+    const nextStatus = data.groups[group].status === "published" ? "draft" : "published";
     try {
-      await syncSave();
+      await syncSave(group);
       const response = await fetch("/api/admin/schedule-publish", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "publication", eventId: data.event.id, status: nextStatus }),
+        body: JSON.stringify({ action: "publication", eventId: data.event.id, group, status: nextStatus }),
       });
       const payload = await response.json() as { data?: SchedulePublishData; error?: string };
-      if (!response.ok || !payload.data) throw new Error(payload.error || "主赛程发布状态更新失败。");
+      if (!response.ok || !payload.data) throw new Error(payload.error || `${group}主赛程发布状态更新失败。`);
       setData(payload.data);
-      setStages(cloneStages(payload.data.stages));
-      setNotice(nextStatus === "published" ? "赛事主赛程已发布到公众端。具体赛程表仍以竞赛执行的发布状态为准。" : "赛事主赛程已取消发布，后台内容仍完整保留。公众端将显示待组委会发布提示。");
+      setStageDrafts((current) => ({ ...current, [group]: cloneStages(payload.data!.groups[group].stages) }));
+      setNotice(nextStatus === "published" ? `${group}主赛程已发布到公众端。` : `${group}主赛程已取消发布，后台内容仍完整保留。`);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "主赛程发布失败。");
+      setError(failure instanceof Error ? failure.message : `${group}主赛程发布失败。`);
     } finally { setWorking(false); }
   };
 
@@ -90,12 +107,12 @@ export default function SchedulePublishClient({ initialData }: { initialData: Sc
         <h1>{data.event.shortTitle || data.event.fullTitle}</h1>
         <p>{data.event.city} · 第 {data.event.stationNo} 站</p>
         <dl className="content-side-status">
-          <div><dt>赛事主赛程</dt><dd className={published ? "ok" : ""}>{published ? "已发布" : "草稿"}</dd></div>
-          <div><dt>详细赛程表</dt><dd className={detailedPublished ? "ok" : ""}>{detailedPublished ? "已有公开赛程" : "正在编排"}</dd></div>
-          <div><dt>阶段资料</dt><dd>{completion}/{stages.length}</dd></div>
+          <div><dt>少年组 U16</dt><dd className={data.groups.少年组.status === "published" ? "ok" : ""}>{data.groups.少年组.status === "published" ? "已发布" : "草稿"}</dd></div>
+          <div><dt>青年组 U20</dt><dd className={data.groups.青年组.status === "published" ? "ok" : ""}>{data.groups.青年组.status === "published" ? "已发布" : "草稿"}</dd></div>
+          <div><dt>详细赛程表</dt><dd className={detailedPublished ? "ok" : ""}>{detailedPublished ? "竞赛执行已发布" : "竞赛执行中"}</dd></div>
         </dl>
-        <div className="content-side-note"><strong>两层赛程</strong><p>这里发布的是公众首先看到的阶段主赛程。具体签表、对阵、球台和场次仍由“竞赛执行 → 赛程编排”产生并单独发布。</p></div>
-        <div className="content-side-note"><strong>查看赛程表</strong><p>主赛程可以先发布。竞赛执行尚未形成可公开的具体场次时，公众点击“查看赛程表”会看到友好的“正在编排中”提示。</p></div>
+        <div className="content-side-note"><strong>按组别独立发布</strong><p>少年组和青年组分别维护、分别发布。修改一个组别不会覆盖另一个组别已经保存的主赛程。</p></div>
+        <div className="content-side-note"><strong>详细赛程继续沿用原数据</strong><p>这里不修改签表、场次、球台和对阵。公众点击“查看赛程表”后仍进入竞赛执行原有的详细赛程页面。</p></div>
       </aside>
 
       <section className="content-main schedule-publish-main">
@@ -104,18 +121,22 @@ export default function SchedulePublishClient({ initialData }: { initialData: Sc
         {error && <div className="content-message error">! {error}<button type="button" onClick={() => setError("")}>×</button></div>}
 
         <section className="content-head-card schedule-publish-head">
-          <div><small>MASTER SCHEDULE</small><h2>赛程发布</h2><p>维护公众端赛程首页的阶段信息：时间、名称、晋级人数、抽签与赛制标签、局数和晋级说明。详细签表与具体场次不在这里编辑。</p></div>
-          <span className={published ? "public" : "draft"}>{published ? "主赛程已发布" : "主赛程草稿"}</span>
+          <div><small>MASTER SCHEDULE</small><h2>赛程发布</h2><p>少年组与青年组分别维护阶段时间、晋级人数、抽签及赛制标签、局数和晋级说明。</p></div>
+          <span className={published ? "public" : "draft"}>{groupCode(activeGroup)} · {published ? "已发布" : "草稿"}</span>
         </section>
 
+        <nav className="schedule-group-switch" aria-label="选择赛程组别">
+          {SCHEDULE_GROUPS.map((group) => <button type="button" className={activeGroup === group ? "active" : ""} onClick={() => { setActiveGroup(group); setNotice(""); setError(""); }} key={group}><b>{groupCode(group)}</b><span>{group}</span><em>{data.groups[group].status === "published" ? "已发布" : "草稿"}</em></button>)}
+        </nav>
+
         <section className="schedule-publish-intro">
-          <div><strong>公众端展示结构</strong><span>四个阶段按比赛顺序展示，每个阶段都可以独立调整文字和标签。</span></div>
+          <div><strong>{activeGroup} · {groupCode(activeGroup)} 主赛程</strong><span>当前只编辑{activeGroup}。四个阶段按比赛顺序展示，标签可以继续增加或删除。</span></div>
           <b>{completion === stages.length ? "阶段信息已完整" : `还有 ${stages.length - completion} 个阶段待完善`}</b>
         </section>
 
-        {stages.map((stage, index) => <section className="content-card schedule-stage-editor" key={stage.code}>
+        {stages.map((stage, index) => <section className="content-card schedule-stage-editor" key={`${activeGroup}-${stage.code}`}>
           <header>
-            <div><small>{stage.phaseNumber || String(index + 1).padStart(2, "0")} · {stage.code.toUpperCase()}</small><h2>{stage.title || "未命名阶段"}</h2><p>这一张卡片对应公众端赛程页中的一个阶段。</p></div>
+            <div><small>{stage.phaseNumber || String(index + 1).padStart(2, "0")} · {stage.code.toUpperCase()}</small><h2>{stage.title || "未命名阶段"}</h2><p>这一张卡片对应公众端{activeGroup}赛程中的一个阶段。</p></div>
             <span className="schedule-stage-order">阶段 {String(index + 1).padStart(2, "0")}</span>
           </header>
 
@@ -124,28 +145,27 @@ export default function SchedulePublishClient({ initialData }: { initialData: Sc
             <label className="content-field"><span>比赛时间</span><input disabled={archived} value={stage.dateLabel} onChange={(event) => updateStage(index, { dateLabel: event.target.value })} placeholder="例如：7月25日—27日" /></label>
             <label className="content-field"><span>晋级人数 / 进程</span><input disabled={archived} value={stage.advancementText} onChange={(event) => updateStage(index, { advancementText: event.target.value })} placeholder="例如：N人 → 晋级24人" /></label>
             <label className="content-field"><span>阶段序号</span><input disabled={archived} value={stage.phaseNumber} onChange={(event) => updateStage(index, { phaseNumber: event.target.value })} placeholder="01" /></label>
-            <label className="content-field"><span>少年组局数标签</span><input disabled={archived} value={stage.u16RaceLabel} onChange={(event) => updateStage(index, { u16RaceLabel: event.target.value })} placeholder="例如：9局5胜" /></label>
-            <label className="content-field"><span>青年组局数标签</span><input disabled={archived} value={stage.u20RaceLabel} onChange={(event) => updateStage(index, { u20RaceLabel: event.target.value })} placeholder="例如：13局7胜" /></label>
+            <label className="content-field wide"><span>{activeGroup}局数标签</span><input disabled={archived} value={stage.raceLabel} onChange={(event) => updateStage(index, { raceLabel: event.target.value })} placeholder={activeGroup === "少年组" ? "例如：9局5胜" : "例如：13局7胜"} /></label>
           </div>
 
           <div className="schedule-tag-editor">
-            <div className="schedule-field-label"><strong>抽签及赛制标签</strong><span>按需添加，例如“一次抽签到底 / 16区 / 单败 / 双败”。最多8个。</span></div>
+            <div className="schedule-field-label"><strong>抽签及赛制标签</strong><span>保留现在的默认标签，可继续添加，例如“一次抽签到底 / 16区 / 单败 / 双败”。最多8个。</span></div>
             <div className="schedule-tags">{stage.tags.map((tag, tagIndex) => <span key={`${tag}-${tagIndex}`}>{tag}{!archived && <button type="button" aria-label={`删除标签${tag}`} onClick={() => removeTag(index, tagIndex)}>×</button>}</span>)}</div>
-            {!archived && <div className="schedule-tag-add"><input value={tagDrafts[index] || ""} onChange={(event) => setTagDrafts((current) => ({ ...current, [index]: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(index); } }} placeholder="输入一个标签" /><button type="button" disabled={!tagDrafts[index]?.trim() || stage.tags.length >= 8} onClick={() => addTag(index)}>＋ 添加标签</button></div>}
+            {!archived && <div className="schedule-tag-add"><input value={tagDrafts[tagKey(index)] || ""} onChange={(event) => setTagDrafts((current) => ({ ...current, [tagKey(index)]: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(index); } }} placeholder="输入一个标签" /><button type="button" disabled={!tagDrafts[tagKey(index)]?.trim() || stage.tags.length >= 8} onClick={() => addTag(index)}>＋ 添加标签</button></div>}
           </div>
 
           <label className="content-field schedule-qualification-note"><span>晋级说明</span><textarea disabled={archived} rows={3} value={stage.qualificationNote} onChange={(event) => updateStage(index, { qualificationNote: event.target.value })} placeholder="简要说明本阶段如何晋级到下一阶段" /></label>
 
           <div className="schedule-stage-preview">
             <div><b>{stage.dateLabel || "时间待定"}</b><strong>{stage.title || "阶段名称"}</strong><span>{stage.advancementText || "晋级人数待定"}</span></div>
-            <div className="schedule-stage-preview-tags">{stage.tags.map((tag) => <em key={tag}>{tag}</em>)}<em>{stage.u16RaceLabel || "少年组局数"}</em></div>
+            <div className="schedule-stage-preview-tags">{stage.tags.map((tag) => <em key={tag}>{tag}</em>)}<em>{stage.raceLabel || `${activeGroup}局数`}</em></div>
             <small>{stage.qualificationNote || "晋级说明待组委会补充。"}</small>
           </div>
         </section>)}
 
         {!archived && <footer className="content-savebar schedule-publish-savebar">
-          <div><strong>保存赛事主赛程</strong><span>{published ? "保存后会立即同步已发布的公众主赛程；具体赛程表不受这里的保存影响。" : "草稿可以先保存未完成内容；确认阶段时间和赛制信息完整后再正式发布。"}</span></div>
-          <div className="content-save-actions"><button className="secondary" type="button" disabled={working} onClick={save}>{working ? "正在保存…" : "保存主赛程"}</button><button className={published ? "secondary schedule-unpublish" : undefined} type="button" disabled={working} onClick={togglePublication}>{published ? "取消发布" : "发布主赛程"}</button></div>
+          <div><strong>{activeGroup}主赛程</strong><span>{published ? `保存后立即更新公众端${activeGroup}主赛程；青年组/少年组另一组不受影响。` : `先保存${activeGroup}草稿，确认完整后再单独发布。`}</span></div>
+          <div className="content-save-actions"><button className="secondary" type="button" disabled={working} onClick={save}>{working ? "正在保存…" : `保存${activeGroup}赛程`}</button><button className={published ? "secondary schedule-unpublish" : undefined} type="button" disabled={working} onClick={togglePublication}>{published ? `取消${activeGroup}发布` : `发布${activeGroup}赛程`}</button></div>
         </footer>}
       </section>
     </div>
