@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type postgres from "postgres";
 import { getSqlClient } from "./index";
 import { assertAdminRole, requireEventAccess, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 
@@ -66,7 +67,6 @@ type BundleRow = {
   items: RawRosterItem[] | null;
   filteredTotal: number | string;
 };
-
 type RegistrationLockRow = {
   registrationId: string;
   playerId: string;
@@ -76,14 +76,12 @@ type RegistrationLockRow = {
   reviewNote: string | null;
   rosterStatus: ParticipantRosterStatus;
 };
-
 type GroupLockRow = {
   id: string;
   name: string;
   rosterStatus: ParticipantRosterStatus;
   rosterCount: number;
 };
-
 type RosterStatsRow = {
   approvedCount: number | string;
   pendingCount: number | string;
@@ -176,9 +174,14 @@ export async function getParticipantRosterPage(inputPrincipal: AdminPrincipalInp
       group by eg.id,eg.name,eg.code,eg.participant_roster_status,eg.participant_roster_count,
         eg.participant_roster_confirmed_at,eg.participant_roster_locked_at
     ), filtered as (
-      select r.id as registration_id,r.player_id,p.full_name,p.gender,p.birth_date,p.phone,
-        p.identity_type,p.identity_no_masked,eg.name as group_name,r.fee_status,r.status as review_status,
-        r.review_note,r.submitted_at,g.full_name as guardian_name,g.phone as guardian_phone
+      select r.id as registration_id,r.player_id,p.full_name,p.gender,p.birth_date,p.phone,p.identity_type,
+        case
+          when nullif(p.identity_no_masked,'') is null then null
+          when position('*' in p.identity_no_masked)>0 or length(p.identity_no_masked)<=8 then p.identity_no_masked
+          else left(p.identity_no_masked,4) || repeat('*',greatest(length(p.identity_no_masked)-8,3)) || right(p.identity_no_masked,4)
+        end as identity_no_masked,
+        eg.name as group_name,r.fee_status,r.status as review_status,r.review_note,r.submitted_at,
+        g.full_name as guardian_name,g.phone as guardian_phone
       from public.registrations r
       join selected_group sg on sg.id=r.group_id
       join public.players p on p.id=r.player_id and p.merged_into_player_id is null
@@ -250,7 +253,7 @@ export async function getParticipantRosterPage(inputPrincipal: AdminPrincipalInp
   };
 }
 
-async function rosterStats(tx: ReturnType<typeof getSqlClient>, eventId: string, groupId: string) {
+async function rosterStats(tx: postgres.TransactionSql, eventId: string, groupId: string) {
   const rows = await tx<RosterStatsRow[]>`
     select
       count(*) filter (where r.status='approved' and p.merged_into_player_id is null)::int as "approvedCount",
@@ -298,11 +301,14 @@ export async function updateParticipantRegistration(inputPrincipal: AdminPrincip
     if (!before) throw new Error("报名记录不存在或已被调整。");
     if (before.rosterStatus === "locked") throw new Error("当前组别参赛名单已经锁定，不能再修改报名状态。");
     const reviewChanged = before.status !== reviewStatus;
+    const nextReviewer = reviewStatus !== "pending" ? principal.id : null;
+    const nextReviewedAt = reviewStatus !== "pending" ? changedAt : null;
     await tx`
       update public.registrations
       set status=${reviewStatus},fee_status=${feeStatus},review_note=${(input.reviewNote || "").trim() || null},
-        reviewed_by=${reviewChanged && reviewStatus !== "pending" ? principal.id : null},
-        reviewed_at=${reviewChanged && reviewStatus !== "pending" ? changedAt : null},updated_at=${changedAt}
+        reviewed_by=case when ${reviewChanged} then ${nextReviewer} else reviewed_by end,
+        reviewed_at=case when ${reviewChanged} then ${nextReviewedAt} else reviewed_at end,
+        updated_at=${changedAt}
       where id=${input.registrationId}
     `;
     if (before.rosterStatus === "confirmed") {
