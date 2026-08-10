@@ -17,7 +17,7 @@ export default function SchedulePublishClient({ initialData }: { initialData: Sc
 
   const archived = data.event.status === "archived";
   const published = data.publication.status === "published";
-  const detailedPublished = data.detailedSchedule.status === "published";
+  const detailedPublished = data.detailedSchedule.status === "published" && data.detailedSchedule.hasContent;
   const completion = useMemo(() => stages.filter((stage) => stage.title.trim() && stage.dateLabel.trim() && stage.advancementText.trim() && stage.u16RaceLabel.trim() && stage.u20RaceLabel.trim()).length, [stages]);
 
   const updateStage = (index: number, patch: Partial<MasterScheduleStage>) => {
@@ -91,11 +91,11 @@ export default function SchedulePublishClient({ initialData }: { initialData: Sc
         <p>{data.event.city} · 第 {data.event.stationNo} 站</p>
         <dl className="content-side-status">
           <div><dt>赛事主赛程</dt><dd className={published ? "ok" : ""}>{published ? "已发布" : "草稿"}</dd></div>
-          <div><dt>详细赛程表</dt><dd className={detailedPublished ? "ok" : ""}>{detailedPublished ? "竞赛执行已发布" : "尚未发布"}</dd></div>
+          <div><dt>详细赛程表</dt><dd className={detailedPublished ? "ok" : ""}>{detailedPublished ? "已有公开赛程" : "正在编排"}</dd></div>
           <div><dt>阶段资料</dt><dd>{completion}/{stages.length}</dd></div>
         </dl>
         <div className="content-side-note"><strong>两层赛程</strong><p>这里发布的是公众首先看到的阶段主赛程。具体签表、对阵、球台和场次仍由“竞赛执行 → 赛程编排”产生并单独发布。</p></div>
-        <div className="content-side-note"><strong>查看赛程表</strong><p>主赛程可以先发布。竞赛执行尚未发布具体赛程时，公众点击“查看赛程表”只会看到友好的“正在编排中”提示。</p></div>
+        <div className="content-side-note"><strong>查看赛程表</strong><p>主赛程可以先发布。竞赛执行尚未形成可公开的具体场次时，公众点击“查看赛程表”会看到友好的“正在编排中”提示。</p></div>
       </aside>
 
       <section className="content-main schedule-publish-main">
@@ -144,7 +144,7 @@ export default function SchedulePublishClient({ initialData }: { initialData: Sc
         </section>)}
 
         {!archived && <footer className="content-savebar schedule-publish-savebar">
-          <div><strong>保存赛事主赛程</strong><span>{published ? "保存后会立即同步已发布的公众主赛程；具体赛程表不受这里的保存影响。" : "可以先反复保存草稿，确认后再正式发布到公众端。"}</span></div>
+          <div><strong>保存赛事主赛程</strong><span>{published ? "保存后会立即同步已发布的公众主赛程；具体赛程表不受这里的保存影响。" : "草稿可以先保存未完成内容；确认阶段时间和赛制信息完整后再正式发布。"}</span></div>
           <div className="content-save-actions"><button className="secondary" type="button" disabled={working} onClick={save}>{working ? "正在保存…" : "保存主赛程"}</button><button className={published ? "secondary schedule-unpublish" : undefined} type="button" disabled={working} onClick={togglePublication}>{published ? "取消发布" : "发布主赛程"}</button></div>
         </footer>}
       </section>
