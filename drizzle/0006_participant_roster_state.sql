@@ -17,6 +17,11 @@ BEGIN
   END IF;
 END $$;
 
+CREATE INDEX IF NOT EXISTS event_groups_participant_roster_confirmed_by_idx
+  ON public.event_groups(participant_roster_confirmed_by);
+CREATE INDEX IF NOT EXISTS event_groups_participant_roster_locked_by_idx
+  ON public.event_groups(participant_roster_locked_by);
+
 -- Existing historical competitions have already entered draw/match execution.
 -- Treat those group rosters as locked so the new prerequisite does not break
 -- legitimate historical competition data.
