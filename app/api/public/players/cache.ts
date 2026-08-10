@@ -1,11 +1,12 @@
 import { unstable_cache } from "next/cache";
-import { getPublicPlayerSummaries, type PublicPlayerSummary } from "@/db/player-data";
+import type { PublicPlayerSummary } from "@/db/player-data";
+import { getFormalPublicPlayerSummaries } from "@/db/player-data-formal";
 
 export const PUBLIC_PLAYER_PAGE_SIZE = 120;
 
 export const getCachedPublicPlayerSummaries = unstable_cache(
-  getPublicPlayerSummaries,
-  ["public-player-summaries-v2"],
+  getFormalPublicPlayerSummaries,
+  ["public-player-summaries-v3"],
   { revalidate: 300, tags: ["public-players"] },
 );
 
