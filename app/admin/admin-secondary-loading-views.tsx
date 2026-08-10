@@ -9,7 +9,7 @@ export function ContentIndexLoadingView() {
       <aside className="content-sidebar">
         <small>当前赛事</small><h1>赛事内容正在读取</h1><p>正在进入内容发布</p>
         <dl className="content-side-status"><div><dt>赛事概览</dt><dd>读取中</dd></div><div><dt>竞赛规程</dt><dd>读取中</dd></div></dl>
-        <div className="content-side-note"><strong>内容发布</strong><p>页面结构已就绪，赛事资料读取完成后会直接进入新版“赛事概览 / 竞赛规程”，不会再显示旧的赛事选择页。</p></div>
+        <div className="content-side-note"><strong>内容发布</strong><p>页面结构已经就绪，赛事资料读取完成后会直接填入赛事概览和竞赛规程。</p></div>
       </aside>
       <section className="content-main">
         <section className="content-head-card content-publishing-head"><div><small>CONTENT PUBLISHING</small><h2>内容发布</h2><p>赛事概览与竞赛规程正在读取。</p><div className="content-top-tabs"><button className="active" type="button">赛事概览</button><button type="button">竞赛规程</button></div></div><span className="draft">读取中</span></section>
@@ -22,7 +22,7 @@ export function ContentIndexLoadingView() {
 export function SchedulePublishLoadingView() {
   return <main className="content-workspace schedule-publish-workspace" aria-busy="true" style={{ pointerEvents: "none" }}>
     <div className="content-layout schedule-publish-layout">
-      <aside className="content-sidebar schedule-publish-sidebar"><small>当前赛事</small><h1>赛事主赛程正在读取</h1><p>正在同步阶段资料</p><dl className="content-side-status"><div><dt>赛事主赛程</dt><dd>读取中</dd></div><div><dt>详细赛程表</dt><dd>读取中</dd></div><div><dt>阶段资料</dt><dd>—/4</dd></div></dl><div className="content-side-note"><strong>两层赛程</strong><p>主赛程与竞赛执行的具体赛程表会分别读取，页面结构不会跳回旧版。</p></div></aside>
+      <aside className="content-sidebar schedule-publish-sidebar"><small>当前赛事</small><h1>赛事主赛程正在读取</h1><p>正在同步阶段资料</p><dl className="content-side-status"><div><dt>赛事主赛程</dt><dd>读取中</dd></div><div><dt>详细赛程表</dt><dd>读取中</dd></div><div><dt>阶段资料</dt><dd>—/4</dd></div></dl><div className="content-side-note"><strong>两层赛程</strong><p>主赛程与竞赛执行的具体赛程表会分别读取，页面结构会保持稳定。</p></div></aside>
       <section className="content-main schedule-publish-main"><section className="content-head-card schedule-publish-head"><div><small>MASTER SCHEDULE</small><h2>赛程发布</h2><p>阶段名称、比赛时间、晋级人数和赛制标签正在读取。</p></div><span className="draft">读取中</span></section><section className="schedule-publish-intro"><div><strong>公众端展示结构</strong><span>四个阶段正在加载。</span></div><b>读取中</b></section>{[0,1,2,3].map((item) => <section className="content-card schedule-stage-editor content-loading-card" key={item}><div className="content-loading-lines"><i /><i /><i /></div></section>)}</section>
     </div>
   </main>;
