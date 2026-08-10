@@ -24,6 +24,14 @@ export type EventRow = {
 
 type LifecycleAction = "hide" | "show" | "archive" | "restore";
 
+function lifecycleClass(status: string) {
+  if (status === "registration_open") return "status-registration";
+  if (status === "in_progress") return "status-progress";
+  if (status === "finished") return "status-finished";
+  if (status === "registration_closed") return "status-closed";
+  return "status-neutral";
+}
+
 function LoadingCard({ index }: { index: number }) {
   return <article className="event-v2-card loading" aria-busy="true"><div className="event-v2-card-top"><span>第 — 站</span><b>读取中</b></div><h3>赛事名称正在读取</h3><p>城市 · 比赛日期 · 参赛组别</p><div className="event-v2-card-actions"><span>赛事设置</span><span>赛事运营</span><span>竞赛执行</span></div><span hidden>{index}</span></article>;
 }
@@ -81,11 +89,11 @@ export default function EventListClient({ events, canDelete, loading = false }: 
   };
 
   const remove = async (event: EventRow) => {
-    if (loading || workingId) return;
+    if (loading || workingId || event.publishStatus === "published") return;
     setOpenMoreId("");
     const ok = await ask({
       title: `删除“${event.shortTitle}”`,
-      description: "删除只用于误建赛事。已开始执行、已有报名或比赛数据、以及已归档赛事都不能删除。这个操作不可撤销。",
+      description: "删除只用于误建赛事。赛事必须先撤回前端发布，且尚未开始执行、没有报名或比赛数据、也未归档。这个操作不可撤销。",
       confirmLabel: "确认删除赛事",
       tone: "danger",
     });
@@ -106,10 +114,17 @@ export default function EventListClient({ events, canDelete, loading = false }: 
     const archived = event.status === "archived";
     const busy = workingId === event.id;
     const moreOpen = openMoreId === event.id;
+    const published = event.publishStatus === "published";
     return <article className={archived ? "event-v2-card archived" : "event-v2-card"} key={event.id}>
       <div className="event-v2-card-top">
         <div className="event-v2-card-tags"><span>第 {event.stationNo} 站</span><small>{event.year}赛季</small></div>
-        <div className="event-v2-card-state"><b>{eventStatusLabel(event.status)}</b>{event.isHidden && <em>前端隐藏</em>}</div>
+        <div className="event-v2-card-state">
+          {archived ? <>
+            <b className="status-finished">已结束</b>
+            <em className="status-archived">已归档</em>
+          </> : <b className={lifecycleClass(event.status)}>{eventStatusLabel(event.status)}</b>}
+          {event.isHidden && <em className="status-hidden">前端隐藏</em>}
+        </div>
       </div>
       <h3>{event.fullTitle || event.shortTitle}</h3>
       <p className="event-v2-meta"><span>{event.city}</span><i /> <span>{event.startDate} — {event.endDate}</span>{event.groupNames && <><i /><span>{event.groupNames}</span></>}</p>
@@ -126,7 +141,7 @@ export default function EventListClient({ events, canDelete, loading = false }: 
           {moreOpen && <div>
             <button type="button" disabled={busy} onClick={() => lifecycle(event, event.isHidden ? "show" : "hide")}>{event.isHidden ? "恢复前端显示" : "隐藏赛事"}</button>
             <button type="button" disabled={busy || event.status !== "finished"} title={event.status !== "finished" ? "只有已结束赛事可以归档" : undefined} onClick={() => lifecycle(event, "archive")}>归档赛事</button>
-            {canDelete && <button className="danger" type="button" disabled={busy} onClick={() => remove(event)}>删除误建赛事</button>}
+            {canDelete && <button className="danger" type="button" disabled={busy || published} title={published ? "前端已发布赛事不能删除，请先在内容发布中撤回赛事概览" : undefined} onClick={() => remove(event)}>删除误建赛事</button>}
           </div>}
         </div>}
       </div>
