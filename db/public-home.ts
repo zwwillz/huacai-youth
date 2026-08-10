@@ -4,11 +4,13 @@ import { getDb } from "./index";
 import { events, venues } from "./schema";
 
 const EVENT_STATUS: Record<string, string> = {
+  draft: "筹备中",
   registration_open: "报名中",
   registration_closed: "报名结束",
   upcoming: "即将开始",
   in_progress: "进行中",
   finished: "已结束",
+  archived: "已结束",
   cancelled: "已取消",
 };
 
@@ -77,7 +79,7 @@ function loadingStation(row: {
     stop: `第${chineseNumber(row.stationNo)}站`,
     city: `${row.city}站`,
     shortCity: shortCity(row.city),
-    status: EVENT_STATUS[row.status] ?? row.status,
+    status: EVENT_STATUS[row.status] ?? "状态待确认",
     active: index === 0,
     title: row.title,
     sponsor: "中国华彩十六球青少年系列赛",
@@ -101,6 +103,7 @@ function loadingStation(row: {
     signup: detailLoading,
     prizes: { 少年组: [["奖金", detailLoading]], 青年组: [["奖金", detailLoading]] },
     phases: [],
+    partners: [],
   };
 }
 
