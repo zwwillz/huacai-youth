@@ -1,5 +1,5 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
-import { saveEventManagementData, type EventManagementInput } from "@/db/event-management";
+import { saveEventManagementData, type EventManagementData, type EventManagementInput } from "@/db/event-management";
 import { getEventManagementDataFast } from "@/db/event-management-fast";
 import { saveEventOverviewData, type EventOverviewInput } from "@/db/event-overview";
 import { syncEventOverviewPublication } from "@/db/event-publication-sync";
@@ -29,6 +29,103 @@ function refreshPublicEvent(eventId: string) {
   revalidateTag(`public-event-detail-${eventId}`, { expire: 0 });
   revalidatePath("/");
   revalidatePath(`/api/public/events/${eventId}/detail`);
+}
+
+function stableMembers(values: string[] | undefined) {
+  return [...new Set(values ?? [])].sort();
+}
+
+function managementSnapshot(data: EventManagementData) {
+  return {
+    year: data.event.year,
+    stationNo: data.event.stationNo,
+    fullTitle: data.event.fullTitle,
+    city: data.event.city,
+    startDate: data.event.startDate,
+    endDate: data.event.endDate,
+    registrationStartAt: data.event.registrationStartAt,
+    registrationEndAt: data.event.registrationEndAt,
+    status: data.event.status,
+    organizations: data.event.organizations,
+    groups: data.event.groups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      code: group.code,
+      birthDateFrom: group.birthDateFrom,
+      birthDateTo: group.birthDateTo,
+      minimumAge: group.minimumAge,
+      registrationFeeYuan: group.registrationFeeYuan,
+      registrationLimit: group.registrationLimit,
+      mainDrawSize: group.mainDrawSize,
+      status: group.status,
+      ageRuleText: group.ageRuleText,
+    })),
+    memberIds: stableMembers(data.event.memberIds),
+    minimumAgeNote: data.event.details.minimumAgeNote,
+    signupNote: data.event.details.signupNote,
+  };
+}
+
+function inputManagementSnapshot(input: EventManagementInput) {
+  return {
+    year: Number(input.year),
+    stationNo: Number(input.stationNo),
+    fullTitle: input.fullTitle.trim(),
+    city: input.city.trim(),
+    startDate: input.startDate,
+    endDate: input.endDate,
+    registrationStartAt: input.registrationStartAt ?? "",
+    registrationEndAt: input.registrationEndAt ?? "",
+    status: input.status,
+    organizations: input.organizations,
+    groups: (input.groups ?? []).map((group) => ({
+      id: group.id,
+      name: group.name,
+      code: group.code,
+      birthDateFrom: group.birthDateFrom ?? "",
+      birthDateTo: group.birthDateTo ?? "",
+      minimumAge: group.minimumAge ?? null,
+      registrationFeeYuan: Number(group.registrationFeeYuan ?? 0),
+      registrationLimit: group.registrationLimit ?? null,
+      mainDrawSize: group.mainDrawSize ?? null,
+      status: group.status,
+      ageRuleText: group.ageRuleText ?? "",
+    })),
+    memberIds: stableMembers(input.memberIds),
+    minimumAgeNote: input.details.minimumAgeNote ?? "",
+    signupNote: input.details.signupNote ?? "",
+  };
+}
+
+function isOverviewOnlyUpdate(current: EventManagementData, input: EventManagementInput) {
+  return JSON.stringify(managementSnapshot(current)) === JSON.stringify(inputManagementSnapshot(input));
+}
+
+function overviewInput(input: EventManagementInput): EventOverviewInput {
+  return {
+    eventId: input.eventId,
+    shortTitle: input.shortTitle,
+    summary: input.summary,
+    publishStatus: input.publishStatus,
+    coverImageKey: input.coverImageKey,
+    venue: { ...input.venue },
+    details: {
+      sponsorLabel: input.details.sponsorLabel,
+      durationLabel: input.details.durationLabel,
+      qualifierDateLabel: input.details.qualifierDateLabel,
+      mainDateLabel: input.details.mainDateLabel,
+      totalPrizeLabel: input.details.totalPrizeLabel,
+      mainSizeLabel: input.details.mainSizeLabel,
+    },
+    sponsors: (input.sponsors ?? []).map((sponsor) => ({
+      name: sponsor.name,
+      sponsorType: sponsor.sponsorType,
+      logoKey: sponsor.logoKey,
+      websiteUrl: sponsor.websiteUrl,
+      isPublished: sponsor.isPublished,
+    })),
+    guides: [],
+  };
 }
 
 export async function GET(request: Request) {
@@ -63,6 +160,18 @@ export async function POST(request: Request) {
     const sql = getSqlClient();
     const rows = await sql<Array<{ status: string }>>`select status from public.events where id=${input.eventId} limit 1`;
     if (rows[0]?.status === "archived") throw new Error("已归档赛事为只读状态，不能继续修改。");
+
+    // The content-publishing screen historically posted the entire event bundle
+    // even when only overview fields changed. Detect that case server-side and
+    // use the lightweight overview writer so cover/partner publication never
+    // rewrites event_groups or depends on a WebSocket transaction.
+    const current = await getEventManagementDataFast(viewer, input.eventId);
+    if (isOverviewOnlyUpdate(current, input)) {
+      const data = await saveEventOverviewData(viewer.username, overviewInput(input));
+      await syncEventOverviewPublication(input.eventId, input.publishStatus === "published");
+      refreshPublicEvent(input.eventId);
+      return Response.json({ data }, { headers: { "Cache-Control": "private, no-store" } });
+    }
 
     await saveEventManagementData(viewer.username, input);
     await normalizeEventJson(input.eventId);
