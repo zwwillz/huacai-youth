@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SCHEDULE_GROUPS, type MasterScheduleStage, type ScheduleGroup, type SchedulePublishData } from "@/db/schedule-publish";
+import type { MasterScheduleStage, ScheduleGroup, SchedulePublishData } from "@/db/schedule-publish";
+
+const SCHEDULE_GROUPS: ScheduleGroup[] = ["少年组", "青年组"];
 
 function cloneStages(stages: MasterScheduleStage[]) {
   return stages.map((stage) => ({ ...stage, tags: [...stage.tags] }));
@@ -164,7 +166,7 @@ export default function SchedulePublishClient({ initialData }: { initialData: Sc
         </section>)}
 
         {!archived && <footer className="content-savebar schedule-publish-savebar">
-          <div><strong>{activeGroup}主赛程</strong><span>{published ? `保存后立即更新公众端${activeGroup}主赛程；青年组/少年组另一组不受影响。` : `先保存${activeGroup}草稿，确认完整后再单独发布。`}</span></div>
+          <div><strong>{activeGroup}主赛程</strong><span>{published ? `保存后立即更新公众端${activeGroup}主赛程；另一组别不受影响。` : `先保存${activeGroup}草稿，确认完整后再单独发布。`}</span></div>
           <div className="content-save-actions"><button className="secondary" type="button" disabled={working} onClick={save}>{working ? "正在保存…" : `保存${activeGroup}赛程`}</button><button className={published ? "secondary schedule-unpublish" : undefined} type="button" disabled={working} onClick={togglePublication}>{published ? `取消${activeGroup}发布` : `发布${activeGroup}赛程`}</button></div>
         </footer>}
       </section>
