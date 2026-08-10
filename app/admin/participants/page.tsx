@@ -55,6 +55,11 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
     currentEventId={currentEventId}
     eventScoped
   >
-    <ParticipantRosterWorkspace viewerKey={viewer.id} viewerRole={viewer.role} initialData={initialData} />
+    <ParticipantRosterWorkspace
+      key={currentEventId}
+      viewerKey={viewer.id}
+      viewerRole={viewer.role}
+      initialData={initialData}
+    />
   </AdminWorkspaceShell>;
 }
