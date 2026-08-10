@@ -5,7 +5,7 @@ import { FormEvent, useMemo, useState } from "react";
 import type { ParticipantGroupSummary, ParticipantRosterItem, ParticipantRosterPageData } from "@/db/participant-roster";
 
 const CACHE_TTL_MS = 60_000;
-const listCache = new Map<string, { at: number; data: ParticipantRosterPageData }>();
+const listCache = new Map<string, ParticipantRosterPageData>();
 
 type EditorState = {
   item: ParticipantRosterItem;
@@ -28,6 +28,10 @@ function feeLabel(value: string) {
   if (["waived", "exempt"].includes(value)) return "免缴";
   return "待核对";
 }
+function editableFeeStatus(value: string) {
+  if (value === "exempt") return "waived";
+  return ["paid", "unpaid", "waived"].includes(value) ? value : "unknown";
+}
 function genderLabel(value: string | null) {
   if (!value) return "—";
   if (["male", "m", "男"].includes(value.toLowerCase())) return "男";
@@ -49,6 +53,12 @@ function rosterClass(group: ParticipantGroupSummary) {
 }
 function cacheKey(viewerKey: string, input: { eventId: string; groupId: string; query: string; review: string; fee: string; page: number }) {
   return [viewerKey, input.eventId, input.groupId, input.query, input.review, input.fee, input.page].join("|");
+}
+function cacheList(key: string, data: ParticipantRosterPageData) {
+  listCache.set(key, data);
+  window.setTimeout(() => {
+    if (listCache.get(key) === data) listCache.delete(key);
+  }, CACHE_TTL_MS);
 }
 function updateUrl(input: { eventId: string; groupId: string; query: string; review: string; fee: string; page: number }) {
   const params = new URLSearchParams();
@@ -87,9 +97,9 @@ export function ParticipantRosterWorkspace({ viewerKey, viewerRole, initialData 
     updateUrl(input);
     const key = cacheKey(viewerKey, input);
     const cached = listCache.get(key);
-    if (!options.force && cached && Date.now() - cached.at < CACHE_TTL_MS) {
-      setData(cached.data);
-      setQueryDraft(cached.data.query);
+    if (!options.force && cached) {
+      setData(cached);
+      setQueryDraft(cached.query);
       setMessage(null);
       return;
     }
@@ -100,7 +110,7 @@ export function ParticipantRosterWorkspace({ viewerKey, viewerRole, initialData 
       const response = await fetch(`/api/admin/participants?${params.toString()}`, { cache: "no-store" });
       const body = await response.json() as { data?: ParticipantRosterPageData; error?: string };
       if (!response.ok || !body.data) throw new Error(body.error || "参赛人员读取失败。");
-      listCache.set(key, { at: Date.now(), data: body.data });
+      cacheList(key, body.data);
       setData(body.data);
       setQueryDraft(body.data.query);
     } catch (error) {
@@ -239,7 +249,7 @@ export function ParticipantRosterWorkspace({ viewerKey, viewerRole, initialData 
             <td>{item.guardianPhone || "—"}</td>
             <td><span className={`participant-badge fee-${item.feeStatus}`}>{feeLabel(item.feeStatus)}</span></td>
             <td><span className={`participant-badge review-${item.reviewStatus}`}>{statusLabel(item.reviewStatus)}</span></td>
-            <td><button className="participant-edit" type="button" disabled={locked || busy} onClick={() => setEditor({ item, reviewStatus: item.reviewStatus, feeStatus: ["paid","unpaid","waived"].includes(item.feeStatus) ? item.feeStatus : "unknown", reviewNote: item.reviewNote || "" })}>{locked ? "已锁定" : "编辑"}</button></td>
+            <td><button className="participant-edit" type="button" disabled={locked || busy} onClick={() => setEditor({ item, reviewStatus: item.reviewStatus, feeStatus: editableFeeStatus(item.feeStatus), reviewNote: item.reviewNote || "" })}>{locked ? "已锁定" : "编辑"}</button></td>
           </tr>)}</tbody>
         </table>
         {!data.items.length && <div className="participant-empty">当前筛选条件下没有报名人员。</div>}
