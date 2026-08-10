@@ -32,6 +32,18 @@ function lifecycleClass(status: string) {
   return "status-neutral";
 }
 
+function lifecycleStyle(status: string) {
+  if (status === "registration_open") return { color: "#b73548", background: "#fff0f2" };
+  if (status === "in_progress") return { color: "#23764a", background: "#eaf8ef" };
+  if (status === "finished") return { color: "#6f6972", background: "#f0eef2" };
+  if (status === "registration_closed") return { color: "#825e22", background: "#fff4df" };
+  return { color: "#665d6b", background: "#f2eff4" };
+}
+
+const finishedStyle = { color: "#6f6972", background: "#f0eef2" };
+const archivedStyle = { color: "#3567a8", background: "#eaf2ff" };
+const hiddenStyle = { color: "#9b681f", background: "#fff0d5" };
+
 function LoadingCard({ index }: { index: number }) {
   return <article className="event-v2-card loading" aria-busy="true"><div className="event-v2-card-top"><span>第 — 站</span><b>读取中</b></div><h3>赛事名称正在读取</h3><p>城市 · 比赛日期 · 参赛组别</p><div className="event-v2-card-actions"><span>赛事设置</span><span>赛事运营</span><span>竞赛执行</span></div><span hidden>{index}</span></article>;
 }
@@ -120,10 +132,10 @@ export default function EventListClient({ events, canDelete, loading = false }: 
         <div className="event-v2-card-tags"><span>第 {event.stationNo} 站</span><small>{event.year}赛季</small></div>
         <div className="event-v2-card-state">
           {archived ? <>
-            <b className="status-finished">已结束</b>
-            <em className="status-archived">已归档</em>
-          </> : <b className={lifecycleClass(event.status)}>{eventStatusLabel(event.status)}</b>}
-          {event.isHidden && <em className="status-hidden">前端隐藏</em>}
+            <b className="status-finished" style={finishedStyle}>已结束</b>
+            <em className="status-archived" style={archivedStyle}>已归档</em>
+          </> : <b className={lifecycleClass(event.status)} style={lifecycleStyle(event.status)}>{eventStatusLabel(event.status)}</b>}
+          {event.isHidden && <em className="status-hidden" style={hiddenStyle}>前端隐藏</em>}
         </div>
       </div>
       <h3>{event.fullTitle || event.shortTitle}</h3>
