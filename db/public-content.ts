@@ -1,12 +1,17 @@
 import { inArray } from "drizzle-orm";
 import { getDb, getSqlClient } from "./index";
 import { eventDocuments, publications } from "./schema";
+import { parseMasterScheduleSnapshot, type MasterScheduleStage } from "./schedule-publish";
 
 export type PublicContentState = {
   stationId: string;
   eventId: string;
   shortTitle: string;
   publishedModules: string[];
+  masterSchedule: {
+    published: boolean;
+    stages: MasterScheduleStage[];
+  };
   guides: Array<{ id: string; title: string; guideType: string }>;
   documents: {
     regulation: { url: string; published: boolean };
@@ -26,6 +31,7 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
       eventId: publications.eventId,
       moduleType: publications.moduleType,
       status: publications.status,
+      snapshotJson: publications.snapshotJson,
     }).from(publications).where(inArray(publications.eventId, eventIds)),
     db.select().from(eventDocuments).where(inArray(eventDocuments.eventId, eventIds)),
     sql<GuideSummaryRow[]>`
@@ -37,7 +43,10 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
   ]);
 
   return stations.map((station) => {
-    const modules = publicationRows.filter((row) => row.eventId === station.eventId && row.status === "published").map((row) => row.moduleType);
+    const eventPublications = publicationRows.filter((row) => row.eventId === station.eventId);
+    const modules = eventPublications.filter((row) => row.status === "published").map((row) => row.moduleType);
+    const masterPublication = eventPublications.find((row) => row.moduleType === "master_schedule");
+    const masterSnapshot = parseMasterScheduleSnapshot(masterPublication?.snapshotJson ?? null);
     const document = (type: "regulation" | "referee_list") => {
       const row = documentRows.find((item) => item.eventId === station.eventId && item.documentType === type);
       return { url: row?.externalUrl || row?.fileKey || "", published: Boolean(row?.isPublished) && modules.includes("documents") };
@@ -47,6 +56,10 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
       eventId: station.eventId,
       shortTitle: station.title,
       publishedModules: modules,
+      masterSchedule: {
+        published: masterPublication?.status === "published" && Boolean(masterSnapshot?.stages.length),
+        stages: masterPublication?.status === "published" ? (masterSnapshot?.stages ?? []) : [],
+      },
       guides: guideRows.filter((row) => row.event_id === station.eventId).map((row) => ({ id: row.id, title: row.title, guideType: row.guide_type })),
       documents: {
         regulation: document("regulation"),
