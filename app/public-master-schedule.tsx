@@ -14,7 +14,7 @@ const PHASE_INDEX: Record<MasterScheduleCode, number> = {
 };
 
 const css = `
-.public-master-schedule{display:flex;flex-direction:column;gap:18px}.public-master-schedule .master-schedule-note{padding:10px 15px;border:1px solid #e7e0ef;border-radius:13px;color:#7c7085;background:#fbf9fd;font-size:9px;line-height:1.7}.public-master-schedule .master-schedule-note strong{color:#5c348e}.public-master-schedule .phase-meta{display:flex;gap:7px;flex-wrap:wrap}.public-master-schedule .phase-meta span{padding:5px 8px;border-radius:999px;color:#613896;background:#f0ebf8;font-size:8px;font-weight:800}.public-master-schedule .master-qualification{margin-top:13px;padding:11px 12px;border-radius:11px;color:#6f6177;background:#f8f5fa;font-size:9px;line-height:1.7}.public-master-schedule .master-qualification strong{display:block;margin-bottom:3px;color:#4f2b85;font-size:8px}.public-master-schedule .compact-phase>footer{margin-top:15px}.public-master-empty{min-height:260px;padding:30px;border:1px solid #e5deed;border-radius:18px;background:linear-gradient(145deg,#fff,#f8f4fb);display:grid;place-items:center;text-align:center}.public-master-empty>div{max-width:460px}.public-master-empty span{width:50px;height:50px;margin:0 auto 13px;border-radius:15px;color:#fff;background:linear-gradient(145deg,#6834ce,#d9469b);display:grid;place-items:center;font-size:17px;font-weight:900}.public-master-empty h2{margin:0 0 8px;font-size:19px}.public-master-empty p{margin:0;color:#817589;font-size:10px;line-height:1.8}.public-master-empty button{margin-top:15px;padding:9px 15px;border:0;border-radius:999px;color:#fff;background:#6034aa;font-size:9px;font-weight:900;cursor:pointer}.public-master-detail-shell{position:relative;min-height:300px}.public-master-detail-shell.is-opening>.public-master-detail-content{position:absolute;inset:0;visibility:hidden;pointer-events:none;overflow:hidden}.public-master-detail-loading{min-height:300px;padding:36px 22px;border:1px solid #e6dff0;border-radius:18px;background:linear-gradient(145deg,#fff,#f8f4fb);display:grid;place-items:center;text-align:center}.public-master-detail-loading>div{max-width:430px}.public-master-detail-loading span{width:50px;height:50px;display:grid;place-items:center;margin:0 auto 13px;border-radius:15px;color:#fff;background:linear-gradient(145deg,#6834ce,#d9469b);font-size:17px;font-weight:900}.public-master-detail-loading h2{margin:0 0 8px;font-size:18px}.public-master-detail-loading p{margin:0;color:#817589;font-size:10px;line-height:1.8}
+.public-master-schedule{display:flex;flex-direction:column;gap:18px}.public-master-schedule .master-schedule-note{padding:10px 15px;border:1px solid #e7e0ef;border-radius:13px;color:#7c7085;background:#fbf9fd;font-size:9px;line-height:1.7}.public-master-schedule .master-schedule-note strong{color:#5c348e}.public-master-schedule .phase-meta{display:flex;gap:7px;flex-wrap:wrap}.public-master-schedule .phase-meta span{padding:5px 8px;border-radius:999px;color:#613896;background:#f0ebf8;font-size:8px;font-weight:800}.public-master-schedule .master-qualification{margin-top:13px;padding:11px 12px;border-radius:11px;color:#6f6177;background:#f8f5fa;font-size:9px;line-height:1.7}.public-master-schedule .master-qualification strong{display:block;margin-bottom:3px;color:#4f2b85;font-size:8px}.public-master-schedule .compact-phase>footer{margin-top:15px}.public-master-empty{min-height:260px;padding:30px;border:1px solid #e5deed;border-radius:18px;background:linear-gradient(145deg,#fff,#f8f4fb);display:grid;place-items:center;text-align:center}.public-master-empty>div{max-width:460px}.public-master-empty span{width:50px;height:50px;margin:0 auto 13px;border-radius:15px;color:#fff;background:linear-gradient(145deg,#6834ce,#d9469b);display:grid;place-items:center;font-size:17px;font-weight:900}.public-master-empty h2{margin:0 0 8px;font-size:19px}.public-master-empty p{margin:0;color:#817589;font-size:10px;line-height:1.8}.public-master-empty button{margin-top:15px;padding:9px 15px;border:0;border-radius:999px;color:#fff;background:#6034aa;font-size:9px;font-weight:900;cursor:pointer}.public-master-detail-shell{position:relative;min-height:300px}.public-master-detail-shell.is-opening>.public-master-detail-content{position:absolute;inset:0;visibility:hidden;pointer-events:none;overflow:hidden}.public-master-detail-loading{min-height:300px;padding:36px 22px;border:1px solid #e6dff0;border-radius:18px;background:linear-gradient(145deg,#fff,#f8f4fb);display:grid;place-items:center;text-align:center}.public-master-detail-loading>div{max-width:430px}.public-master-detail-loading span{width:50px;height:50px;display:grid;place-items:center;margin:0 auto 13px;border-radius:15px;color:#fff;background:linear-gradient(145deg,#6834ce,#d9469b);font-size:17px;font-weight:900}.public-master-detail-loading h2{margin:0 0 8px;font-size:18px}.public-master-detail-loading p{margin:0;color:#817589;font-size:10px;line-height:1.8}.public-master-detail-loading button{margin-top:14px;padding:8px 14px;border:0;border-radius:999px;color:#fff;background:#6034aa;font-size:9px;font-weight:900;cursor:pointer}
 `;
 
 function GroupSwitch({ group, setGroup }: { group: ScheduleGroup; setGroup: (group: ScheduleGroup) => void }) {
@@ -32,24 +32,30 @@ function DirectScheduleDetail({ station, contentState, group, phaseId, onBack, o
   const hostRef = useRef<HTMLDivElement>(null);
   const openedRef = useRef(false);
   const [ready, setReady] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     openedRef.current = false;
     setReady(false);
+    setTimedOut(false);
 
     const openRequestedPhase = () => {
       const detail = host.querySelector<HTMLElement>(".public-live-stage-detail");
       if (detail) {
         setReady(true);
+        setTimedOut(false);
         return;
       }
 
       const moduleState = host.querySelector<HTMLElement>(".public-module-state");
       if (moduleState) {
         const text = moduleState.textContent || "";
-        if (!/正在加载|正在读取|正在准备/.test(text)) setReady(true);
+        if (!/正在加载|正在读取|正在准备/.test(text)) {
+          setReady(true);
+          setTimedOut(false);
+        }
         return;
       }
 
@@ -74,7 +80,7 @@ function DirectScheduleDetail({ station, contentState, group, phaseId, onBack, o
     const observer = new MutationObserver(openRequestedPhase);
     observer.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
     const timer = window.setInterval(openRequestedPhase, 120);
-    const fallback = window.setTimeout(() => setReady(true), 6000);
+    const fallback = window.setTimeout(() => setTimedOut(true), 6000);
     openRequestedPhase();
     return () => {
       observer.disconnect();
@@ -101,7 +107,7 @@ function DirectScheduleDetail({ station, contentState, group, phaseId, onBack, o
 
   return <div ref={hostRef} className={`public-master-detail-shell ${ready ? "is-ready" : "is-opening"}`} onClickCapture={captureClick}>
     <style>{css}</style>
-    {!ready && <section className="public-master-detail-loading" aria-busy="true"><div><span>赛</span><h2>正在打开详细赛程表</h2><p>正在读取当前组别与阶段的签表、场次和球台信息。</p></div></section>}
+    {!ready && <section className="public-master-detail-loading" aria-busy={!timedOut}><div><span>{timedOut ? "!" : "赛"}</span><h2>{timedOut ? "详细赛程暂时没有打开" : "正在打开详细赛程表"}</h2><p>{timedOut ? "当前阶段的公开赛程没有及时响应。可以返回主赛程后稍后再试，已发布数据不会受到影响。" : "正在读取当前组别与阶段的签表、场次和球台信息。"}</p>{timedOut && <button type="button" onClick={onBack}>返回主赛程</button>}</div></section>}
     <div className="public-master-detail-content"><PublicCompetitionLiveV2 station={station} contentState={contentState} activeTab="schedule" /></div>
   </div>;
 }
@@ -109,17 +115,19 @@ function DirectScheduleDetail({ station, contentState, group, phaseId, onBack, o
 export default function PublicMasterSchedule({ station, contentState }: { station: Station; contentState?: PublicContentState }) {
   const [group, setGroup] = useState<ScheduleGroup>("少年组");
   const [selectedPhase, setSelectedPhase] = useState<MasterScheduleCode | null>(null);
+  const resolvedEventRef = useRef("");
 
   const u16Published = Boolean(contentState?.masterSchedule?.groups.少年组.published);
   const u20Published = Boolean(contentState?.masterSchedule?.groups.青年组.published);
 
   useEffect(() => {
-    if (!contentState || selectedPhase) return;
-    const currentPublished = Boolean(contentState.masterSchedule?.groups[group].published);
-    if (currentPublished) return;
+    if (resolvedEventRef.current === station.eventId) return;
+    resolvedEventRef.current = station.eventId;
+    setSelectedPhase(null);
     if (u16Published) setGroup("少年组");
     else if (u20Published) setGroup("青年组");
-  }, [contentState, group, selectedPhase, u16Published, u20Published]);
+    else setGroup("少年组");
+  }, [station.eventId, u16Published, u20Published]);
 
   if (selectedPhase && contentState) {
     return <DirectScheduleDetail station={station} contentState={contentState} group={group} phaseId={selectedPhase} onBack={() => setSelectedPhase(null)} onGroupChange={setGroup} />;
