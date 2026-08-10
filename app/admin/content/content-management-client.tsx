@@ -119,13 +119,16 @@ export default function ContentManagementClient({ initialData, initialEventData 
     return payload.data;
   };
 
-  const saveOverview = async (publish = false) => {
+  const saveOverview = async (publication?: "published" | "draft") => {
     if (archived) return;
     setWorking(true); setNotice(""); setError("");
     try {
-      const nextEvent = { ...eventDraft, publishStatus: publish ? "published" as const : eventDraft.publishStatus };
+      const publishStatus = publication ?? eventDraft.publishStatus;
+      const nextEvent = { ...eventDraft, publishStatus };
       await Promise.all([syncEventSave(nextEvent), syncContentSave({ ...contentDraft, summary: eventDraft.summary ?? "" })]);
-      setNotice(publish ? "赛事概览已保存并发布到公众端。" : "赛事概览草稿已保存。");
+      if (publication === "published") setNotice("赛事概览已保存并发布到公众端。");
+      else if (publication === "draft") setNotice("赛事概览已取消发布，公众前端将不再显示本站；已填写内容仍保存在后台。");
+      else setNotice("赛事概览已保存。");
     } catch (failure) { setError(failure instanceof Error ? failure.message : "赛事概览保存失败。"); }
     finally { setWorking(false); }
   };
@@ -136,7 +139,7 @@ export default function ContentManagementClient({ initialData, initialEventData 
     try {
       const nextContent = { ...contentDraft, summary: eventDraft.summary ?? "", ruleStandard: contentDraft.ruleStandard.trim() || DEFAULT_RULE_STANDARD };
       await Promise.all([syncContentSave(nextContent), syncEventSave(eventDraft)]);
-      setNotice("竞赛规程概要与官方文件设置已保存。");
+      setNotice(regulationPublished ? "竞赛规程已保存，公众端已同步更新。" : "竞赛规程已保存为后台草稿。");
     } catch (failure) { setError(failure instanceof Error ? failure.message : "竞赛规程保存失败。"); }
     finally { setWorking(false); }
   };
@@ -146,11 +149,13 @@ export default function ContentManagementClient({ initialData, initialEventData 
     setWorking(true); setNotice(""); setError("");
     const status = regulationPublished ? "draft" : "published";
     try {
+      const nextContent = { ...contentDraft, summary: eventDraft.summary ?? "", ruleStandard: contentDraft.ruleStandard.trim() || DEFAULT_RULE_STANDARD };
+      await Promise.all([syncContentSave(nextContent), syncEventSave(eventDraft)]);
       const response = await fetch("/api/admin/content-management", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "publication", eventId: contentDraft.eventId, publicationId: regulationPublication.id, status }) });
       const payload = await response.json() as { data?: ContentManagementData; error?: string };
       if (!response.ok || !payload.data) throw new Error(payload.error || "发布操作失败。");
       setData(payload.data); setContentDraft(toContentDraft(payload.data));
-      setNotice(status === "published" ? "竞赛规程已发布。" : "竞赛规程已撤回为草稿。");
+      setNotice(status === "published" ? "竞赛规程已保存并发布到公众端。" : "竞赛规程已撤回发布，公众端将显示待组委会发布提示；已填写内容仍保存在后台。");
     } catch (failure) { setError(failure instanceof Error ? failure.message : "发布操作失败。"); }
     finally { setWorking(false); }
   };
@@ -202,7 +207,7 @@ export default function ContentManagementClient({ initialData, initialEventData 
         <small>当前赛事</small><h1>{eventDraft.shortTitle || eventDraft.fullTitle || "当前赛事"}</h1><p>{eventDraft.city || "城市待设置"} · 第 {eventDraft.stationNo} 站</p>
         <dl className="content-side-status"><div><dt>赛事概览</dt><dd className={eventDraft.publishStatus === "published" ? "ok" : ""}>{eventDraft.publishStatus === "published" ? "已发布" : "草稿"}</dd></div><div><dt>竞赛规程</dt><dd className={regulationPublished ? "ok" : ""}>{regulationPublished ? "已发布" : "草稿"}</dd></div></dl>
         <div className="content-side-note"><strong>运营提示</strong><p>赛事名称、年份、站次、城市和日期属于赛事管理主数据；这里负责公众展示内容。切换模块请使用页面顶部按钮。</p></div>
-        <div className="content-side-note"><strong>发布原则</strong><p>先保存再发布。完整竞赛规则以正式 PDF 为准，页面只维护参赛者最常用的概要信息。</p></div>
+        <div className="content-side-note"><strong>发布原则</strong><p>保存只更新后台内容；发布决定公众端是否可见。撤回发布不会删除已经填写的数据。</p></div>
       </aside>
 
       <section className="content-main">
@@ -238,7 +243,7 @@ export default function ContentManagementClient({ initialData, initialEventData 
           <section className="content-card"><header><div><small>06 · DRAW</small><h2>种子与抽签</h2><p>用简洁文字说明种子位、混抽和正赛阶段的抽签原则，实际签位仍由竞赛执行产生。</p></div></header><label className="content-field"><span>种子与抽签规则</span><textarea disabled={archived} rows={7} value={contentDraft.drawRules.join("\n")} onChange={(e) => setContentDraft((current) => ({ ...current, drawRules: e.target.value.split("\n") }))} placeholder="每行一条规则，例如：资格赛不设种子，全部混抽入位。" /></label></section>
         </>}
 
-        {!archived && <footer className="content-savebar"><div><strong>{tab === "overview" ? "保存赛事概览" : "保存竞赛规程"}</strong><span>{tab === "overview" ? "主题图、合作伙伴、友好提示等与赛事概览一起保存。" : "官方文件、报名要求、规则、赛制、奖励、费用和抽签统一保存。"}</span></div><div className="content-save-actions"><button className="secondary" type="button" onClick={() => tab === "overview" ? saveOverview(false) : saveRegulation()} disabled={working}>{working ? "正在保存…" : "保存当前模块"}</button>{tab === "overview" ? <button type="button" onClick={() => saveOverview(true)} disabled={working}>发布赛事概览</button> : <button type="button" onClick={toggleRegulation} disabled={working}>{regulationPublished ? "撤回发布" : "发布竞赛规程"}</button>}</div></footer>}
+        {!archived && <footer className="content-savebar"><div><strong>{tab === "overview" ? "保存赛事概览" : "保存竞赛规程"}</strong><span>{tab === "overview" ? "保存不会改变当前发布状态；取消发布后内容仍会保留。" : "保存后，已发布的规程会同步更新公众端；撤回发布不会清空数据。"}</span></div><div className="content-save-actions"><button className="secondary" type="button" onClick={() => tab === "overview" ? saveOverview() : saveRegulation()} disabled={working}>{working ? "正在保存…" : "保存当前模块"}</button>{tab === "overview" ? (eventDraft.publishStatus === "published" ? <button className="secondary" style={{ color: "#a44352", borderColor: "#e1c4c9", background: "#fff5f6" }} type="button" onClick={() => saveOverview("draft")} disabled={working}>取消发布</button> : <button type="button" onClick={() => saveOverview("published")} disabled={working}>发布赛事概览</button>) : <button className={regulationPublished ? "secondary" : undefined} type="button" onClick={toggleRegulation} disabled={working}>{regulationPublished ? "撤回发布" : "发布竞赛规程"}</button>}</div></footer>}
       </section>
     </div>
   </main>;
