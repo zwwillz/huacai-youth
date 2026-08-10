@@ -44,7 +44,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ eve
     const updatedAt = new Date().toISOString();
     if (payload.action === "archive") {
       if (current.status !== "finished") throw new Error("只有已结束的赛事才能归档。请先确认赛事已经结束。");
-      await sql`update public.events set status='archived', updated_by=${actor.id}, updated_at=${updatedAt} where id=${eventId}`;
+      // 归档是后台生命周期状态，不是公众可见性状态。归档时解除“前端隐藏”，
+      // 已经发布的历史赛事会继续作为已结束赛事出现在公众端。
+      await sql`update public.events set status='archived', is_hidden=false, updated_by=${actor.id}, updated_at=${updatedAt} where id=${eventId}`;
     } else if (payload.action === "restore") {
       await sql`update public.events set status='finished', updated_by=${actor.id}, updated_at=${updatedAt} where id=${eventId}`;
     } else {
@@ -52,7 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ eve
     }
 
     const after = payload.action === "archive"
-      ? { status: "archived" }
+      ? { status: "archived", isHidden: false }
       : payload.action === "restore"
         ? { status: "finished" }
         : { isHidden: payload.action === "hide" };
