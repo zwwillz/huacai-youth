@@ -1,11 +1,11 @@
 import { getAdminViewer } from "@/app/admin/admin-viewer";
 import {
   confirmParticipantRoster,
-  getParticipantRosterPage,
   lockParticipantRoster,
   unlockParticipantRoster,
   updateParticipantRegistration,
 } from "@/db/participant-roster";
+import { getParticipantRosterPage } from "@/db/participant-roster-page";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
-import { getParticipantRosterPage } from "@/db/participant-roster";
+import { getParticipantRosterPage } from "@/db/participant-roster-page";
 import AdminWorkspaceShell from "../admin-workspace-shell";
 import { getAdminViewer } from "../admin-viewer";
 import { ParticipantRosterWorkspace } from "./participant-workspace";
