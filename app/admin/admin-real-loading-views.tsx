@@ -1,34 +1,44 @@
 "use client";
 
 import type { EventManagementData } from "@/db/event-management";
-import type { AccountManagementRow } from "@/db/account-admin";
-import type { PlayerPointsPageData } from "@/db/player-points";
-import EventSettingsIndexView from "./events/event-settings-index-view";
 import EventManagementClient from "./events/event-management-client";
-import { PlayerManagementWorkspace } from "./players/player-management-client";
-import { PointsRankingWorkspace } from "./points/points-client";
+import EventSettingsIndexView from "./events/event-settings-index-view";
+import type { ContentManagementData } from "@/db/content-management";
+import type { AccountManagementRow } from "@/db/account-management";
 import AccountManagementClient from "./accounts/account-management-client";
-import AuditLogView, { type AuditLogRow } from "./logs/audit-log-view";
+import OperationLogClient from "./logs/operation-log-client";
+import PlayerManagementWorkspace from "./players/player-management-workspace";
+import PointsRankingWorkspace from "./points/points-ranking-workspace";
+import type { PlayerPointsPageData } from "@/db/player-points-fast";
+
+function placeholderContent(eventId: string): ContentManagementData {
+  return {
+    event: { id: eventId, shortTitle: "当前赛事", city: "赛事资料读取中", summary: "" },
+    details: { competitionFormat: [], drawRules: [], ruleStandard: "", prizeNote: "", prizes: { 少年组: [], 青年组: [] } },
+    publications: [
+      { id: `${eventId}_loading-overview`, moduleType: "overview", moduleTitle: "赛事概览", status: "draft", versionNo: 1, updatedAt: "" },
+      { id: `${eventId}_loading-regulation`, moduleType: "regulation", moduleTitle: "竞赛规程", status: "draft", versionNo: 1, updatedAt: "" },
+    ],
+    documents: [
+      { id: "loading-regulation", documentType: "regulation", title: "完整竞赛规程", url: "", isPublished: false },
+      { id: "loading-referee", documentType: "referee_list", title: "裁判组名单", url: "", isPublished: false },
+    ],
+    guides: [
+      { id: "loading-transport", guideType: "transport", title: "交通住宿攻略", body: "", publishStatus: "draft" },
+      { id: "loading-clothing", guideType: "clothing", title: "服装要求", body: "", publishStatus: "draft" },
+    ],
+  };
+}
 
 function placeholderEvent(eventId: string): EventManagementData {
-  const year = new Date().getFullYear();
   return {
-    viewerRole: "committee",
-    publicationStatuses: { overview: "draft", regulation: "draft", documents: "draft", schedule: "draft", matches: "draft", rankings: "draft" },
+    viewerRole: "committee", publicationStatuses: {}, assignableAccounts: [],
     event: {
-      id: eventId, year, stationNo: 0, fullTitle: "赛事完整名称正在读取", shortTitle: "当前赛事", slug: "", city: "城市读取中",
-      startDate: "", endDate: "", registrationStartAt: "", registrationEndAt: "", coverImageKey: "", summary: "赛事简介正在读取…",
-      status: "draft", publishStatus: "draft",
-      venue: { id: null, name: "场馆读取中", province: "", city: "", district: "", address: "", tableCount: 0 },
+      id: eventId, year: 2026, stationNo: 0, fullTitle: "赛事资料正在读取", shortTitle: "当前赛事", slug: "", city: "城市读取中", startDate: "", endDate: "", registrationStartAt: "", registrationEndAt: "", coverImageKey: "", summary: "", status: "draft", publishStatus: "draft",
+      venue: { id: null, name: "", province: "", city: "", district: "", address: "", tableCount: 0 },
       details: { sponsorLabel: "", durationLabel: "", qualifierDateLabel: "", mainDateLabel: "", totalPrizeLabel: "", mainSizeLabel: "", minimumAgeNote: "", signupNote: "" },
-      sponsors: [], organizations: { host: "", support: "", operator: "", cooperator: "" },
-      groups: [
-        { id: "u16", name: "少年组", code: "U16", birthDateFrom: "", birthDateTo: "", minimumAge: null, registrationFeeYuan: 0, registrationLimit: null, mainDrawSize: 64, status: "active", ageRuleText: "年龄规则正在读取" },
-        { id: "u20", name: "青年组", code: "U20", birthDateFrom: "", birthDateTo: "", minimumAge: null, registrationFeeYuan: 0, registrationLimit: null, mainDrawSize: 64, status: "active", ageRuleText: "年龄规则正在读取" },
-      ],
-      memberIds: [],
+      sponsors: [], organizations: { host: "", support: "", operator: "", cooperator: "" }, groups: [], memberIds: [],
     },
-    assignableAccounts: [],
   };
 }
 
@@ -46,7 +56,7 @@ export function ContentLoadingView({ eventId = "" }: { eventId?: string }) {
       <aside className="content-sidebar">
         <small>当前赛事</small><h1>赛事内容正在读取</h1><p>{eventId ? "正在同步当前赛事资料" : "正在进入内容发布"}</p>
         <dl className="content-side-status"><div><dt>赛事概览</dt><dd>读取中</dd></div><div><dt>竞赛规程</dt><dd>读取中</dd></div></dl>
-        <div className="content-side-note"><strong>内容发布</strong><p>页面结构已就绪，赛事资料会在读取完成后直接填入当前页面，不再切换旧版编辑界面。</p></div>
+        <div className="content-side-note"><strong>内容发布</strong><p>页面结构已经就绪，赛事资料读取完成后会直接填入赛事概览和竞赛规程。</p></div>
       </aside>
       <section className="content-main">
         <section className="content-head-card content-publishing-head"><div><small>CONTENT PUBLISHING</small><h2>内容发布</h2><p>赛事概览与竞赛规程正在读取。</p><div className="content-top-tabs"><button className="active" type="button">赛事概览</button><button type="button">竞赛规程</button></div></div><span className="draft">读取中</span></section>
@@ -101,6 +111,5 @@ export function AccountsLoadingView() {
 }
 
 export function LogsLoadingView() {
-  const logs: AuditLogRow[] = Array.from({ length: 7 }, (_, index) => ({ id: `loading-${index}`, createdAt: "", actorName: "操作人读取中", actorUsername: "—", moduleType: "模块读取中", action: "update", targetType: "对象读取中", targetId: null, eventId: null }));
-  return <AuditLogView logs={logs} loading />;
+  return <div aria-busy="true" style={{ pointerEvents: "none" }}><OperationLogClient initialLogs={[]} /></div>;
 }
