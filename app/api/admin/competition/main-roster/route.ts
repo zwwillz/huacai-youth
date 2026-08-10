@@ -4,12 +4,12 @@ import {
   clearSeedReplacement,
   confirmAllAvailableSeeds,
   confirmMain32Advancement,
-  initializeSeedsFromPreviousStation,
   lockMainRoster,
   updateSeedAttendance,
   voidMainRosterLock,
   type SeedAttendanceStatus,
 } from "@/db/main-competition-flow";
+import { initializeSeedsFromEligiblePreviousStation } from "@/db/seed-initialization";
 import { getMainRosterControlDataFast } from "@/db/main-roster-fast";
 import { assertMainRosterMutable, assertSeedEntryMutable, assertSeedReplacementAllowed } from "@/db/main-roster-lock-check";
 import { markCompetitionModuleDirty } from "@/db/competition-context";
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     let eventId = bodyEventId;
     if (action === "initialize-seeds") {
       const groupId = String(body.groupId || ""); await assertMainRosterMutable(bodyEventId, groupId);
-      data = await initializeSeedsFromPreviousStation(viewer.username, bodyEventId, groupId);
+      data = await initializeSeedsFromEligiblePreviousStation(viewer, bodyEventId, groupId);
     } else if (action === "seed-status") {
       const seedEntryId = String(body.seedEntryId || ""); const scope = await assertSeedEntryMutable(seedEntryId); eventId = scope.eventId;
       data = await updateSeedAttendance(viewer.username, seedEntryId, String(body.attendanceStatus || "pending") as SeedAttendanceStatus, String(body.note || ""));
