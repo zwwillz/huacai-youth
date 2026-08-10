@@ -121,13 +121,13 @@ export default function PublicMasterSchedule({ station, contentState }: { statio
   const u20Published = Boolean(contentState?.masterSchedule?.groups.青年组.published);
 
   useEffect(() => {
-    if (resolvedEventRef.current === station.eventId) return;
+    if (!contentState || resolvedEventRef.current === station.eventId) return;
     resolvedEventRef.current = station.eventId;
     setSelectedPhase(null);
     if (u16Published) setGroup("少年组");
     else if (u20Published) setGroup("青年组");
     else setGroup("少年组");
-  }, [station.eventId, u16Published, u20Published]);
+  }, [contentState, station.eventId, u16Published, u20Published]);
 
   if (selectedPhase && contentState) {
     return <DirectScheduleDetail station={station} contentState={contentState} group={group} phaseId={selectedPhase} onBack={() => setSelectedPhase(null)} onGroupChange={setGroup} />;
