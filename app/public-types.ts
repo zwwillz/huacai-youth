@@ -2,6 +2,13 @@ export type Group = "少年组" | "青年组";
 export type PhaseId = "qualifier-one" | "qualifier-two" | "main-one" | "main-two";
 export type PrizeMap = Record<Group, string[][]>;
 
+export type EventPartner = {
+  name: string;
+  type: string;
+  logo: string;
+  website: string;
+};
+
 export type Match = {
   id: string;
   eventId: string;
@@ -65,6 +72,7 @@ export type Station = {
   signup: string;
   prizes: PrizeMap;
   phases: Phase[];
+  partners?: EventPartner[];
   publicPlayerCount?: number;
   publicMatchCount?: number;
 };
