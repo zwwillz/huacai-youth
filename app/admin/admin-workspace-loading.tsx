@@ -9,7 +9,7 @@ import ScoringWorkspaceView, { scoringPhases } from "./competition/scoring/scori
 import { DrawLoadingView, FinalRankingLoadingView, QualificationLoadingView } from "./competition/competition-loading-views";
 import { BracketLoadingView, ScheduleWorkbenchLoadingView } from "./competition/competition-deep-loading-views";
 import { AccountsLoadingView, ContentLoadingView, EventSettingsLoadingView, EventsLoadingView, LogsLoadingView, PlayersLoadingView, PointsLoadingView } from "./admin-real-loading-views";
-import { ContentIndexLoadingView, GlobalRankingsLoadingView, GuidesLoadingView, RegistrationsLoadingView } from "./admin-secondary-loading-views";
+import { ContentIndexLoadingView, GlobalRankingsLoadingView, GuidesLoadingView, RegistrationsLoadingView, SchedulePublishLoadingView } from "./admin-secondary-loading-views";
 
 type LoadingProps = { pathname: string; search?: string; overlay?: boolean; viewerRole?: string };
 
@@ -51,6 +51,7 @@ function RealPageLoading({ pathname, search, viewerRole = "committee" }: { pathn
   if (pathname === "/admin/content" || pathname === "/admin/content/") return <ContentIndexLoadingView />;
   if (pathname.startsWith("/admin/content/") && segments[2] && segments[3] === "guides") return <GuidesLoadingView eventId={decodeURIComponent(segments[2])} />;
   if (pathname.startsWith("/admin/content/") && segments[2]) return <ContentLoadingView eventId={decodeURIComponent(segments[2])} />;
+  if (pathname.startsWith("/admin/schedule-publish")) return <SchedulePublishLoadingView />;
   if (pathname.startsWith("/admin/players")) return <PlayersLoadingView viewerRole={viewerRole} eventId={eventId} />;
   if (pathname.startsWith("/admin/points")) return <PointsLoadingView viewerRole={viewerRole} eventId={eventId} />;
   if (pathname === "/admin/competition" || pathname === "/admin/competition/") return <CompetitionOverviewView model={makeCompetitionOverviewLoadingModel(eventId, groupId)} />;
