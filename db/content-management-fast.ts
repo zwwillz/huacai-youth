@@ -20,17 +20,25 @@ type BundleRow = {
   guides: ContentGuide[] | null;
 };
 
+function parseJsonValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try { return JSON.parse(value); } catch { return value; }
+}
+
 function asRows(value: unknown): string[][] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(Array.isArray).map((row) => (row as unknown[]).map((item) => String(item ?? "")));
+  const normalized = parseJsonValue(value);
+  if (!Array.isArray(normalized)) return [];
+  return normalized.filter(Array.isArray).map((row) => (row as unknown[]).map((item) => String(item ?? "")));
 }
 function asStrings(value: unknown): string[] {
-  return Array.isArray(value) ? value.map((item) => String(item ?? "")).filter(Boolean) : [];
+  const normalized = parseJsonValue(value);
+  return Array.isArray(normalized) ? normalized.map((item) => String(item ?? "")).filter(Boolean) : [];
 }
 function prizeMap(value: unknown) {
+  const normalized = parseJsonValue(value);
   const result: Record<"少年组" | "青年组", string[][]> = { 少年组: [], 青年组: [] };
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const record = value as Record<string, unknown>;
+  if (normalized && typeof normalized === "object" && !Array.isArray(normalized)) {
+    const record = normalized as Record<string, unknown>;
     result.少年组 = asRows(record.少年组);
     result.青年组 = asRows(record.青年组);
   }
