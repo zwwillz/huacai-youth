@@ -148,6 +148,28 @@ function GroupSwitch({ group, setGroup }: { group: Group; setGroup: (group: Grou
   return <div className="group-switch" aria-label="选择比赛组别"><button className={group === "少年组" ? "active" : ""} onClick={() => setGroup("少年组")}><b>U16</b><span>少年组</span></button><button className={group === "青年组" ? "active" : ""} onClick={() => setGroup("青年组")}><b>U20</b><span>青年组</span></button></div>;
 }
 
+function groupFromUrl(): Group {
+  if (typeof window === "undefined") return "少年组";
+  const value = new URLSearchParams(window.location.search).get("group");
+  return value === "u20" || value === "青年组" ? "青年组" : "少年组";
+}
+
+function usePublicGroup() {
+  const [group, setGroupState] = useState<Group>(groupFromUrl);
+  useEffect(() => {
+    const restore = () => setGroupState(groupFromUrl());
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
+  const setGroup = useCallback((next: Group) => {
+    setGroupState(next);
+    const params = new URLSearchParams(window.location.search);
+    params.set("group", next === "青年组" ? "u20" : "u16");
+    window.history.pushState({}, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+  }, []);
+  return [group, setGroup] as const;
+}
+
 function shortDate(value: string | null) { if (!value) return "时间待定"; const [, month, day] = value.split("-"); return month && day ? `${Number(month)}月${Number(day)}日` : value; }
 function compactDate(value: string) { const [, month, day] = value.split("-"); return month && day ? `${month}-${day}` : value; }
 function weekday(value: string) { const labels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]; const date = new Date(`${value}T12:00:00+08:00`); return Number.isNaN(date.getTime()) ? "" : labels[date.getDay()]; }
@@ -253,7 +275,7 @@ function MainRosterDetail({ station, data, group, setGroup, onBack }: { station:
 }
 
 function PublicSchedule({ station, data, detailsReady, ensureDetails }: { station: StationMeta; data: PublicCompetitionDisplayEvent; detailsReady: boolean; ensureDetails: () => void }) {
-  const [group, setGroup] = useState<Group>("少年组"); const [detail, setDetail] = useState<PhaseId | null>(null); const [showRoster, setShowRoster] = useState(false);
+  const [group, setGroup] = usePublicGroup(); const [detail, setDetail] = useState<PhaseId | null>(null); const [showRoster, setShowRoster] = useState(false);
   const openDetail = (phaseId: PhaseId) => { ensureDetails(); setDetail(phaseId); };
   if (showRoster) return <MainRosterDetail station={station} data={data} group={group} setGroup={setGroup} onBack={() => setShowRoster(false)} />;
   if (detail?.startsWith("qualifier")) return <QualifierStageDetail station={station} data={data} group={group} setGroup={setGroup} phaseId={detail} onBack={() => setDetail(null)} />;
@@ -263,7 +285,7 @@ function PublicSchedule({ station, data, detailsReady, ensureDetails }: { statio
 }
 
 function PublicMatches({ station, data }: { station: StationMeta; data: PublicCompetitionDisplayEvent }) {
-  const [group, setGroup] = useState<Group>("少年组");
+  const [group, setGroup] = usePublicGroup();
   const all = useMemo(() => data.matches.filter((match) => match.group === group && match.date), [data.matches, group]);
   const days = useMemo(() => [...new Set(all.map((match) => match.date!).filter(Boolean))].sort(), [all]);
   const defaultDay = latestAvailableDay(days);
@@ -289,7 +311,7 @@ function rankingNumberStyle(place: number): CSSProperties | undefined {
 }
 
 function PublicRankings({ station, rankings }: { station: StationMeta; rankings: PublicRanking[] }) {
-  const [group, setGroup] = useState<Group>("少年组"); const finalRows = rankings.filter((row) => row.group === group).sort((a, b) => a.displayOrder - b.displayOrder); const prizes = station.prizes[group] ?? [];
+  const [group, setGroup] = usePublicGroup(); const finalRows = rankings.filter((row) => row.group === group).sort((a, b) => a.displayOrder - b.displayOrder); const prizes = station.prizes[group] ?? [];
   return <div className="stack public-competition-overlay"><section className="ranking-head"><div><small className="event-name-kicker">{station.title}</small><h1>比赛排名</h1><p>{finalRows.length ? "组委会已发布本站正赛最终排名" : "最终排名待组委会确认并发布"}</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="card ranking"><header><div><small>{group}</small><h2>{finalRows.length ? "本站赛事排名" : "奖金设置"}</h2></div></header>{finalRows.length ? <div className="public-final-ranking">{finalRows.map((row) => <div key={row.id}><span style={rankingNumberStyle(row.displayOrder)}>{row.displayOrder}</span><b>{row.placementLabel}</b><strong>{row.playerName}</strong><em>{row.prizeDisplay || "—"}</em></div>)}</div> : <><div className="ranking-wait"><i /><div><strong>比赛结果尚未全部完成</strong><p>排名仅统计正赛最终名次。待组委会确认并发布本站排名后，这里会自动切换为正式排名。</p></div></div><div className="prizes">{prizes.map(([rank, amount], index) => <div key={`${rank}-${index}`}><span>{index + 1}</span><strong>{rank}</strong><b>{amount}</b></div>)}</div></>}</section></div>;
 }
 
