@@ -40,7 +40,7 @@ export default function PublicMasterSchedule({ station, contentState }: { statio
   const master = contentState?.masterSchedule;
   const stages = master?.stages ?? [];
   const masterPublished = Boolean(master?.published && stages.length);
-  const detailedPublished = Boolean(contentState?.publishedModules.includes("schedule"));
+  const detailedPublished = Boolean(master?.detailedScheduleReady);
   const detailStage = detailCode ? stages.find((stage) => stage.code === detailCode) : undefined;
   const detailMatches = useMemo(() => detailPayload?.event.matches.filter((match) => match.group === group && match.phaseId === detailCode) ?? [], [detailPayload, detailCode, group]);
 
