@@ -10,7 +10,7 @@ import {
   type SeedAttendanceStatus,
 } from "@/db/main-competition-flow";
 import { initializeSeedsFromEligiblePreviousStation } from "@/db/seed-initialization";
-import { getMainRosterControlDataFast } from "@/db/main-roster-fast";
+import { getMainRosterControlDataSafe } from "@/db/main-roster-safe";
 import { assertMainRosterMutable, assertSeedEntryMutable, assertSeedReplacementAllowed } from "@/db/main-roster-lock-check";
 import { markCompetitionModuleDirty } from "@/db/competition-context";
 import { getSqlClient } from "@/db/index";
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   try {
     const eventId = new URL(request.url).searchParams.get("eventId") || "";
     if (!eventId) throw new Error("缺少赛事ID。");
-    const data = await getMainRosterControlDataFast(viewer, eventId);
+    const data = await getMainRosterControlDataSafe(viewer, eventId);
     return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "正赛名单数据读取失败。" }, { status: 400 });
