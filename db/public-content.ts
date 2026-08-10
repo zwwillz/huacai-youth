@@ -10,6 +10,7 @@ export type PublicContentState = {
   publishedModules: string[];
   masterSchedule?: {
     published: boolean;
+    detailedScheduleReady: boolean;
     stages: MasterScheduleStage[];
   };
   guides: Array<{ id: string; title: string; guideType: string }>;
@@ -20,6 +21,16 @@ export type PublicContentState = {
 };
 
 type GuideSummaryRow = { id: string; event_id: string; guide_type: string; title: string; sort_order: number };
+
+function detailedScheduleReady(snapshot: string | null | undefined) {
+  if (!snapshot) return false;
+  try {
+    const parsed = JSON.parse(snapshot) as { matches?: unknown[] };
+    return Array.isArray(parsed.matches) && parsed.matches.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 export async function getPublicContentState(stations: Array<{ id: string; eventId: string; title: string }>): Promise<PublicContentState[]> {
   if (!stations.length) return [];
@@ -46,6 +57,7 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
     const eventPublications = publicationRows.filter((row) => row.eventId === station.eventId);
     const modules = eventPublications.filter((row) => row.status === "published").map((row) => row.moduleType);
     const masterPublication = eventPublications.find((row) => row.moduleType === "master_schedule");
+    const detailedPublication = eventPublications.find((row) => row.moduleType === "schedule");
     const masterSnapshot = parseMasterScheduleSnapshot(masterPublication?.snapshotJson ?? null);
     const document = (type: "regulation" | "referee_list") => {
       const row = documentRows.find((item) => item.eventId === station.eventId && item.documentType === type);
@@ -58,6 +70,7 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
       publishedModules: modules,
       masterSchedule: {
         published: masterPublication?.status === "published" && Boolean(masterSnapshot?.stages.length),
+        detailedScheduleReady: detailedPublication?.status === "published" && detailedScheduleReady(detailedPublication.snapshotJson),
         stages: masterPublication?.status === "published" ? (masterSnapshot?.stages ?? []) : [],
       },
       guides: guideRows.filter((row) => row.event_id === station.eventId).map((row) => ({ id: row.id, title: row.title, guideType: row.guide_type })),
