@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { getPublicSiteData, getPublishedEventIds } from "@/db/public";
 import { getPublicContentState } from "@/db/public-content";
+import { getPublicRegistrationInfo } from "@/db/registration-publishing";
 import { publicJson } from "../../../response";
 
 export const dynamic = "force-static";
@@ -21,11 +22,12 @@ function getCachedEventDetail(eventId: string) {
     const data = await getPublicSiteData();
     const station = data.stations.find((item) => item.eventId === eventId) ?? null;
     if (!station) return null;
-    const [contentState] = await getPublicContentState([
-      { id: station.id, eventId: station.eventId, title: station.title },
+    const [[contentState], registration] = await Promise.all([
+      getPublicContentState([{ id: station.id, eventId: station.eventId, title: station.title }]),
+      getPublicRegistrationInfo(eventId),
     ]);
-    return { station, contentState: contentState ?? null };
-  }, ["public-event-detail-v4", eventId], {
+    return { station, contentState: contentState ?? null, registration };
+  }, ["public-event-detail-v5", eventId], {
     revalidate: 300,
     tags: ["public-site", "public-content", `public-event-detail-${eventId}`],
   })();
