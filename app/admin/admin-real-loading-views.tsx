@@ -5,10 +5,6 @@ import EventManagementClient from "./events/event-management-client";
 import EventSettingsIndexView from "./events/event-settings-index-view";
 import type { AccountManagementRow } from "@/db/account-management";
 import AccountManagementClient from "./accounts/account-management-client";
-import OperationLogClient from "./logs/operation-log-client";
-import PlayerManagementWorkspace from "./players/player-management-workspace";
-import PointsRankingWorkspace from "./points/points-ranking-workspace";
-import type { PlayerPointsPageData } from "@/db/player-points-fast";
 
 function placeholderEvent(eventId: string): EventManagementData {
   return {
@@ -20,6 +16,16 @@ function placeholderEvent(eventId: string): EventManagementData {
       sponsors: [], organizations: { host: "", support: "", operator: "", cooperator: "" }, groups: [], memberIds: [],
     },
   };
+}
+
+function SimpleWorkspaceLoading({ kicker, title, description, rows = 6 }: { kicker: string; title: string; description: string; rows?: number }) {
+  return <main className="admin-simple-page" aria-busy="true" style={{ pointerEvents: "none" }}>
+    <section className="admin-simple-head"><small>{kicker}</small><h2>{title}</h2><p>{description}</p></section>
+    <section className="admin-simple-card">
+      <div className="content-loading-lines"><i /><i /><i /></div>
+      <div className="admin-simple-table">{Array.from({ length: rows }, (_, index) => <div className="admin-simple-row" key={index}><div><b>数据正在读取</b><br/><small>页面结构已经打开</small></div><span>—</span><span>读取中</span></div>)}</div>
+    </section>
+  </main>;
 }
 
 export function EventsLoadingView({ canDelete = false }: { canDelete?: boolean }) {
@@ -46,39 +52,12 @@ export function ContentLoadingView({ eventId = "" }: { eventId?: string }) {
   </main>;
 }
 
-export function PlayersLoadingView({ viewerRole = "committee", eventId = "" }: { viewerRole?: string; eventId?: string }) {
-  const items = Array.from({ length: 6 }, (_, index) => ({
-    id: `loading-${index}`, playerCode: "—", fullName: "球员读取中", displayName: "球员读取中", gender: null, phone: null,
-    groupName: null, identityDisplay: "—", profileStatus: "pending",
-  }));
-  return <div aria-busy="true" style={{ pointerEvents: "none" }}><PlayerManagementWorkspace
-    viewerRole={viewerRole}
-    events={eventId ? [{ id: eventId, shortTitle: "当前赛事", stationNo: 0, status: "draft", startDate: "", endDate: "", city: "" }] : []}
-    initialState={{ event: eventId, scope: viewerRole === "system_admin" && !eventId ? "all" : "event", group: "all", q: "", page: 1 }}
-    initialPageData={{ items, filteredTotal: 0, page: 1, pageSize: 50, scope: viewerRole === "system_admin" && !eventId ? "all" : "event", eventId: eventId || null }}
-  /></div>;
+export function PlayersLoadingView({ eventId = "" }: { viewerRole?: string; eventId?: string }) {
+  return <SimpleWorkspaceLoading kicker="PLAYER ARCHIVE" title="球员档案" description={eventId ? "当前赛事球员资料正在读取，筛选、档案和参赛信息会在原位置补齐。" : "球员档案正在读取，搜索、筛选和球员资料会在原位置补齐。"} rows={7} />;
 }
 
-export function PointsLoadingView({ viewerRole = "committee", eventId = "" }: { viewerRole?: string; eventId?: string }) {
-  const year = new Date().getFullYear();
-  const overview = viewerRole === "system_admin" && !eventId;
-  const pageData: PlayerPointsPageData = {
-    items: Array.from({ length: 7 }, (_, index) => ({ id: `loading-${index}`, rank: index + 1, fullName: "球员读取中", displayName: "球员读取中", groupName: null, eventCount: 0, prizeCents: 0, points: 0 })),
-    filteredTotal: 0,
-    page: 1,
-    pageSize: 40,
-    year,
-    scope: overview ? "all" : "event",
-    eventId: overview ? null : eventId || null,
-    rule: { year, participationPoints: 1, prizeUnitYuan: 100, prizePointsPerUnit: 1 },
-  };
-  const events = eventId ? [{ id: eventId, shortTitle: "当前赛事", stationNo: 0, status: "draft", startDate: "", endDate: "", city: "" }] : [];
-  return <div aria-busy="true" style={{ pointerEvents: "none" }}><PointsRankingWorkspace
-    viewerRole={viewerRole}
-    events={events}
-    initialState={{ event: eventId, scope: overview ? "all" : "event", group: "all", q: "", page: 1 }}
-    initialPageData={pageData}
-  /></div>;
+export function PointsLoadingView({ eventId = "" }: { viewerRole?: string; eventId?: string }) {
+  return <SimpleWorkspaceLoading kicker="POINTS RANKING" title="积分排名" description={eventId ? "当前赛事积分和排名正在读取。" : "系列赛积分排名、分站成绩和积分规则正在读取。"} rows={7} />;
 }
 
 export function AccountsLoadingView() {
@@ -91,5 +70,5 @@ export function AccountsLoadingView() {
 }
 
 export function LogsLoadingView() {
-  return <div aria-busy="true" style={{ pointerEvents: "none" }}><OperationLogClient initialLogs={[]} /></div>;
+  return <SimpleWorkspaceLoading kicker="OPERATION LOG" title="操作日志" description="后台操作记录正在读取，账号、模块、操作内容和时间会在列表中自动补齐。" rows={8} />;
 }
