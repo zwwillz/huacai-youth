@@ -12,7 +12,7 @@ export default function EventSettingsIndexView({ events, canDelete }: Props) {
   const currentCount = loading ? 0 : rows.filter((event) => event.status !== "archived").length;
   const finishedCount = loading ? 0 : rows.filter((event) => event.status === "finished" || event.status === "archived").length;
   const archivedCount = loading ? 0 : rows.filter((event) => event.status === "archived").length;
-  const hiddenCount = loading ? 0 : rows.filter((event) => event.isHidden && event.status !== "archived").length;
+  const hiddenCount = loading ? 0 : rows.filter((event) => event.isHidden).length;
 
   return <main className="event-v2-index" aria-busy={loading} style={loading ? { pointerEvents: "none" } : undefined}>
     <section className="event-v2-page-head">
@@ -37,7 +37,7 @@ export default function EventSettingsIndexView({ events, canDelete }: Props) {
           <div><dt>已归档</dt><dd>{loading ? "—" : archivedCount}</dd></div>
           <div><dt>前端隐藏</dt><dd>{loading ? "—" : hiddenCount}</dd></div>
         </dl>
-        <div className="event-v2-summary-note"><strong>生命周期说明</strong><p>“当前赛事”指所有未归档赛事；已归档赛事仍计入赛事总数和已结束赛事，但不再计入当前赛事。隐藏只影响公众前端。</p></div>
+        <div className="event-v2-summary-note"><strong>生命周期说明</strong><p>“当前赛事”指所有未归档赛事；已归档赛事仍计入赛事总数和已结束赛事，但不再计入当前赛事。归档只控制后台是否可继续操作，不等于前端隐藏；“前端隐藏”单独统计所有隐藏赛事。</p></div>
       </aside>
     </div>
   </main>;
