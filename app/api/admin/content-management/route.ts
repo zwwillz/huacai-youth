@@ -3,8 +3,16 @@ import { saveContentManagementData, type ContentManagementInput } from "@/db/con
 import { getContentManagementDataFast } from "@/db/content-management-fast";
 import { setContentPublicationStatusFast } from "@/db/content-publication-fast";
 import { getSqlClient } from "@/db";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 export const dynamic = "force-dynamic";
+
+function refreshPublicEvent(eventId: string) {
+  revalidateTag("public-site", { expire: 0 });
+  revalidateTag("public-content", { expire: 0 });
+  revalidateTag(`public-event-detail-${eventId}`, { expire: 0 });
+  revalidatePath("/");
+}
 
 export async function GET(request: Request) {
   const startedAt = performance.now();
@@ -35,9 +43,11 @@ export async function POST(request: Request) {
 
     if (payload.action === "publication") {
       const data = await setContentPublicationStatusFast(viewer, payload.eventId, payload.publicationId, payload.status);
+      refreshPublicEvent(eventId);
       return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
     }
     const data = await saveContentManagementData(viewer.username, payload.data);
+    refreshPublicEvent(eventId);
     return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "内容保存失败。" }, { status: 400 });
