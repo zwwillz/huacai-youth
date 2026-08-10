@@ -7,6 +7,18 @@ import { revalidatePath, revalidateTag } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
+async function normalizeEventJson(eventId: string) {
+  const sql = getSqlClient();
+  await sql`
+    update public.event_details set
+      age_rules=case when jsonb_typeof(age_rules)='string' then (age_rules #>> '{}')::jsonb else age_rules end,
+      competition_format=case when jsonb_typeof(competition_format)='string' then (competition_format #>> '{}')::jsonb else competition_format end,
+      draw_rules=case when jsonb_typeof(draw_rules)='string' then (draw_rules #>> '{}')::jsonb else draw_rules end,
+      prizes=case when jsonb_typeof(prizes)='string' then (prizes #>> '{}')::jsonb else prizes end
+    where event_id=${eventId}
+  `;
+}
+
 export async function GET(request: Request) {
   const startedAt = performance.now();
   const viewer = await getAdminViewer();
@@ -30,8 +42,10 @@ export async function POST(request: Request) {
     const rows = await sql<Array<{ status: string }>>`select status from public.events where id=${input.eventId} limit 1`;
     if (rows[0]?.status === "archived") throw new Error("已归档赛事为只读状态，不能继续修改。");
 
-    const data = await saveEventManagementData(viewer.username, input);
+    await saveEventManagementData(viewer.username, input);
+    await normalizeEventJson(input.eventId);
     await syncEventOverviewPublication(input.eventId, input.publishStatus === "published");
+    const data = await getEventManagementDataFast(viewer, input.eventId);
     revalidateTag("admin-navigation-events", { expire: 0 });
     revalidateTag("public-site", { expire: 0 });
     revalidateTag("public-content", { expire: 0 });
