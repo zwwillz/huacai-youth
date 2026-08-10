@@ -1,13 +1,30 @@
 "use client";
 
-import Link from "next/link";
 import type { GuideManagementData } from "@/db/guides";
 import GuideManagementClient from "./content/[eventId]/guides/guide-management-client";
 
 export function ContentIndexLoadingView() {
-  return <main className="event-settings-index" aria-busy="true" style={{ pointerEvents: "none" }}>
-    <header className="event-settings-index-head"><div><small>静态内容发布</small><h1>选择赛事</h1><p>赛事创建后，才会进入本站的内容发布。这里维护赛事简介、竞赛规程、赛事文件和参赛友好提示；赛程签表、对阵、比分和排名交给“竞赛执行”。</p></div><span>— 场赛事</span></header>
-    <section className="event-settings-index-grid">{Array.from({ length: 4 }, (_, index) => <article key={index}><header><span>第 — 站</span><b>状态读取中</b></header><h2>赛事名称正在读取</h2><p>城市 · 场馆正在读取</p><dl><div><dt>比赛时间</dt><dd>—</dd></div><div><dt>赛事状态</dt><dd>正在读取</dd></div><div><dt>前端状态</dt><dd>正在读取</dd></div></dl><div className="event-settings-card-actions"><Link href="/admin/content" tabIndex={-1}>进入内容发布 →</Link><Link href="/admin/content" tabIndex={-1}>参赛提示 →</Link><Link href="/admin/events" tabIndex={-1}>赛事设置 →</Link></div></article>)}</section>
+  return <main className="content-workspace" aria-busy="true" style={{ pointerEvents: "none" }}>
+    <div className="content-layout">
+      <aside className="content-sidebar">
+        <small>当前赛事</small><h1>赛事内容正在读取</h1><p>正在进入内容发布</p>
+        <dl className="content-side-status"><div><dt>赛事概览</dt><dd>读取中</dd></div><div><dt>竞赛规程</dt><dd>读取中</dd></div></dl>
+        <div className="content-side-note"><strong>内容发布</strong><p>页面结构已就绪，赛事资料读取完成后会直接进入新版“赛事概览 / 竞赛规程”，不会再显示旧的赛事选择页。</p></div>
+      </aside>
+      <section className="content-main">
+        <section className="content-head-card content-publishing-head"><div><small>CONTENT PUBLISHING</small><h2>内容发布</h2><p>赛事概览与竞赛规程正在读取。</p><div className="content-top-tabs"><button className="active" type="button">赛事概览</button><button type="button">竞赛规程</button></div></div><span className="draft">读取中</span></section>
+        {[0,1,2].map((item) => <section className="content-card content-loading-card" key={item}><div className="content-loading-lines"><i /><i /><i /></div></section>)}
+      </section>
+    </div>
+  </main>;
+}
+
+export function SchedulePublishLoadingView() {
+  return <main className="content-workspace schedule-publish-workspace" aria-busy="true" style={{ pointerEvents: "none" }}>
+    <div className="content-layout schedule-publish-layout">
+      <aside className="content-sidebar schedule-publish-sidebar"><small>当前赛事</small><h1>赛事主赛程正在读取</h1><p>正在同步阶段资料</p><dl className="content-side-status"><div><dt>赛事主赛程</dt><dd>读取中</dd></div><div><dt>详细赛程表</dt><dd>读取中</dd></div><div><dt>阶段资料</dt><dd>—/4</dd></div></dl><div className="content-side-note"><strong>两层赛程</strong><p>主赛程与竞赛执行的具体赛程表会分别读取，页面结构不会跳回旧版。</p></div></aside>
+      <section className="content-main schedule-publish-main"><section className="content-head-card schedule-publish-head"><div><small>MASTER SCHEDULE</small><h2>赛程发布</h2><p>阶段名称、比赛时间、晋级人数和赛制标签正在读取。</p></div><span className="draft">读取中</span></section><section className="schedule-publish-intro"><div><strong>公众端展示结构</strong><span>四个阶段正在加载。</span></div><b>读取中</b></section>{[0,1,2,3].map((item) => <section className="content-card schedule-stage-editor content-loading-card" key={item}><div className="content-loading-lines"><i /><i /><i /></div></section>)}</section>
+    </div>
   </main>;
 }
 
