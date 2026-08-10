@@ -60,7 +60,7 @@ test("participant locking and scoring keep server-side write guards", () => {
 test("unpublished competition writes remain dirty drafts until explicit publish", () => {
   const context = source("db/competition-context.ts");
   assert.match(context, /has_unpublished_changes=true/);
-  assert.match(context, /status='draft'/);
+  assert.match(context, /'draft',true/);
   assert.match(context, /write: true/);
 });
 
