@@ -1,9 +1,10 @@
 import { getSqlClient } from "./index";
-import { getCurrentCompetitionEvents, type PublicCompetitionEvent, type PublicLiveMatch } from "./public-competition-live";
+import type { PublicCompetitionEvent, PublicLiveMatch } from "./public-competition-live";
 import { getCompetitionMatches, type CompetitionMatch } from "./competition-matches";
 
 type MatchSnapshot = { eventId: string; matches: Array<Pick<PublicLiveMatch, "id" | "playerAId" | "playerA" | "playerBId" | "playerB" | "scoreA" | "scoreB" | "resultType" | "resultStatus" | "status" | "winnerPlayerId" | "winnerPlayerName">> };
 type PublicationRow = { eventId: string; moduleType: "schedule" | "matches"; status: string; snapshotJson: string | null };
+type LegacyEventRow = { eventId: string };
 
 function emptyEvent(eventId: string): PublicCompetitionEvent {
   return { eventId, phaseSummaries: [], matches: [], qualificationEntries: [], mainRoster: [] };
@@ -156,45 +157,68 @@ function overlay(base: PublicCompetitionEvent, result: MatchSnapshot | null) {
   return { ...base, matches: base.matches.map((match) => ({ ...match, ...(map.get(match.id) ?? {}) })) };
 }
 
+async function loadExplicitLegacyEventIds(eventIds: string[]) {
+  if (!eventIds.length) return new Set<string>();
+  const sql = getSqlClient();
+  const rows = await sql<LegacyEventRow[]>`
+    select e.id as "eventId"
+    from public.events e
+    where e.id=any(${eventIds}::text[])
+      and not exists (select 1 from public.competition_brackets b where b.event_id=e.id)
+      and exists (
+        select 1 from public.matches m
+        where m.event_id=e.id
+          and (m.source like 'static_%' or m.source like 'pdf_static_%')
+      )
+  `;
+  return new Set(rows.map((row) => row.eventId));
+}
+
+/**
+ * New database-driven events are snapshot-only on the public side.
+ * Legacy fallback is restricted to events that are explicitly backed by imported/static match sources
+ * and have no Competition-engine bracket data (for example the migrated Langfang event).
+ */
 export async function getPublishedCompetitionEvents(eventIds: string[]): Promise<PublicCompetitionEvent[]> {
   if (!eventIds.length) return [];
   const sql = getSqlClient();
-  const rows = await sql<PublicationRow[]>`
-    select event_id as "eventId",module_type as "moduleType",status,snapshot_json as "snapshotJson"
-    from public.publications
-    where event_id=any(${eventIds}::text[]) and module_type in ('schedule','matches')
-  `;
+  const [rows, legacyIds] = await Promise.all([
+    sql<PublicationRow[]>`
+      select event_id as "eventId",module_type as "moduleType",status,snapshot_json as "snapshotJson"
+      from public.publications
+      where event_id=any(${eventIds}::text[]) and module_type in ('schedule','matches')
+    `,
+    loadExplicitLegacyEventIds(eventIds),
+  ]);
   const publications = new Map(rows.map((row) => [`${row.eventId}|${row.moduleType}`, row]));
-  const fallbackIds = eventIds.filter((eventId) => {
-    const schedule = publications.get(`${eventId}|schedule`);
-    const matches = publications.get(`${eventId}|matches`);
-    const parsedSchedule = parseSchedule(schedule?.snapshotJson ?? null, eventId);
-    const parsedMatches = parseMatches(matches?.snapshotJson ?? null, eventId);
-    return (schedule?.status === "published" && !hasCompetitionData(parsedSchedule))
-      || (matches?.status === "published" && (!parsedMatches || parsedMatches.matches.length === 0));
-  });
-  const [fallbackRows, legacyRows] = fallbackIds.length ? await Promise.all([
-    getCurrentCompetitionEvents(fallbackIds),
-    Promise.all(fallbackIds.map(async (eventId) => legacyCompetitionEvent(eventId, await getCompetitionMatches(eventId)))),
-  ]) : [[], []];
-  const fallbackMap = new Map(fallbackRows.map((event) => [event.eventId, event]));
-  const legacyMap = new Map(legacyRows.map((event) => [event.eventId, event]));
+  const legacyEvents = await Promise.all([...legacyIds].map(async (eventId) => legacyCompetitionEvent(eventId, await getCompetitionMatches(eventId))));
+  const legacyMap = new Map(legacyEvents.map((event) => [event.eventId, event]));
 
   return eventIds.map((eventId) => {
     const schedule = publications.get(`${eventId}|schedule`);
     const matches = publications.get(`${eventId}|matches`);
     if (schedule?.status !== "published") return emptyEvent(eventId);
-    const engineCurrent = fallbackMap.get(eventId) ?? emptyEvent(eventId);
-    const current = hasCompetitionData(engineCurrent) ? engineCurrent : legacyMap.get(eventId) ?? engineCurrent;
+
     const parsedSchedule = parseSchedule(schedule.snapshotJson, eventId);
-    const base = hasCompetitionData(parsedSchedule) || !hasCompetitionData(current) ? parsedSchedule ?? sanitizeSchedule(current) : sanitizeSchedule(current);
+    const legacy = legacyMap.get(eventId) ?? null;
+    let base: PublicCompetitionEvent;
+    if (parsedSchedule) {
+      base = sanitizeSchedule(parsedSchedule);
+      if (legacy && !hasCompetitionData(base) && hasCompetitionData(legacy)) base = sanitizeSchedule(legacy);
+    } else if (legacy) {
+      base = sanitizeSchedule(legacy);
+    } else {
+      return emptyEvent(eventId);
+    }
+
     if (matches?.status !== "published") return base;
     const parsedResult = parseMatches(matches.snapshotJson, eventId);
-    const result = parsedResult?.matches.length ? parsedResult : currentResults(current);
-    return overlay(base, result);
+    if (parsedResult) return overlay(base, parsedResult);
+    if (legacy) return overlay(base, currentResults(legacy));
+    // Never read live Competition-engine results for a new database event when its published snapshot is absent/invalid.
+    return base;
   });
 }
-
 
 export async function getCompetitionPublicationVersion(eventId: string) {
   const sql = getSqlClient();
