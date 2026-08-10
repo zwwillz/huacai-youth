@@ -8,7 +8,7 @@ export type PublicContentState = {
   eventId: string;
   shortTitle: string;
   publishedModules: string[];
-  masterSchedule: {
+  masterSchedule?: {
     published: boolean;
     stages: MasterScheduleStage[];
   };
