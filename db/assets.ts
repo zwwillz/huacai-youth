@@ -87,15 +87,24 @@ export async function uploadEventAsset(
 
 export async function readEventAsset(assetId: string) {
   const sql = getSqlClient();
-  const rows = await sql<{
-    mime_type: string;
-    file_name: string;
-    data: Buffer;
-  }[]>`
-    select mime_type, file_name, data
+  // Read bytea as base64 text instead of transporting raw binary through the
+  // HTTPS database bridge. This is more reliable on Edge runtimes and avoids
+  // broken image/PDF responses after a successful upload.
+  const rows = await sql<Array<{
+    mimeType: string;
+    fileName: string;
+    dataBase64: string;
+  }>>`
+    select mime_type as "mimeType", file_name as "fileName", encode(data, 'base64') as "dataBase64"
     from public.event_assets
     where id = ${assetId}
     limit 1
   `;
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    mime_type: row.mimeType,
+    file_name: row.fileName,
+    data: Buffer.from(row.dataBase64, "base64"),
+  };
 }
