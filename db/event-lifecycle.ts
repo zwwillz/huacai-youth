@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type postgres from "postgres";
 import { getSqlClient } from "./index";
 import { requireEventAccess, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 
@@ -32,7 +33,7 @@ function validUrl(value: string | null) {
   try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
 }
 
-async function loadLockedEvent(tx: Parameters<Parameters<ReturnType<typeof getSqlClient>["begin"]>[0]>[0], eventId: string) {
+async function loadLockedEvent(tx: postgres.TransactionSql, eventId: string) {
   const rows = await tx<LifecycleRow[]>`
     select e.id,e.short_title as "shortTitle",e.status,e.full_title as "fullTitle",e.city,e.venue_id as "venueId",
       e.start_date as "startDate",e.end_date as "endDate",e.registration_start_at as "registrationStartAt",e.registration_end_at as "registrationEndAt",e.registration_url as "registrationUrl",
@@ -59,7 +60,7 @@ function assertOpenRegistrationReady(row: LifecycleRow) {
   if (!validUrl(row.registrationUrl)) throw new Error("当前赛事还不能开放报名，请先填写有效的 http / https 报名入口。");
 }
 
-async function competitionReadyToStart(tx: Parameters<Parameters<ReturnType<typeof getSqlClient>["begin"]>[0]>[0], eventId: string) {
+async function competitionReadyToStart(tx: postgres.TransactionSql, eventId: string) {
   const rows = await tx<Array<{ ready: boolean }>>`
     select exists(
       select 1 from public.event_groups g
@@ -73,7 +74,7 @@ async function competitionReadyToStart(tx: Parameters<Parameters<ReturnType<type
   return Boolean(rows[0]?.ready);
 }
 
-async function unfinishedRankingGroups(tx: Parameters<Parameters<ReturnType<typeof getSqlClient>["begin"]>[0]>[0], eventId: string) {
+async function unfinishedRankingGroups(tx: postgres.TransactionSql, eventId: string) {
   return tx<Array<{ groupId: string; groupName: string }>>`
     select g.id as "groupId",g.name as "groupName"
     from public.event_groups g
