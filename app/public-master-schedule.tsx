@@ -21,6 +21,12 @@ function GroupSwitch({ group, setGroup }: { group: ScheduleGroup; setGroup: (gro
   return <div className="group-switch" aria-label="选择比赛组别"><button className={group === "少年组" ? "active" : ""} onClick={() => setGroup("少年组")}><b>U16</b><span>少年组</span></button><button className={group === "青年组" ? "active" : ""} onClick={() => setGroup("青年组")}><b>U20</b><span>青年组</span></button></div>;
 }
 
+function groupFromUrl(): ScheduleGroup {
+  if (typeof window === "undefined") return "少年组";
+  const value = new URLSearchParams(window.location.search).get("group");
+  return value === "u20" || value === "青年组" ? "青年组" : "少年组";
+}
+
 function DirectScheduleDetail({ station, contentState, group, phaseId, onBack, onGroupChange }: {
   station: Station;
   contentState: PublicContentState;
@@ -113,8 +119,19 @@ function DirectScheduleDetail({ station, contentState, group, phaseId, onBack, o
 }
 
 function PublicMasterScheduleView({ station, contentState }: { station: Station; contentState?: PublicContentState }) {
-  const [group, setGroup] = useState<ScheduleGroup>("少年组");
+  const [group, setGroupState] = useState<ScheduleGroup>(groupFromUrl);
   const [selectedPhase, setSelectedPhase] = useState<MasterScheduleCode | null>(null);
+  useEffect(() => {
+    const restoreGroup = () => setGroupState(groupFromUrl());
+    window.addEventListener("popstate", restoreGroup);
+    return () => window.removeEventListener("popstate", restoreGroup);
+  }, []);
+  const setGroup = (next: ScheduleGroup) => {
+    setGroupState(next);
+    const params = new URLSearchParams(window.location.search);
+    params.set("group", next === "青年组" ? "u20" : "u16");
+    window.history.pushState({}, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+  };
   const u16Published = Boolean(contentState?.masterSchedule?.groups.少年组.published);
   const u20Published = Boolean(contentState?.masterSchedule?.groups.青年组.published);
   const effectiveGroup: ScheduleGroup = group === "少年组" && !u16Published && u20Published

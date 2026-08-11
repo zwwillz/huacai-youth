@@ -1,5 +1,6 @@
 import { getSqlClient } from "./index";
 import { competitionPhaseLabel } from "./competition-labels";
+import { loadQualificationSupportRows } from "./qualification-support-query.mjs";
 import { assertAdminRole, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 import type { QualificationCandidate, QualificationDirect, QualificationStage, QualificationWorkspaceData } from "./qualification-engine";
 
@@ -223,44 +224,8 @@ export async function getQualificationWorkspaceDataFast(input: AdminPrincipalInp
   const stages = base.stages ?? [];
   if (!stages.length) return { viewerRole: principal.role, event: { id: base.id, shortTitle: base.shortTitle }, stages: [] };
 
-  const stageFilter = stages.map((stage) => ({ bracket_id: stage.bracketId, final_round_no: Math.log2(stage.divisionSize) }));
-  const drawSessionIds = stages.map((stage) => stage.drawSessionId);
-  const supportRows = await sql<SupportBundle[]>`
-    with stage_filter as (
-      select * from jsonb_to_recordset(${JSON.stringify(stageFilter)}::jsonb) as x(bracket_id text,final_round_no int)
-    ), relevant_matches as (
-      select bm.bracket_id as "bracketId",bm.id,bm.round_no as "roundNo",bm.division_no as "divisionNo",
-        bm.player_a_id as "playerAId",bm.player_a_name as "playerAName",bm.player_b_id as "playerBId",bm.player_b_name as "playerBName",
-        bm.winner_player_id as "winnerPlayerId",bm.winner_player_name as "winnerPlayerName",bm.score_a as "scoreA",bm.score_b as "scoreB",
-        bm.result_type as "resultType",bm.result_status as "resultStatus",bm.status
-      from public.competition_bracket_matches bm
-      join stage_filter sf on sf.bracket_id=bm.bracket_id
-      where bm.round_no=sf.final_round_no
-        or (bm.result_status='confirmed' and bm.result_type='normal' and bm.score_a is not null and bm.score_b is not null)
-    ), relevant_batches as (
-      select qb.id,qb.draw_session_id as "drawSessionId",qb.confirmed_at as "confirmedAt"
-      from public.competition_qualification_batches qb
-      where qb.draw_session_id=any(${drawSessionIds}::text[])
-    )
-    select
-      coalesce((select jsonb_agg(to_jsonb(m)) from relevant_matches m),'[]'::jsonb) as matches,
-      coalesce((select jsonb_agg(jsonb_build_object(
-        'id',b.id,'drawSessionId',b."drawSessionId",'confirmedAt',b."confirmedAt",'entries',coalesce((
-          select jsonb_agg(jsonb_build_object(
-            'playerId',qe.player_id,'playerName',qe.player_name,'entryType',qe.entry_type,'selected',qe.selected,'rankNo',qe.rank_no,
-            'divisionNo',qe.division_no,'gamesWon',qe.games_won,'gamesLost',qe.games_lost,'gameWinRateBp',qe.game_win_rate_bp,
-            'netGames',qe.net_games,'finalMatchId',qe.final_match_id,'finalResultType',qe.final_result_type,'eligibilityStatus',qe.eligibility_status
-          ) order by case when qe.entry_type='direct' then 0 else 1 end,coalesce(qe.rank_no,999),qe.division_no
-          from public.competition_qualification_entries qe where qe.batch_id=b.id
-        ),'[]'::jsonb)
-      )) from relevant_batches b),'[]'::jsonb) as batches,
-      coalesce((select jsonb_agg(jsonb_build_object('groupId',pe.group_id,'phaseCode',pe.phase_code,'count',pe.cnt)) from (
-        select group_id,phase_code,count(*)::int as cnt
-        from public.competition_phase_entries
-        where event_id=${eventId} and status='active' and phase_code in ('qualifier-two','main-one')
-        group by group_id,phase_code
-      ) pe),'[]'::jsonb) as "nextCounts"
-  `;
+  // The support query receives only the scalar eventId and reconstructs its database relationships server-side.
+  const supportRows = await loadQualificationSupportRows(sql, eventId) as SupportBundle[];
   const support = supportRows[0] ?? { matches: [], batches: [], nextCounts: [] };
   return {
     viewerRole: principal.role,

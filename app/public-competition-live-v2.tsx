@@ -139,12 +139,35 @@ const liveCss = `
 .public-main-empty-note{padding:8px 17px;color:#755c88;background:#f5f0fa;font-size:9px}.public-main-empty-note strong{color:#56317f}
 .public-module-state{min-height:300px;display:grid;place-items:center;padding:36px 22px;border:1px solid #e6dff0;border-radius:18px;background:linear-gradient(145deg,#fff,#f8f4fb);text-align:center}.public-module-state>div{max-width:460px}.public-module-state span{width:52px;height:52px;display:grid;place-items:center;margin:0 auto 14px;border-radius:16px;color:#fff;background:linear-gradient(145deg,#6734ce,#d7469c);font-size:18px;font-weight:900}.public-module-state h2{margin:0 0 9px;color:#2c173f;font-size:20px}.public-module-state p{margin:0;color:#817489;font-size:11px;line-height:1.8}.public-module-state button{margin-top:16px;padding:10px 18px;border:0;border-radius:999px;color:#fff;background:#6235b0;font-size:10px;font-weight:900;cursor:pointer}
 .public-third-place{width:240px;margin:20px 0 0}.public-third-place h3{margin:0 0 9px;color:#fff;font-size:12px}
+.public-match-load-more{display:flex;justify-content:center;padding:4px 0 14px}.public-match-load-more button{display:flex;align-items:center;gap:8px;padding:10px 18px;border:0;border-radius:999px;color:#fff;background:#6235b0;font-size:10px;font-weight:900;cursor:pointer}.public-match-load-more button span{font-size:8px;font-weight:700;opacity:.78}
 @media(max-width:900px){.tabs.public-five-tabs{width:100%!important}.tabs.public-five-tabs button{font-size:10px!important;padding:8px 2px!important}.public-roster-groups{grid-template-columns:1fr}.public-prelim-grid{grid-template-columns:repeat(2,154px)}}
 @media(max-width:520px){.public-final-ranking>div{grid-template-columns:36px 70px minmax(90px,1fr) auto;gap:6px}.public-prelim-grid{grid-template-columns:154px}}
 `;
 
 function GroupSwitch({ group, setGroup }: { group: Group; setGroup: (group: Group) => void }) {
   return <div className="group-switch" aria-label="选择比赛组别"><button className={group === "少年组" ? "active" : ""} onClick={() => setGroup("少年组")}><b>U16</b><span>少年组</span></button><button className={group === "青年组" ? "active" : ""} onClick={() => setGroup("青年组")}><b>U20</b><span>青年组</span></button></div>;
+}
+
+function groupFromUrl(): Group {
+  if (typeof window === "undefined") return "少年组";
+  const value = new URLSearchParams(window.location.search).get("group");
+  return value === "u20" || value === "青年组" ? "青年组" : "少年组";
+}
+
+function usePublicGroup() {
+  const [group, setGroupState] = useState<Group>(groupFromUrl);
+  useEffect(() => {
+    const restore = () => setGroupState(groupFromUrl());
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
+  const setGroup = useCallback((next: Group) => {
+    setGroupState(next);
+    const params = new URLSearchParams(window.location.search);
+    params.set("group", next === "青年组" ? "u20" : "u16");
+    window.history.pushState({}, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+  }, []);
+  return [group, setGroup] as const;
 }
 
 function shortDate(value: string | null) { if (!value) return "时间待定"; const [, month, day] = value.split("-"); return month && day ? `${Number(month)}月${Number(day)}日` : value; }
@@ -252,7 +275,7 @@ function MainRosterDetail({ station, data, group, setGroup, onBack }: { station:
 }
 
 function PublicSchedule({ station, data, detailsReady, ensureDetails }: { station: StationMeta; data: PublicCompetitionDisplayEvent; detailsReady: boolean; ensureDetails: () => void }) {
-  const [group, setGroup] = useState<Group>("少年组"); const [detail, setDetail] = useState<PhaseId | null>(null); const [showRoster, setShowRoster] = useState(false);
+  const [group, setGroup] = usePublicGroup(); const [detail, setDetail] = useState<PhaseId | null>(null); const [showRoster, setShowRoster] = useState(false);
   const openDetail = (phaseId: PhaseId) => { ensureDetails(); setDetail(phaseId); };
   if (showRoster) return <MainRosterDetail station={station} data={data} group={group} setGroup={setGroup} onBack={() => setShowRoster(false)} />;
   if (detail?.startsWith("qualifier")) return <QualifierStageDetail station={station} data={data} group={group} setGroup={setGroup} phaseId={detail} onBack={() => setDetail(null)} />;
@@ -262,9 +285,21 @@ function PublicSchedule({ station, data, detailsReady, ensureDetails }: { statio
 }
 
 function PublicMatches({ station, data }: { station: StationMeta; data: PublicCompetitionDisplayEvent }) {
-  const [group, setGroup] = useState<Group>("少年组"); const all = useMemo(() => data.matches.filter((match) => match.group === group && match.date), [data.matches, group]); const days = useMemo(() => [...new Set(all.map((match) => match.date!).filter(Boolean))].sort(), [all]); const defaultDay = latestAvailableDay(days); const [day, setDay] = useState(defaultDay); const selectedDay = days.includes(day) ? day : defaultDay; const [query, setQuery] = useState("");
-  const matches = all.filter((match) => match.date === selectedDay && [match.playerA, match.playerB, match.table, match.roundName, match.matchCode].some((value) => (value ?? "").includes(query.trim())));
-  return <div className="match-list-page stack public-competition-overlay"><section className="match-list-head with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>对阵</h1><p>默认显示最近一个已有比赛的日期，可切换查看其它比赛日</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="match-filter"><nav className="match-days">{days.map((value) => <button className={selectedDay === value ? "active" : ""} onClick={() => setDay(value)} key={value}><small>{weekday(value)}</small><b>{compactDate(value)}</b></button>)}</nav><label><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索球员、球台或场次" /></label></section><div className="match-count"><strong>{selectedDay ? compactDate(selectedDay) : "—"}</strong><span>{group} · {matches.length}场对阵</span></div>{matches.length ? <section className="versus-list">{matches.map((match) => <article className="versus-card" key={match.id}><header><b>{match.time || "待定"}</b><span>{PHASE_LABELS[match.phaseId]} · {match.roundName} · {displayMatchCode(match.matchCode, match.phaseId)}</span></header><section><div className="match-player"><i>{displayName(match.playerA, "待").slice(0, 1)}</i><strong>{displayName(match.playerA, "待定")}</strong></div><div className="match-center"><strong>{scoreLabel(match)}</strong><span className={matchStatus(match) === "已结束" ? "ended" : ""}>{matchStatus(match)}</span><b className={match.isTv ? "tv" : ""}>{match.table || "球台待定"}</b></div><div className="match-player"><i>{displayName(match.playerB, "待").slice(0, 1)}</i><strong>{displayName(match.playerB, "待定")}</strong></div></section></article>)}</section> : <section className="match-empty"><i>○</i><h2>当日对阵待公布</h2><p>该日期目前没有已发布的比赛，可切换其它日期查看。</p></section>}</div>;
+  const [group, setGroup] = usePublicGroup();
+  const all = useMemo(() => data.matches.filter((match) => match.group === group && match.date), [data.matches, group]);
+  const days = useMemo(() => [...new Set(all.map((match) => match.date!).filter(Boolean))].sort(), [all]);
+  const defaultDay = latestAvailableDay(days);
+  const [day, setDay] = useState(defaultDay);
+  const selectedDay = days.includes(day) ? day : defaultDay;
+  const [query, setQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(40);
+  const matches = useMemo(() => {
+    const normalizedQuery = query.trim();
+    return all.filter((match) => match.date === selectedDay && [match.playerA, match.playerB, match.table, match.roundName, match.matchCode].some((value) => (value ?? "").includes(normalizedQuery)));
+  }, [all, query, selectedDay]);
+  const visibleMatches = matches.slice(0, visibleCount);
+  useEffect(() => { setVisibleCount(40); }, [group, selectedDay, query]);
+  return <div className="match-list-page stack public-competition-overlay"><section className="match-list-head with-group compact-head"><div><small className="event-name-kicker">{station.title}</small><h1>对阵</h1><p>默认显示最近一个已有比赛的日期，可切换查看其它比赛日</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="match-filter"><nav className="match-days">{days.map((value) => <button className={selectedDay === value ? "active" : ""} onClick={() => setDay(value)} key={value}><small>{weekday(value)}</small><b>{compactDate(value)}</b></button>)}</nav><label><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索球员、球台或场次" /></label></section><div className="match-count"><strong>{selectedDay ? compactDate(selectedDay) : "—"}</strong><span>{group} · {matches.length}场对阵</span></div>{matches.length ? <><section className="versus-list">{visibleMatches.map((match) => <article className="versus-card" key={match.id}><header><b>{match.time || "待定"}</b><span>{PHASE_LABELS[match.phaseId]} · {match.roundName} · {displayMatchCode(match.matchCode, match.phaseId)}</span></header><section><div className="match-player"><i>{displayName(match.playerA, "待").slice(0, 1)}</i><strong>{displayName(match.playerA, "待定")}</strong></div><div className="match-center"><strong>{scoreLabel(match)}</strong><span className={matchStatus(match) === "已结束" ? "ended" : ""}>{matchStatus(match)}</span><b className={match.isTv ? "tv" : ""}>{match.table || "球台待定"}</b></div><div className="match-player"><i>{displayName(match.playerB, "待").slice(0, 1)}</i><strong>{displayName(match.playerB, "待定")}</strong></div></section></article>)}</section>{visibleMatches.length < matches.length && <div className="public-match-load-more"><button onClick={() => setVisibleCount((count) => Math.min(matches.length, count + 40))}>加载更多 <span>已显示{visibleMatches.length}/{matches.length}场</span></button></div>}</> : <section className="match-empty"><i>○</i><h2>当日对阵待公布</h2><p>该日期目前没有已发布的比赛，可切换其它日期查看。</p></section>}</div>;
 }
 
 function rankingNumberStyle(place: number): CSSProperties | undefined {
@@ -276,7 +311,7 @@ function rankingNumberStyle(place: number): CSSProperties | undefined {
 }
 
 function PublicRankings({ station, rankings }: { station: StationMeta; rankings: PublicRanking[] }) {
-  const [group, setGroup] = useState<Group>("少年组"); const finalRows = rankings.filter((row) => row.group === group).sort((a, b) => a.displayOrder - b.displayOrder); const prizes = station.prizes[group] ?? [];
+  const [group, setGroup] = usePublicGroup(); const finalRows = rankings.filter((row) => row.group === group).sort((a, b) => a.displayOrder - b.displayOrder); const prizes = station.prizes[group] ?? [];
   return <div className="stack public-competition-overlay"><section className="ranking-head"><div><small className="event-name-kicker">{station.title}</small><h1>比赛排名</h1><p>{finalRows.length ? "组委会已发布本站正赛最终排名" : "最终排名待组委会确认并发布"}</p></div><GroupSwitch group={group} setGroup={setGroup} /></section><section className="card ranking"><header><div><small>{group}</small><h2>{finalRows.length ? "本站赛事排名" : "奖金设置"}</h2></div></header>{finalRows.length ? <div className="public-final-ranking">{finalRows.map((row) => <div key={row.id}><span style={rankingNumberStyle(row.displayOrder)}>{row.displayOrder}</span><b>{row.placementLabel}</b><strong>{row.playerName}</strong><em>{row.prizeDisplay || "—"}</em></div>)}</div> : <><div className="ranking-wait"><i /><div><strong>比赛结果尚未全部完成</strong><p>排名仅统计正赛最终名次。待组委会确认并发布本站排名后，这里会自动切换为正式排名。</p></div></div><div className="prizes">{prizes.map(([rank, amount], index) => <div key={`${rank}-${index}`}><span>{index + 1}</span><strong>{rank}</strong><b>{amount}</b></div>)}</div></>}</section></div>;
 }
 

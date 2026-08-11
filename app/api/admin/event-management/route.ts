@@ -2,7 +2,6 @@ import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { saveEventManagementData, type EventManagementData, type EventManagementInput } from "@/db/event-management";
 import { getEventManagementDataFast } from "@/db/event-management-fast";
 import { saveEventOverviewData, type EventOverviewInput } from "@/db/event-overview";
-import { syncEventOverviewPublication } from "@/db/event-publication-sync";
 import { getSqlClient } from "@/db";
 import { revalidatePath, revalidateTag } from "next/cache";
 
@@ -151,7 +150,6 @@ export async function POST(request: Request) {
     if ("action" in payload && payload.action === "save_overview") {
       const input = payload.data;
       const data = await saveEventOverviewData(viewer.username, input);
-      await syncEventOverviewPublication(input.eventId, input.publishStatus === "published");
       refreshPublicEvent(input.eventId);
       return Response.json({ data }, { headers: { "Cache-Control": "private, no-store" } });
     }
@@ -163,19 +161,19 @@ export async function POST(request: Request) {
 
     // The content-publishing screen historically posted the entire event bundle
     // even when only overview fields changed. Detect that case server-side and
-    // use the lightweight overview writer so cover/partner publication never
-    // rewrites event_groups or depends on a WebSocket transaction.
+    // use the atomic overview writer so event data + overview publication cannot split.
     const current = await getEventManagementDataFast(viewer, input.eventId);
     if (isOverviewOnlyUpdate(current, input)) {
       const data = await saveEventOverviewData(viewer.username, overviewInput(input));
-      await syncEventOverviewPublication(input.eventId, input.publishStatus === "published");
       refreshPublicEvent(input.eventId);
       return Response.json({ data }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (input.publishStatus !== current.event.publishStatus) {
+      throw new Error("赛事概览发布或撤回请前往“赛事运营 → 内容发布 → 赛事概览”操作，以保证发布状态原子更新。");
     }
 
     await saveEventManagementData(viewer.username, input);
     await normalizeEventJson(input.eventId);
-    await syncEventOverviewPublication(input.eventId, input.publishStatus === "published");
     const data = await getEventManagementDataFast(viewer, input.eventId);
     refreshPublicEvent(input.eventId);
     return Response.json({ data });

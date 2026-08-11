@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getAdminViewer } from "../../admin-viewer";
 import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
 import { getQualificationWorkspaceDataFast } from "@/db/qualification-fast";
-import { getMainRosterControlDataFast } from "@/db/main-roster-fast";
+import { getMainRosterControlDataSafe } from "@/db/main-roster-safe";
 import { getCompetitionContextData } from "@/db/competition-context";
 import AdminWorkspaceShell from "../../admin-workspace-shell";
 import CompetitionContextBar from "../competition-context-bar";
@@ -43,7 +43,7 @@ export default async function QualificationPage({ searchParams }: { searchParams
     const requestedPhase = PHASES.some((phase) => phase.code === query.phase) ? String(query.phase) : "";
     const qualificationDone = Boolean(q1?.confirmed && q2?.confirmed);
     const needsMainData = requestedPhase.startsWith("main-") || (!requestedPhase && qualificationDone);
-    const mainRosterControl = needsMainData ? await getMainRosterControlDataFast(viewer, eventId) : null;
+    const mainRosterControl = needsMainData ? await getMainRosterControlDataSafe(viewer, eventId) : null;
     const rosterGroup = mainRosterControl?.groups.find((group) => group.groupId === selectedGroupId);
     const suggestedPhase = !q1 || !q1.confirmed
       ? "qualifier-one"

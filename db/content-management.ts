@@ -114,8 +114,9 @@ function prizeMap(value: unknown) {
   return result;
 }
 
-async function requireEditor(username: string, eventId: string) {
+async function requireEditor(username: string, eventId: string, write = false) {
   return requireEventAccess(username, eventId, {
+    write,
     allowedRoles: ["system_admin", "committee"],
     deniedMessage: "当前账号没有编辑和发布赛事内容的权限。",
   });
@@ -196,7 +197,7 @@ function validate(input: ContentManagementInput) {
 
 export async function saveContentManagementData(username: string, input: ContentManagementInput) {
   validate(input);
-  const account = await requireEditor(username, input.eventId);
+  const account = await requireEditor(username, input.eventId, true);
   const db = getDb();
   const [event] = await db.select().from(events).where(eq(events.id, input.eventId)).limit(1);
   if (!event) throw new Error("没有找到这场赛事。");
@@ -209,9 +210,6 @@ export async function saveContentManagementData(username: string, input: Content
   await db.transaction(async (tx) => {
     await tx.update(events).set({ summary: input.summary.trim() || null, updatedBy: account.id, updatedAt }).where(eq(events.id, input.eventId));
 
-    // The HTTPS database bridge does not expose postgres.js JSON serializers.
-    // Use explicit ::jsonb casts here so arrays/objects are stored as JSON values,
-    // not as JSON strings inside a jsonb column.
     await tx.execute(sql`
       insert into public.event_details (
         event_id,age_rules,competition_format,rule_standard,draw_rules,prize_note,prizes,created_at,updated_at
@@ -262,7 +260,7 @@ export async function saveContentManagementData(username: string, input: Content
 }
 
 export async function setContentPublicationStatus(username: string, eventId: string, publicationId: string, status: "draft" | "published") {
-  const account = await requireEditor(username, eventId);
+  const account = await requireEditor(username, eventId, true);
   const db = getDb();
   const [before] = await db.select().from(publications).where(and(eq(publications.id, publicationId), eq(publications.eventId, eventId))).limit(1);
   if (!before) throw new Error("没有找到要发布的内容模块。");

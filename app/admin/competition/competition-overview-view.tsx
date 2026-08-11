@@ -12,8 +12,9 @@ export const competitionOverviewPhases = [
 
 export type CompetitionOverviewDrawView = { status?: string; versionNo?: number; entrantCount?: number };
 export type CompetitionOverviewGroupView = { id: string; name: string; code: string; approvedCount: number | null; draws: Partial<Record<(typeof competitionOverviewPhases)[number]["code"], CompetitionOverviewDrawView>> };
-export type CompetitionOverviewViewModel = { eventId: string; eventTitle: string; groups: CompetitionOverviewGroupView[]; selectedGroupId: string; loading?: boolean };
+export type CompetitionOverviewViewModel = { viewerRole: string; eventId: string; eventTitle: string; groups: CompetitionOverviewGroupView[]; selectedGroupId: string; loading?: boolean };
 type Props = { model: CompetitionOverviewViewModel; onGroupChange?: (groupId: string) => void };
+type NextAction = { title: string; detail: string; label?: string; href?: string };
 
 function drawStatusLabel(status?: string, loading?: boolean) {
   if (loading) return "正在读取";
@@ -25,8 +26,9 @@ function drawStatusLabel(status?: string, loading?: boolean) {
 }
 function value(current: number | null | undefined, loading?: boolean) { return loading || current == null ? "—" : String(current); }
 
-export function makeCompetitionOverviewLoadingModel(eventId = "", selectedGroupId = "u16"): CompetitionOverviewViewModel {
+export function makeCompetitionOverviewLoadingModel(eventId = "", selectedGroupId = "u16", viewerRole = "referee"): CompetitionOverviewViewModel {
   return {
+    viewerRole,
     eventId,
     eventTitle: "当前赛事",
     groups: [
@@ -46,19 +48,21 @@ export default function CompetitionOverviewView({ model, onGroupChange }: Props)
   const byeCount = approvedCount == null ? null : Math.max(0, 512 - approvedCount);
   const nextPhase = loading ? competitionOverviewPhases[0] : competitionOverviewPhases.find((phase) => selectedGroup?.draws[phase.code]?.status !== "confirmed");
   const nextDraw = nextPhase ? selectedGroup?.draws[nextPhase.code] : null;
-  const nextAction = loading
+  const nextAction: NextAction = loading
     ? { title: "正在读取当前任务", detail: "报名审核、抽签状态与当前阶段正在同步。", label: "正在读取", href: "/admin/competition" }
     : !selectedGroup
       ? { title: "先选择比赛组别", detail: "少年组和青年组分别维护，选择后再处理当前阶段。", label: "选择组别", href: "/admin/competition" }
       : approvedCount === 0
-        ? { title: `${selectedGroup.name}尚无已审核名单`, detail: "抽签必须使用已审核参赛名单；请先确认本站报名数据。", label: "查看赛事设置", href: `/admin/events/${encodeURIComponent(model.eventId)}` }
+        ? model.viewerRole === "referee"
+          ? { title: "等待组委会确认参赛名单", detail: "当前组别尚未完成参赛名单确认，组委会完成后即可继续竞赛执行。" }
+          : { title: `${selectedGroup.name}尚无已审核名单`, detail: "抽签必须使用已审核参赛名单；请先完成报名审核、名单确认和锁定。", label: "前往参赛人员", href: `/admin/participants?event=${encodeURIComponent(model.eventId)}` }
         : nextPhase
           ? { title: `${nextPhase.title} · ${nextDraw?.status === "draft" ? "确认抽签草稿" : "生成抽签"}`, detail: `当前名单 ${approvedCount} 人。完成这一阶段后再进入赛程编排，避免跨阶段操作。`, label: nextDraw?.status === "draft" ? "继续确认抽签" : "进入抽签", href: `/admin/competition/draw?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup.id)}&phase=${nextPhase.code}` }
           : { title: "当前组别签表均已确认", detail: "下一步进入赛程编排，设置比赛时间、球台、TV台和裁判。", label: "进入赛程编排", href: `/admin/competition/schedules?event=${encodeURIComponent(model.eventId)}&group=${encodeURIComponent(selectedGroup.id)}` };
 
   return <main className="competition-workspace-page" aria-busy={loading} style={loading ? { pointerEvents: "none" } : undefined}><section className="competition-workspace-shell">
     {selectedGroup && <CompetitionContextBar eventId={model.eventId} eventTitle={model.eventTitle || "竞赛执行"} groups={model.groups.map((group) => ({ id: group.id, name: group.name, code: group.code }))} selectedGroupId={selectedGroup.id} basePath="/admin/competition" eyebrow="竞赛执行" title={`${selectedGroup.name} · 竞赛总览`} description="统一使用同一个组别上下文。组别切换现在只更新当前工作区，不再重新加载整个后台页面。" onGroupChange={loading ? undefined : onGroupChange} />}
-    <section className="competition-next-task"><div><small>当前建议下一步</small><h2>{nextAction.title}</h2><p>{nextAction.detail}</p></div><Link prefetch={false} href={nextAction.href}>{nextAction.label} →</Link></section>
+    <section className="competition-next-task"><div><small>当前建议下一步</small><h2>{nextAction.title}</h2><p>{nextAction.detail}</p></div>{nextAction.href && nextAction.label ? <Link prefetch={false} href={nextAction.href}>{nextAction.label} →</Link> : null}</section>
     {selectedGroup && <section className="competition-qualifier-summary">
       <article><small>当前报名审核</small><strong>{value(approvedCount, loading)}</strong><span>人</span></article>
       <article><small>资格赛标准签表</small><strong>512</strong><span>签位</span></article>

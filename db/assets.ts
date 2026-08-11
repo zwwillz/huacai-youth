@@ -1,6 +1,5 @@
-import { and, eq } from "drizzle-orm";
-import { getDb, getSqlClient } from "./index";
-import { events, users } from "./schema";
+import { getSqlClient } from "./index";
+import { requireEventAccess } from "./permissions";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -12,15 +11,6 @@ function now() {
 
 function assetId() {
   return "asset_" + crypto.randomUUID().replaceAll("-", "");
-}
-
-async function requireEventEditor(username: string) {
-  const db = getDb();
-  const [account] = await db.select().from(users).where(and(eq(users.username, username), eq(users.status, "active"))).limit(1);
-  if (!account || !["system_admin", "committee"].includes(account.role)) {
-    throw new Error("当前账号没有上传赛事文件的权限。");
-  }
-  return account;
 }
 
 export type UploadedEventAsset = {
@@ -47,10 +37,11 @@ export async function uploadEventAsset(
     height?: number | null;
   },
 ): Promise<UploadedEventAsset> {
-  const account = await requireEventEditor(username);
-  const db = getDb();
-  const [event] = await db.select({ id: events.id }).from(events).where(eq(events.id, input.eventId)).limit(1);
-  if (!event) throw new Error("没有找到要上传文件的赛事。");
+  const account = await requireEventAccess(username, input.eventId, {
+    write: true,
+    allowedRoles: ["system_admin", "committee"],
+    deniedMessage: "当前账号没有上传赛事文件的权限。",
+  });
   if (!input.bytes.length) throw new Error("请选择要上传的文件。");
 
   const isDocument = input.assetType.startsWith("document_");

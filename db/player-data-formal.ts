@@ -71,7 +71,7 @@ function prizePoints(prizeAmountCents: number) {
   return prizeAmountCents > 0 ? prizeAmountCents / 10_000 : 0;
 }
 
-/** Public player database = formal players only. */
+/** Public player database = approved players from non-test published events only. */
 export async function getFormalPublicPlayerSummaries(): Promise<PublicPlayerSummary[]> {
   const sql = getSqlClient();
   const result = await sql`
@@ -85,6 +85,7 @@ export async function getFormalPublicPlayerSummaries(): Promise<PublicPlayerSumm
       join public.players p on p.id = r.player_id
       where r.status = 'approved'
         and e.publish_status = 'published'
+        and coalesce(e.is_test, false) = false
         and p.merged_into_player_id is null
         and coalesce(p.profile_status, 'approved') <> 'disabled'
     ),
@@ -112,6 +113,7 @@ export async function getFormalPublicPlayerSummaries(): Promise<PublicPlayerSumm
         and er.status = 'published'
         and r.status = 'approved'
         and e.publish_status = 'published'
+        and coalesce(e.is_test, false) = false
       order by er.player_id, er.display_order asc, er.event_id desc
     ),
     points_total as (
@@ -187,6 +189,7 @@ export async function getFormalPublicPlayerDetail(playerId: string): Promise<Pub
         where r.player_id = ${playerId}
           and r.status = 'approved'
           and e.publish_status = 'published'
+          and coalesce(e.is_test, false) = false
         order by e.start_date desc, r.event_id desc
         limit 1
       ),
@@ -204,6 +207,7 @@ export async function getFormalPublicPlayerDetail(playerId: string): Promise<Pub
             where formal_r.player_id=same_name.id
               and formal_r.status='approved'
               and formal_e.publish_status='published'
+              and coalesce(formal_e.is_test, false)=false
           )
       )
       select p.id, p.full_name,
@@ -238,6 +242,7 @@ export async function getFormalPublicPlayerDetail(playerId: string): Promise<Pub
       where r.player_id = ${playerId}
         and r.status = 'approved'
         and e.publish_status = 'published'
+        and coalesce(e.is_test, false) = false
       order by e.year desc, e.start_date desc, r.event_id desc
     `,
     sql`
@@ -246,6 +251,7 @@ export async function getFormalPublicPlayerDetail(playerId: string): Promise<Pub
       join public.events e on e.id = m.event_id
       where (m.player_a_id = ${playerId} or m.player_b_id = ${playerId})
         and e.publish_status = 'published'
+        and coalesce(e.is_test, false) = false
         and exists (
           select 1 from public.registrations formal_r
           where formal_r.player_id=${playerId}

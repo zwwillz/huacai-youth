@@ -174,8 +174,9 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-async function requireEventEditor(username: string, eventId: string) {
+async function requireEventEditor(username: string, eventId: string, write = false) {
   return requireEventAccess(username, eventId, {
+    write,
     allowedRoles: ["system_admin", "committee"],
     deniedMessage: "当前账号没有编辑赛事资料的权限。",
   });
@@ -301,7 +302,7 @@ function validateInput(input: EventManagementInput) {
 export async function saveEventManagementData(username: string, input: EventManagementInput) {
   validateInput(input);
   const db = getDb();
-  const account = await requireEventEditor(username, input.eventId);
+  const account = await requireEventEditor(username, input.eventId, true);
   const [beforeEvent] = await db.select().from(events).where(eq(events.id, input.eventId)).limit(1);
   if (!beforeEvent) throw new Error("没有找到要修改的赛事。");
 

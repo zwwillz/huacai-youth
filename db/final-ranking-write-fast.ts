@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
-import { assertAdminRole, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
+import { assertAdminRole, requireEventAccess, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 import { markCompetitionModuleDirty } from "./competition-context";
 import type { FinalRankingRow } from "./final-ranking-engine";
 
@@ -41,6 +41,11 @@ async function loadBatchForWrite(principal: Awaited<ReturnType<typeof resolveAdm
   `;
   const batch = rows[0];
   if (!batch) throw new Error("没有找到最终排名批次，或当前账号未被分配到本站。");
+  await requireEventAccess(principal, batch.eventId, {
+    write: true,
+    allowedRoles: ["system_admin", "committee"],
+    deniedMessage: "最终排名维护需要系统管理员或组委会权限。",
+  });
   return batch;
 }
 

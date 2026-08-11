@@ -9,8 +9,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint . --ignore-pattern .next",
-    "test": "npm run lint && npm run build",
+    "test:core": "node --test tests/*.test.mjs",
+    "test:db-smoke": "node scripts/qualification-db-smoke.mjs",
+    "test": "npm run typecheck && npm run lint && npm run test:core && npm run build",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { EventData, Station } from "@/app/public-types";
 import { getDb } from "./index";
+import { registrationTimeState } from "./registration-time-policy.mjs";
 import { events, venues } from "./schema";
 
 const EVENT_STATUS: Record<string, string> = {
@@ -12,6 +13,17 @@ const EVENT_STATUS: Record<string, string> = {
   finished: "已结束",
   archived: "已结束",
   cancelled: "已取消",
+};
+
+const ACTIVE_PRIORITY: Record<string, number> = {
+  in_progress: 50,
+  registration_open: 40,
+  upcoming: 30,
+  registration_closed: 25,
+  finished: 20,
+  archived: 10,
+  draft: 0,
+  cancelled: -10,
 };
 
 function visualId(eventId: string) {
@@ -51,7 +63,7 @@ function locationPrefix(parts: Array<string | null | undefined>) {
   return [...new Set(values)].join("");
 }
 
-function loadingStation(row: {
+type HomeEventRow = {
   id: string;
   year: number;
   stationNo: number;
@@ -59,15 +71,57 @@ function loadingStation(row: {
   city: string;
   startDate: string;
   endDate: string;
+  registrationStartAt: string | null;
+  registrationEndAt: string | null;
   coverImage: string | null;
   summary: string | null;
   status: string;
+  isTest: boolean;
   venueName: string | null;
   venueProvince: string | null;
   venueCity: string | null;
   venueDistrict: string | null;
   venueAddress: string | null;
-}, index: number): Station {
+};
+
+function effectiveLifecycleStatus(row: HomeEventRow) {
+  if (row.status !== "registration_open") return row.status;
+  return registrationTimeState(row.registrationStartAt || "", row.registrationEndAt || "") === "closed" ? "registration_closed" : row.status;
+}
+function publicStatusLabel(row: HomeEventRow) {
+  if (row.status !== "registration_open") return EVENT_STATUS[row.status] ?? "状态待确认";
+  const timeState = registrationTimeState(row.registrationStartAt || "", row.registrationEndAt || "");
+  if (timeState === "not_started") return "报名即将开始";
+  if (timeState === "closed") return "报名已截止";
+  return "报名中";
+}
+
+function activeEventIds(rows: HomeEventRow[]) {
+  const byYear = new Map<number, HomeEventRow[]>();
+  for (const row of rows) byYear.set(row.year, [...(byYear.get(row.year) ?? []), row]);
+  const ids = new Set<string>();
+  for (const yearRows of byYear.values()) {
+    const formalRows = yearRows.filter((row) => !row.isTest);
+    const candidates = formalRows.length ? formalRows : yearRows;
+    const selected = [...candidates].sort((a, b) => {
+      const aStatus = effectiveLifecycleStatus(a);
+      const bStatus = effectiveLifecycleStatus(b);
+      const priority = (ACTIVE_PRIORITY[bStatus] ?? -20) - (ACTIVE_PRIORITY[aStatus] ?? -20);
+      if (priority) return priority;
+      if (aStatus === "finished" || aStatus === "archived") {
+        const dateOrder = b.endDate.localeCompare(a.endDate);
+        if (dateOrder) return dateOrder;
+      }
+      const startOrder = b.startDate.localeCompare(a.startDate);
+      if (startOrder) return startOrder;
+      return b.stationNo - a.stationNo;
+    })[0];
+    if (selected) ids.add(selected.id);
+  }
+  return ids;
+}
+
+function loadingStation(row: HomeEventRow, active: boolean): Station {
   const id = visualId(row.id);
   const prefix = locationPrefix([row.venueProvince, row.venueCity, row.venueDistrict]);
   const venuePrefix = row.venueDistrict?.includes("/") ? row.city : prefix;
@@ -79,8 +133,8 @@ function loadingStation(row: {
     stop: `第${chineseNumber(row.stationNo)}站`,
     city: `${row.city}站`,
     shortCity: shortCity(row.city),
-    status: EVENT_STATUS[row.status] ?? "状态待确认",
-    active: index === 0,
+    status: publicStatusLabel(row),
+    active,
     title: row.title,
     sponsor: "中国华彩十六球青少年系列赛",
     coverImage: row.coverImage || "",
@@ -118,9 +172,12 @@ export async function getPublicHomeData(): Promise<EventData> {
       city: events.city,
       startDate: events.startDate,
       endDate: events.endDate,
+      registrationStartAt: events.registrationStartAt,
+      registrationEndAt: events.registrationEndAt,
       coverImage: events.coverImageKey,
       summary: events.summary,
       status: events.status,
+      isTest: events.isTest,
       venueName: venues.name,
       venueProvince: venues.province,
       venueCity: venues.city,
@@ -132,8 +189,9 @@ export async function getPublicHomeData(): Promise<EventData> {
     .where(and(eq(events.publishStatus, "published"), sql`coalesce(is_hidden, false) = false`))
     .orderBy(desc(events.year), desc(events.stationNo));
 
+  const activeIds = activeEventIds(rows);
   return {
-    stations: rows.map((row, index) => loadingStation(row, index)),
+    stations: rows.map((row) => loadingStation(row, activeIds.has(row.id))),
     matches: [],
     players: [],
   };

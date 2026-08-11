@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAccountsForAdmin } from "@/db/account-admin";
 import { getAdminNavigationEventsForPrincipal } from "@/db/admin-principal-ui";
+import { isRootSystemAdminUsername } from "@/db/system-admin-policy.mjs";
 import { getAdminViewer } from "../admin-viewer";
 import AdminWorkspaceShell from "../admin-workspace-shell";
 import AccountManagementClient from "./account-management-client";
@@ -23,6 +24,6 @@ export default async function AccountsPage() {
     pageTitle="账号与权限"
     pageHint="系统 · 用户、角色与赛事权限"
   >
-    <AccountManagementClient initialAccounts={accounts} />
+    <AccountManagementClient initialAccounts={accounts} canManageSystemAdmins={isRootSystemAdminUsername(viewer.username)} />
   </AdminWorkspaceShell>;
 }

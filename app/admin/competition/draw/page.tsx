@@ -32,7 +32,7 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
   const query = await searchParams;
   const events = await getAdminNavigationEventsForPrincipal(viewer);
   const eventId = events.some((event) => event.id === query.event) ? String(query.event) : events[0]?.id;
-  if (!eventId) redirect("/admin/events");
+  if (!eventId) redirect("/admin/competition");
   const phaseCode = (["qualifier-one", "qualifier-two", "main-one", "main-two"].includes(String(query.phase)) ? query.phase : "qualifier-one") as DrawPhaseCode;
   const context = await getCompetitionContextData(viewer, eventId);
 
@@ -44,17 +44,20 @@ export default async function DrawWorkbenchPage({ searchParams }: { searchParams
 
   const selectedGroupId = context.groups.some((group) => group.id === query.group) ? String(query.group) : context.groups[0]?.id || "";
   const phaseTitle = PHASES.find((phase) => phase.code === phaseCode)?.title || "当前阶段";
-  if (!selectedGroupId) return shell(<main className="backend-state backend-denied"><div className="backend-state-logo">签</div><small>抽签引擎</small><h1>当前还不能开始抽签</h1><p>当前赛事还没有可用参赛组别，请先完成赛事基础设置。</p></main>, "", phaseTitle);
+  if (!selectedGroupId) return shell(<main className="backend-state backend-denied"><div className="backend-state-logo">签</div><small>抽签引擎</small><h1>当前还不能开始抽签</h1><p>当前赛事还没有可用参赛组别，请等待组委会完成赛事基础设置。</p></main>, "", phaseTitle);
 
   if (!isMainPhase(phaseCode)) {
     const rosterGate = await getParticipantRosterGate(eventId, selectedGroupId);
     if (!rosterGate.locked) {
-      const note = rosterGate.status === "confirmed"
-        ? `${rosterGate.name}正式参赛名单已经确认，但尚未锁定。锁定后才能开始资格赛抽签。`
-        : rosterGate.status === "locked"
-          ? `${rosterGate.name}锁定人数与当前审核通过人数不一致，请先处理参赛名单异常。`
-          : `${rosterGate.name}正式参赛名单尚未确认和锁定，请先完成报名审核与名单确认。`;
-      return shell(<main className="backend-state backend-denied"><div className="backend-state-logo">锁</div><small>参赛名单前置检查</small><h1>当前还不能开始抽签</h1><p>{note}</p><a href={`/admin/participants?event=${encodeURIComponent(eventId)}&group=${encodeURIComponent(selectedGroupId)}`}>前往参赛人员</a></main>, selectedGroupId, phaseTitle);
+      const refereeBlocked = viewer.role === "referee";
+      const note = refereeBlocked
+        ? `${rosterGate.name}正式参赛名单尚未完成确认和锁定，请等待组委会处理；完成后即可继续竞赛执行。`
+        : rosterGate.status === "confirmed"
+          ? `${rosterGate.name}正式参赛名单已经确认，但尚未锁定。锁定后才能开始资格赛抽签。`
+          : rosterGate.status === "locked"
+            ? `${rosterGate.name}锁定人数与当前审核通过人数不一致，请先处理参赛名单异常。`
+            : `${rosterGate.name}正式参赛名单尚未确认和锁定，请先完成报名审核与名单确认。`;
+      return shell(<main className="backend-state backend-denied"><div className="backend-state-logo">锁</div><small>参赛名单前置检查</small><h1>当前还不能开始抽签</h1><p>{note}</p>{!refereeBlocked && <a href={`/admin/participants?event=${encodeURIComponent(eventId)}&group=${encodeURIComponent(selectedGroupId)}`}>前往参赛人员</a>}</main>, selectedGroupId, phaseTitle);
     }
   }
 

@@ -30,8 +30,9 @@ function newId(prefix: string) {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
 }
 
-async function requireEditor(username: string, eventId: string) {
+async function requireEditor(username: string, eventId: string, write = false) {
   return requireEventAccess(username, eventId, {
+    write,
     allowedRoles: ["system_admin", "committee"],
     deniedMessage: "当前账号没有编辑参赛提示的权限。",
   });
@@ -89,7 +90,7 @@ export async function getGuideManagementData(username: string, eventId: string):
 }
 
 export async function saveGuideManagementData(username: string, eventId: string, input: GuideEditorItem[]) {
-  const account = await requireEditor(username, eventId);
+  const account = await requireEditor(username, eventId, true);
   const db = getDb();
   const [event] = await db.select({ id: events.id }).from(events).where(eq(events.id, eventId)).limit(1);
   if (!event) throw new Error("没有找到这场赛事。");
@@ -144,6 +145,7 @@ export async function getPublicGuide(guideId: string) {
     where g.id = ${guideId}
       and g.publish_status = 'published'
       and e.publish_status = 'published'
+      and coalesce(e.is_hidden, false) = false
     limit 1
   `;
   const row = rows[0];

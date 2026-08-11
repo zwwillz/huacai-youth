@@ -17,6 +17,6 @@ export default async function CompetitionWorkspacePage({ searchParams }: { searc
   if (!selectedEventId) redirect("/admin");
 
   return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active="competition" pageTitle="竞赛执行" pageHint="先选组别，再处理当前任务" currentEventId={selectedEventId} eventScoped eventSwitchMode="local" competitionTool="overview">
-    <CompetitionOverviewClient initialEventId={selectedEventId} initialGroupId={query.group || ""} />
+    <CompetitionOverviewClient initialEventId={selectedEventId} initialGroupId={query.group || ""} initialViewerRole={viewer.role} />
   </AdminWorkspaceShell>;
 }

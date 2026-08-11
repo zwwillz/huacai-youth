@@ -1,18 +1,43 @@
-import { getSqlClient } from "./index";
+import { sql } from "drizzle-orm";
+import { getDb } from "./index";
+import { publications } from "./schema";
 
-export async function syncEventOverviewPublication(eventId: string, published: boolean, actorUserId?: string | null) {
-  const sql = getSqlClient();
+type DbTransaction = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+
+export async function syncEventOverviewPublicationInTransaction(
+  tx: DbTransaction,
+  eventId: string,
+  published: boolean,
+  actorUserId: string | null,
+  timestamp: string,
+) {
+  const status = published ? "published" : "draft";
+  await tx.insert(publications).values({
+    id: `${eventId}_publication_overview`,
+    eventId,
+    moduleType: "overview",
+    moduleTitle: "赛事概览",
+    versionNo: 1,
+    status,
+    publishedBy: published ? actorUserId : null,
+    publishedAt: published ? timestamp : null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }).onConflictDoUpdate({
+    target: [publications.eventId, publications.moduleType],
+    set: {
+      status,
+      versionNo: sql`case when ${publications.status} is distinct from ${status} then ${publications.versionNo}+1 else ${publications.versionNo} end`,
+      publishedBy: published ? actorUserId : null,
+      publishedAt: published ? timestamp : null,
+      updatedAt: timestamp,
+    },
+  });
+}
+
+/** Bootstrap/legacy event routes reuse the same publication writer without duplicating SQL. */
+export async function syncEventOverviewPublication(eventId: string, published: boolean, actorUserId: string | null = null) {
+  const db = getDb();
   const timestamp = new Date().toISOString();
-  const id = `${eventId}_publication_overview`;
-  await sql`
-    insert into public.publications
-      (id,event_id,module_type,module_title,version_no,status,published_by,published_at,created_at,updated_at)
-    values (${id},${eventId},'overview','赛事概览',1,${published ? "published" : "draft"},${published ? actorUserId ?? null : null},${published ? timestamp : null},${timestamp},${timestamp})
-    on conflict (event_id,module_type) do update set
-      status=excluded.status,
-      version_no=case when public.publications.status is distinct from excluded.status then public.publications.version_no+1 else public.publications.version_no end,
-      published_by=excluded.published_by,
-      published_at=excluded.published_at,
-      updated_at=excluded.updated_at
-  `;
+  await db.transaction((tx) => syncEventOverviewPublicationInTransaction(tx, eventId, published, actorUserId, timestamp));
 }
