@@ -81,6 +81,7 @@ test("qualification workspace SQL closes nested entry aggregation before FROM", 
   assert.match(smoke, /qualifier-two/);
   assert.match(smoke, /main-one/);
   assert.match(smoke, /main-two/);
+  assert.doesNotMatch(smoke, /\b(insert|update|delete|alter|drop|truncate)\b/i);
   assert.match(source("package.json"), /"test:db-smoke": "node scripts\/qualification-db-smoke\.mjs"/);
 });
 
@@ -115,6 +116,7 @@ test("scoring workspace bootstraps once and confirmed toggle cannot rebootstrap-
   assert.match(fetchBlock, /\}, \[applyData, initialDate, initialGroupId, initialPhase, initialShowConfirmed\]\);/);
   assert.doesNotMatch(fetchBlock, /\[applyData, data,/);
   assert.match(code, /const toggleConfirmed = \(\) => \{[\s\S]*showConfirmed: !data\.filters\.showConfirmed, force: true/);
+  assert.match(fetchBlock, /finally \{ if \(currentRequest === requestId\.current\) setLoading\(false\); \}/);
 });
 
 test("unpublished competition writes remain dirty drafts until explicit publish", () => {
