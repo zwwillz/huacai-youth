@@ -14,6 +14,7 @@ export default async function EventManagementPage({ params }: { params: Promise<
   const viewer = await getAdminViewer();
   if (!viewer) redirect("/admin/login");
   const { eventId } = await params;
+  if (viewer.role === "referee") redirect(`/admin/competition?event=${encodeURIComponent(eventId)}`);
 
   const result = await captureAdminLoad(Promise.all([
     getEventManagementDataFast(viewer, eventId),
