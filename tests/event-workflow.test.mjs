@@ -29,27 +29,23 @@ function eventSummary(overrides = {}) {
   };
 }
 
-// Case 1: newly created event must stay in preparation instead of jumping to competition.
 test("case 1 new event points to event preparation", () => {
   const action = chooseEventNextAction(eventSummary({ event: { id: "event_test", status: "draft", basicReady: false } }), "committee");
   assert.equal(action.code, "complete_event_basics");
   assert.match(action.href, /\/admin\/events\/event_test/);
 });
 
-// Case 2: overview is the first publication prerequisite.
 test("case 2 overview published but registration not configured points to registration setup", () => {
   const action = chooseEventNextAction(eventSummary({ publications: { overview: "published", registration: "draft" } }), "committee");
   assert.equal(action.code, "setup_registration");
 });
 
-// Case 3: configured draft lifecycle recommends explicit open registration.
 test("case 3 configured draft recommends open registration", () => {
   const action = chooseEventNextAction(eventSummary({ publications: { overview: "published", registration: "draft" }, registration: { timeState: "not_started", configReady: true, totalCount: 0, pendingCount: 0 } }), "committee");
   assert.equal(action.code, "open_registration");
   assert.equal(action.kind, "lifecycle");
 });
 
-// Cases 4-5: live registration blockers.
 test("case 4 registration pending review has priority", () => {
   const action = chooseEventNextAction(eventSummary({ event: { id: "event_test", status: "registration_open", basicReady: true }, registration: { timeState: "open", configReady: true, totalCount: 20, pendingCount: 3 }, publications: { overview: "published", registration: "published" } }), "committee");
   assert.equal(action.code, "review_pending_registration");
@@ -60,7 +56,6 @@ test("case 5 passed registration deadline recommends close registration", () => 
   assert.equal(action.priority, 100);
 });
 
-// Cases 7-9: roster progression.
 test("case 7 registration closed with reviewed roster recommends confirm roster", () => {
   const group = buildGroupWorkflow(groupFact());
   assert.equal(group.nextAction.code, "confirm_roster");
@@ -74,7 +69,6 @@ test("case 9 locked roster recommends qualifier one draw", () => {
   assert.equal(group.nextAction.code, "qualifier-one_draw");
 });
 
-// Cases 10-12: draw -> schedule -> score -> advancement.
 test("case 10 confirmed draw recommends scheduling", () => {
   const q1 = { ...emptyPhase(), drawStatus: "confirmed" };
   const group = buildGroupWorkflow(groupFact({ lifecycle: "in_progress", rosterStatus: "locked", rosterCount: 462, phases: { ...groupFact().phases, "qualifier-one": q1 } }));
@@ -91,7 +85,6 @@ test("case 12 completed qualifier matches recommend advancement", () => {
   assert.equal(group.nextAction.code, "qualifier-one_advancement");
 });
 
-// Main-field and ranking chain.
 test("completed qualifiers require the 64-player main roster", () => {
   const phases = { ...groupFact().phases, "qualifier-one": completedPhase({ qualificationStatus: "confirmed" }), "qualifier-two": completedPhase({ qualificationStatus: "confirmed" }) };
   const group = buildGroupWorkflow(groupFact({ lifecycle: "in_progress", rosterStatus: "locked", rosterCount: 462, phases }));
@@ -114,7 +107,6 @@ test("main two completion goes directly to final ranking, not a fake advancement
   assert.equal(group.nextAction.code, "generate_ranking");
 });
 
-// Case 13: groups must keep independent progress.
 test("case 13 youth groups can be at different workflow steps", () => {
   const youth = buildGroupWorkflow(groupFact({ groupId: "u16", groupName: "少年组", rosterStatus: "confirmed", rosterCount: 462 }));
   const young = buildGroupWorkflow(groupFact({ groupId: "u20", groupName: "青年组", lifecycle: "in_progress", rosterStatus: "locked", rosterCount: 560 }));
@@ -123,7 +115,6 @@ test("case 13 youth groups can be at different workflow steps", () => {
   assert.notEqual(youth.nextAction.code, young.nextAction.code);
 });
 
-// Closure Case A: one group may already be competing while the other still completes its formal roster.
 test("closure case A in-progress group without formal competition can still confirm and lock roster", () => {
   const u20 = buildGroupWorkflow(groupFact({ groupId: "u20", groupName: "青年组", lifecycle: "in_progress", rosterStatus: "draft", approvedCount: 560 }));
   assert.equal(u20.nextAction.code, "confirm_roster");
@@ -136,7 +127,6 @@ test("closure case A in-progress group without formal competition can still conf
   assert.match(blockedConfirm.message, /当前组已经产生正式竞赛数据/);
 });
 
-// Closure Case B: draw draft is not formal Competition Ready; confirmed draw/bracket is.
 test("closure case B draft draw cannot start competition and confirmed draw can", () => {
   const draftQ1 = { ...emptyPhase(), drawStatus: "draft" };
   const draftGroup = buildGroupWorkflow(groupFact({ rosterStatus: "locked", rosterCount: 462, phases: { ...groupFact().phases, "qualifier-one": draftQ1 } }));
@@ -152,7 +142,6 @@ test("closure case B draft draw cannot start competition and confirmed draw can"
   assert.equal(readyAction.code, "start_competition");
 });
 
-// Cases 14-15: site closing and historical terminal state.
 test("case 14 both rankings confirmed allow explicit event finish", () => {
   const groups = [
     { groupId: "u16", groupName: "少年组", rankingStatus: "confirmed", nextAction: null },
@@ -168,7 +157,6 @@ test("case 15 finished event never re-enters competition workflow", () => {
   assert.equal(group.nextAction, null);
 });
 
-// Permission-aware recommendation.
 test("referee never receives content, participant or ranking publishing recommendations", () => {
   const waiting = chooseEventNextAction(eventSummary({ event: { id: "event_test", status: "draft", basicReady: false } }), "referee");
   assert.equal(waiting.kind, "wait");
@@ -177,15 +165,16 @@ test("referee never receives content, participant or ranking publishing recommen
   assert.equal(active.href, scoring.href);
 });
 
-// Closure Case C: dashboard, event list and event settings all consume the same Workflow Next Action.
 test("closure case C three admin entry points use the same workflow next action", async () => {
-  const [eventSettings, adminIndex, dashboard] = await Promise.all([
+  const [eventSettings, eventSettingsPage, adminIndex, dashboard] = await Promise.all([
     readFile(new URL("../app/admin/events/event-management-client.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/events/[eventId]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../db/admin-index.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/dashboard-client.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(eventSettings, /\/api\/admin\/workflow-summary\?event=/);
-  assert.match(eventSettings, /const nextAction = workflow\?\.nextAction/);
+  assert.match(eventSettingsPage, /getEventWorkflowSummary/);
+  assert.match(eventSettings, /initialWorkflow/);
+  assert.match(eventSettings, /const nextAction = workflow\.nextAction/);
   assert.doesNotMatch(eventSettings, /const lifecycleActions/);
   assert.match(adminIndex, /const action = workflow\?\.nextAction/);
   assert.match(dashboard, /const action = workflow\.nextAction/);
@@ -196,7 +185,6 @@ test("closure case C three admin entry points use the same workflow next action"
   assert.equal(chooseEventNextAction(eventSummary({ publications: { overview: "published", registration: "draft" }, registration: { timeState: "not_started", configReady: true, totalCount: 0, pendingCount: 0 } }), "committee").code, "open_registration");
 });
 
-// Source contracts for server-side lifecycle safety and shared formal competition semantics.
 test("lifecycle and roster safety cannot regress to client-only or draft-ready guards", async () => {
   const [eventApi, participantApi, rosterLifecycle, finalRanking, lifecycleService, formalCompetition, workflowSource] = await Promise.all([
     readFile(new URL("../app/api/admin/event-management/route.ts", import.meta.url), "utf8"),
@@ -225,4 +213,5 @@ test("lifecycle and roster safety cannot regress to client-only or draft-ready g
   const formalBlock = workflowSource.slice(formalStart, formalEnd);
   assert.match(formalBlock, /FORMAL_COMPETITION_CONFIRMED_STATUS/);
   assert.doesNotMatch(formalBlock, /status<>'void'/);
+  assert.match(workflowSource, /groupReadyToStartCompetition/);
 });
