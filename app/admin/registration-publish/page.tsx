@@ -33,6 +33,6 @@ export default async function RegistrationPublishPage({ searchParams }: { search
     currentEventId={currentEventId}
     eventScoped
   >
-    <RegistrationPublishClient initialData={data} />
+    <RegistrationPublishClient key={currentEventId} currentEventId={currentEventId} initialData={data} />
   </AdminWorkspaceShell>;
 }
