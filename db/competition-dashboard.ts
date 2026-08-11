@@ -4,6 +4,7 @@ import { resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 import type { DrawPhaseCode } from "./draw-engine";
 
 export type CompetitionDashboardData = {
+  viewerRole: string;
   events: Awaited<ReturnType<typeof getAdminNavigationEventsForPrincipal>>;
   selectedEventId: string;
   groups: Array<{
@@ -27,7 +28,7 @@ export async function getCompetitionDashboardData(input: AdminPrincipalInput, re
   const principal = await resolveAdminPrincipal(input);
   const events = await getAdminNavigationEventsForPrincipal(principal);
   const selectedEventId = events.some((event) => event.id === requestedEventId) ? String(requestedEventId) : events[0]?.id || "";
-  if (!selectedEventId) return { events, selectedEventId: "", groups: [] };
+  if (!selectedEventId) return { viewerRole: principal.role, events, selectedEventId: "", groups: [] };
 
   const sql = getSqlClient();
   const rows = await sql<DashboardGroupRow[]>`
@@ -52,6 +53,7 @@ export async function getCompetitionDashboardData(input: AdminPrincipalInput, re
   `;
 
   return {
+    viewerRole: principal.role,
     events,
     selectedEventId,
     groups: rows.map((row) => ({ ...row, approvedCount: Number(row.approvedCount), draws: row.draws ?? {} })),
