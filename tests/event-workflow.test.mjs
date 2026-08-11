@@ -174,7 +174,7 @@ test("closure case C three admin entry points use the same workflow next action"
   ]);
   assert.match(eventSettingsPage, /getEventWorkflowSummary/);
   assert.match(eventSettings, /initialWorkflow/);
-  assert.match(eventSettings, /const nextAction = workflow\.nextAction/);
+  assert.match(eventSettings, /const nextAction = workflow\?\.nextAction/);
   assert.doesNotMatch(eventSettings, /const lifecycleActions/);
   assert.match(adminIndex, /const action = workflow\?\.nextAction/);
   assert.match(dashboard, /const action = workflow\.nextAction/);
