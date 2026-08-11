@@ -6,34 +6,20 @@ This branch implements the product-flow convergence phase only:
 - derived Workflow Summary / role-aware Next Action
 - `/admin` event command center
 
-Phase 1 closure invariants:
-
-- U16 / U20 roster progression is group-level. After the event enters `in_progress`, a group that has not started formal competition may still confirm and lock its roster.
-- A group is treated as already in formal competition when it has confirmed draw/bracket/schedule, confirmed/completed result data, confirmed qualification, locked main roster, confirmed advancement, or ranking data.
-- `registration_closed -> in_progress` requires at least one active group with a locked roster and a **confirmed** draw or **confirmed** bracket. Draft competition data never makes the event Competition Ready.
-- Dashboard, event-list Continue, and event settings consume the same Workflow Summary / Next Action. Event settings do not maintain a second `event.status -> action` map.
-- Workflow recommends actions; server lifecycle/roster services remain the final execution guard.
-
-Shared closure implementation:
-
-- `db/formal-competition-policy.mjs`: common pure formal-competition / Competition Ready policy.
-- `db/formal-competition.ts`: read-only formal competition fact queries used by server guards.
-- `db/participant-roster-lifecycle.ts`: group-aware confirm/lock lifecycle boundary.
-- `db/event-lifecycle.ts`: confirmed-only start-competition boundary.
-- `db/event-workflow.ts`: confirmed-only Workflow readiness and the same shared ready predicate.
-
-Second-round acceptance scenarios:
-
-1. U16 starts first; U20 can still confirm and lock its roster while the event is `in_progress` if U20 has no formal competition data.
-2. Draft draw cannot start competition.
-3. Confirmed draw can start competition when that group's roster is locked.
-4. Dashboard / event-list Continue / event settings give the same Next Action direction.
-5. `registration_closed` with no Competition Ready group does not recommend start competition.
-6. `in_progress` group without formal competition may continue roster preparation.
-7. `in_progress` group with formal competition data is rejected when attempting roster reconfirm/relock.
-
 Explicitly deferred: competition-task simplification, engine rewrites, P2-05 preload/cache work, P2-07 large qualifier loading changes, registration/account/payment expansion, and broad UI redesign.
 
 The permanent Luoyang test event is used for read-only workflow regression; Taiyuan/Langfang historical results must not be changed for workflow testing.
 
-Phase 1 closure is frozen after this handoff; no next-phase competition-task work belongs in PR #60.
+## Closure Fix
+
+- Group roster confirm/lock can continue during `in_progress` only when that group has not produced formal competition data.
+- Competition Ready requires a locked roster plus confirmed draw or confirmed bracket; draft draw/bracket is not formal competition.
+- Dashboard, Event List Continue, and Event Settings all consume the same Workflow Summary / Next Action.
+
+## Preview blocker: qualification draw persistence bridge
+
+Taiyuan U16 exposed `cannot call jsonb_to_recordset on a non-array` while generating a qualification draw draft. The qualification calculation path was not the source of the failure. The persistence layer was sending serialized row arrays through the EdgeOne -> Supabase database bridge and unpacking them with PostgreSQL `jsonb_to_recordset`.
+
+The draw persistence transport now keeps the existing calculation and transaction boundaries but writes `draw_prelim_matches`, `draw_participants`, and `draw_slots` as chunked scalar-parameter `INSERT ... VALUES` statements. No qualification-plan, randomization, division, slot, 16+8 advancement, q1/q2, or seed algorithm was changed.
+
+Taiyuan validation remains read-only. U16 q1 still contains only its two historical `void` sessions; the failed browser attempt did not leave a new draft.
