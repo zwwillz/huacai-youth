@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import MePreview from "./me-preview";
@@ -37,6 +38,20 @@ function statusTone(status: string): PublicStatusTone {
   if (status === "已归档") return "archived";
   if (status === "已取消") return "cancelled";
   return "ended";
+}
+
+function groupMainSize(station: Station, group: Group) {
+  const value = station.groupDetails?.[group]?.mainDrawSize;
+  if (typeof value === "number" && value > 0) return `${value}人`;
+  const fallback = station.mainSize.replace(/^每组/, "").trim();
+  return fallback || "待公布";
+}
+
+function feeLabel(cents: number | null | undefined) {
+  if (typeof cents !== "number" || !Number.isFinite(cents) || cents < 0) return "";
+  const yuan = cents / 100;
+  const value = Number.isInteger(yuan) ? String(yuan) : yuan.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return `¥${value}`;
 }
 
 function preloadMainView(view: MainView) {
@@ -128,11 +143,10 @@ function StationOverview({station,contentState,registration,openRules,openSchedu
     <section className="card introduction"><div><small>赛事简介</small><h2>{station.stop} · {station.city}</h2></div><div><p>{station.intro}</p><div className="inline-actions"><button onClick={openRules}>查看完整竞赛规程</button><button onClick={openSchedule}>查看分阶段赛程</button></div></div></section>
     {registration && <section className="card introduction registration-public-card"><div><small>赛事报名</small><h2>{registrationTitle}</h2></div><div><p>{registration.note || (registration.state === "closed" ? "本站报名已经截止，请关注组委会后续赛事信息。" : registration.state === "open" ? "报名通道已经开放，请按组委会要求完成报名。" : "报名信息将在开放后更新。")}</p>{registration.state === "open" && registration.url ? <div className="inline-actions"><a href={registration.url} target="_blank" rel="noreferrer">立即报名</a></div> : registration.state === "closed" ? <strong>报名已截止</strong> : null}</div></section>}
     <section className="rules overview-groups">
-      <article className="card overview-group-card"><small>少年组 U16</small><h2>少年组</h2><p>冠军奖金 {station.prizes.少年组[0]?.[1] ?? "待公布"}</p></article>
-      <article className="card overview-group-card"><small>青年组 U20</small><h2>青年组</h2><p>冠军奖金 {station.prizes.青年组[0]?.[1] ?? "待公布"}</p></article>
+      {(["少年组", "青年组"] as Group[]).map((group) => <article className="card overview-group-card" key={group}><small>{group} {group === "少年组" ? "U16" : "U20"}</small><h2>{group}</h2><p className="overview-group-age">{station.age[group]}</p><dl><div><dt>正赛规模</dt><dd>{groupMainSize(station, group)}</dd></div><div><dt>冠军奖金</dt><dd>{station.prizes[group][0]?.[1] ?? "待公布"}</dd></div></dl></article>)}
     </section>
     <section className="card organizers"><div><small>官方信息</small><h2>赛事组织</h2></div><dl>{station.organizers.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}<div><dt>比赛地点</dt><dd>{station.venueDetail}</dd></div></dl></section>
-    <section className="card participant-tips"><header><div><small>参赛提示</small><h2>参赛友好提示</h2></div><b>信息将持续更新</b></header><div className="tip-links">{guides.length ? guides.map((guide) => <a href={`/guide/${encodeURIComponent(guide.id)}`} className="dynamic-guide-link" key={guide.id}><span>{guideIcon(guide.title, guide.guideType)}</span><div><strong>{guide.title}</strong><small>查看组委会发布的参赛提示</small></div><b>查看 ›</b></a>) : <><button onClick={() => openGuide("transport")}><span>行</span><div><strong>交通住宿攻略</strong><small>路线、场馆周边及住宿信息</small></div><b>查看 ›</b></button><button onClick={() => openGuide("clothing")}><span>装</span><div><strong>服装要求</strong><small>查看参赛着装相关提示</small></div><b>查看 ›</b></button></>}</div></section>
+    <section className="card participant-tips"><header><div><small>参赛提示</small><h2>参赛友好提示</h2></div><b>信息将持续更新</b></header><div className="tip-links">{guides.length ? guides.map((guide) => <Link prefetch href={`/guide/${encodeURIComponent(guide.id)}`} className="dynamic-guide-link" key={guide.id}><span>{guideIcon(guide.title, guide.guideType)}</span><div><strong>{guide.title}</strong><small>查看组委会发布的参赛提示</small></div><b>查看 ›</b></Link>) : <><button onClick={() => openGuide("transport")}><span>行</span><div><strong>交通住宿攻略</strong><small>路线、场馆周边及住宿信息</small></div><b>查看 ›</b></button><button onClick={() => openGuide("clothing")}><span>装</span><div><strong>服装要求</strong><small>查看参赛着装相关提示</small></div><b>查看 ›</b></button></>}</div></section>
     <PartnerSection station={station} />
   </div>;
 }
@@ -149,6 +163,10 @@ function CompetitionRules({ station, contentState }: { station: Station; content
   const drawRules = regulation?.drawRules ?? [];
   const prizes = regulation?.prizes ?? { 少年组: [], 青年组: [] };
   const prizeNote = regulation?.prizeNote.trim() || "";
+  const signupNote = regulation?.signupNote.trim() || "";
+  const u16Fee = feeLabel(regulation?.registrationFees.少年组);
+  const u20Fee = feeLabel(regulation?.registrationFees.青年组);
+  const sameFee = Boolean(u16Fee && u20Fee && u16Fee === u20Fee);
   return <div className="regulation stack">
     <section className="regulation-head"><h1>{station.city}竞赛规程</h1><p>{station.title}</p><span>以下为竞赛规程重点摘要，具体执行以官方原文及组委会最新通知为准</span>{hasDocuments && <div className="pdf-actions">{regulationUrl && <a className="pdf-button" href={regulationUrl} target="_blank" rel="noreferrer">查看完整竞赛规程 <b>原文 ↗</b></a>}{refereeUrl && <a className="pdf-button referee-button" href={refereeUrl} target="_blank" rel="noreferrer">查看裁判员名单 <b>原文 ↗</b></a>}</div>}</section>
     <section className="rule-nav">{["基本信息", "参赛资格", "竞赛办法", "种子与抽签", "报名与费用", "奖金设置"].map((item, index) => <a href={`#rule-${station.id}-${index + 1}`} key={item}><b>{String(index + 1).padStart(2, "0")}</b>{item}</a>)}</section>
@@ -156,7 +174,7 @@ function CompetitionRules({ station, contentState }: { station: Station; content
     <section id={`rule-${station.id}-2`} className="rule-section card"><header><span>02</span><div><small>参赛资格</small><h2>少年组与青年组</h2></div></header><div className="eligibility"><article><b>U16</b><h3>少年组</h3><p>{station.age.少年组}</p></article><article><b>U20</b><h3>青年组</h3><p>{station.age.青年组}</p></article></div><p className="rule-note">{station.minimumAge}</p></section>
     <section id={`rule-${station.id}-3`} className="rule-section card"><header><span>03</span><div><small>竞赛办法</small><h2>{ruleStandard ? "比赛规则与赛制" : "赛制"}</h2></div></header>{ruleStandard && <div className="rule-standard"><h3>比赛规则</h3><p>{ruleStandard}</p></div>}<div className="competition-format-block"><h3>赛制</h3><div className="format-table"><div><b>阶段</b><b>赛制</b><b>少年组</b><b>青年组</b></div>{competitionFormat.map((row) => <div key={row.join("|")}><span>{row[0]}</span><span>{row[1]}</span><span>{row[2]}</span><span>{row[3]}</span></div>)}</div></div></section>
     <section id={`rule-${station.id}-4`} className="rule-section card"><header><span>04</span><div><small>种子与抽签</small><h2>抽签与入位规则</h2></div></header><ol>{drawRules.length ? drawRules.map((item, index) => <li key={index}>{item}</li>) : <li>抽签规则待组委会确认后发布。</li>}</ol></section>
-    <section id={`rule-${station.id}-5`} className="rule-section card"><header><span>05</span><div><small>报名与费用</small><h2>报名须知</h2></div></header><p className="rule-note">{station.signup}</p></section>
+    <section id={`rule-${station.id}-5`} className="rule-section card"><header><span>05</span><div><small>报名与费用</small><h2>报名须知</h2></div></header>{sameFee ? <div className="fee public-fee-single"><strong>{u16Fee}</strong><span>本站参赛费用</span></div> : (u16Fee || u20Fee) ? <div className="public-fee-grid">{u16Fee && <article><small>少年组</small><strong>{u16Fee}</strong><span>本站参赛费用</span></article>}{u20Fee && <article><small>青年组</small><strong>{u20Fee}</strong><span>本站参赛费用</span></article>}</div> : null}{signupNote && <p className="rule-note">{signupNote}</p>}</section>
     <section id={`rule-${station.id}-6`} className="rule-section card"><header><span>06</span><div><small>奖金设置</small><h2>本站总奖金 {station.totalPrize}</h2></div></header><div className="dual-prize">{(["少年组", "青年组"] as Group[]).map((group) => <article key={group}><h3>{group}</h3>{prizes[group].map(([rank, amount]) => <div key={rank}><span>{rank}</span><b>{amount}</b></div>)}</article>)}</div>{prizeNote && <p className="rule-note">{prizeNote}</p>}</section>
   </div>;
 }
@@ -223,7 +241,7 @@ export default function EventApp({ data }: { data: EventData }) {
     }
   };
   const title = view === "players" ? "球员数据" : view === "me" ? "个人中心" : station?.city || "赛事中心";
-  const openGuide = (kind: GuideKind) => { setGuideKind(kind); setTab("guide"); if (station) void warmCompetition(station.eventId, "entry"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const openGuide = (kind: GuideKind) => { setGuideKind(kind); setTab("guide"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const changeTab = (nextTab: EventTab) => {
     if (station) {
       const intent: CompetitionWarmIntent = nextTab === "matches" || nextTab === "rankings" ? nextTab : "entry";
@@ -295,6 +313,6 @@ export default function EventApp({ data }: { data: EventData }) {
         {view === "me" && <MePreview />}
       </div>
     </div>
-    <nav className="bottom">{[["event", "赛", "赛事"], ["players", "员", "球员"], ["me", "我", "我的"]].map((item) => { const nextView=item[0] as MainView; return <button className={view === item[0] ? "active" : ""} onPointerEnter={() => preloadMainView(nextView)} onPointerDown={() => preloadMainView(nextView)} onFocus={() => preloadMainView(nextView)} onClick={() => enter(nextView)} key={item[0]}><span>{item[1]}</span><strong>{item[2]}</strong></button>; })}</nav>
+    <nav className="bottom">{[["event", "赛", "赛事"], ["players", "员", "球员"], ["me", "我", "我的"]].map((item) => { const nextView=item[0] as MainView; return <button className={view === item[0] ? "active":""} onPointerEnter={() => preloadMainView(nextView)} onPointerDown={() => preloadMainView(nextView)} onFocus={() => preloadMainView(nextView)} onClick={() => enter(nextView)} key={item[0]}><span>{item[1]}</span><strong>{item[2]}</strong></button>; })}</nav>
   </main>;
 }
