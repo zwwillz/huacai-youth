@@ -5,10 +5,27 @@ import { calculateQualificationPlan, getDrawSessionDetail, type DrawPhaseCode } 
 
 type Participant = { playerId: string; playerName: string; sourceType: string };
 type Viewer = { id: string; role: string };
+type DrawInsertScalar = string | number | boolean | null;
+type UnsafeTransaction = { unsafe: unknown };
 
 function now() { return new Date().toISOString(); }
 function newId(prefix: string) { return `${prefix}_${randomUUID().replaceAll("-", "")}`; }
 function pad(value: number, width = 3) { return String(value).padStart(width, "0"); }
+
+const DRAW_INSERT_CHUNK_SIZE = 200;
+
+async function insertScalarRows(tx: UnsafeTransaction, insertPrefix: string, columnCount: number, rows: DrawInsertScalar[][]) {
+  const unsafe = tx.unsafe as (query: string, params: DrawInsertScalar[]) => PromiseLike<unknown>;
+  for (let offset = 0; offset < rows.length; offset += DRAW_INSERT_CHUNK_SIZE) {
+    const chunk = rows.slice(offset, offset + DRAW_INSERT_CHUNK_SIZE);
+    const params = chunk.flat();
+    const valuesSql = chunk.map((_, rowIndex) => {
+      const base = rowIndex * columnCount;
+      return `(${Array.from({ length: columnCount }, (_item, columnIndex) => `$${base + columnIndex + 1}`).join(",")})`;
+    }).join(",");
+    await unsafe(`${insertPrefix} values ${valuesSql}`, params);
+  }
+}
 
 async function requireViewer(username: string): Promise<Viewer> {
   const sql = getSqlClient();
@@ -186,17 +203,23 @@ export async function createQualificationDrawFast(username: string, input: {
     await tx`insert into public.draw_sessions (id,event_id,group_id,phase_code,version_no,status,entrant_count,bracket_size,division_size,division_count,direct_qualifier_count,rate_qualifier_count,total_qualifier_count,playoff_match_count,playoff_player_count,bye_count,seeds_enabled,seed_target_count,seed_fill_rule,random_seed,random_commitment,rules_json,created_by,created_at)
       values (${sessionId},${input.eventId},${input.groupId},${input.phaseCode},${versionNo},'draft',${plan.entrantCount},${plan.bracketSize},${plan.divisionSize},${plan.divisionCount},${plan.directQualifierCount},${plan.rateQualifierCount},${plan.totalQualifierCount},${plan.playoffMatchCount},${plan.playoffPlayerCount},${plan.byeCount},${Boolean(input.seedsEnabled)},${Number(input.seedTargetCount || 0)},${seedFillRule},${randomSeed},${randomCommitment},${rulesJson}::jsonb,${viewer.id},${createdAt})`;
 
-    if (prelimRows.length) await tx`insert into public.draw_prelim_matches (id,session_id,match_no,player_a_id,player_a_name,player_b_id,player_b_name,target_slot_no,status,winner_player_id,winner_player_name,created_at,updated_at)
-      select x.id,x.session_id,x.match_no,x.player_a_id,x.player_a_name,x.player_b_id,x.player_b_name,x.target_slot_no,x.status,x.winner_player_id,x.winner_player_name,x.created_at,x.updated_at
-      from jsonb_to_recordset(${JSON.stringify(prelimRows)}::jsonb) as x(id text,session_id text,match_no int,player_a_id text,player_a_name text,player_b_id text,player_b_name text,target_slot_no int,status text,winner_player_id text,winner_player_name text,created_at text,updated_at text)`;
+    await insertScalarRows(tx,
+      "insert into public.draw_prelim_matches (id,session_id,match_no,player_a_id,player_a_name,player_b_id,player_b_name,target_slot_no,status,winner_player_id,winner_player_name,created_at,updated_at)",
+      13,
+      prelimRows.map((row) => [row.id,row.session_id,row.match_no,row.player_a_id,row.player_a_name,row.player_b_id,row.player_b_name,row.target_slot_no,row.status,row.winner_player_id,row.winner_player_name,row.created_at,row.updated_at]),
+    );
 
-    await tx`insert into public.draw_participants (id,session_id,player_id,player_name,source_type,seed_no,random_order,assignment_type,display_draw_no,created_at)
-      select x.id,x.session_id,x.player_id,x.player_name,x.source_type,x.seed_no,x.random_order,x.assignment_type,x.display_draw_no,x.created_at
-      from jsonb_to_recordset(${JSON.stringify(participantRows)}::jsonb) as x(id text,session_id text,player_id text,player_name text,source_type text,seed_no int,random_order int,assignment_type text,display_draw_no text,created_at text)`;
+    await insertScalarRows(tx,
+      "insert into public.draw_participants (id,session_id,player_id,player_name,source_type,seed_no,random_order,assignment_type,display_draw_no,created_at)",
+      10,
+      participantRows.map((row) => [row.id,row.session_id,row.player_id,row.player_name,row.source_type,row.seed_no,row.random_order,row.assignment_type,row.display_draw_no,row.created_at]),
+    );
 
-    await tx`insert into public.draw_slots (id,session_id,slot_no,division_no,division_slot_no,slot_type,player_id,player_name,prelim_match_id,created_at)
-      select x.id,x.session_id,x.slot_no,x.division_no,x.division_slot_no,x.slot_type,x.player_id,x.player_name,x.prelim_match_id,x.created_at
-      from jsonb_to_recordset(${JSON.stringify(slotRows)}::jsonb) as x(id text,session_id text,slot_no int,division_no int,division_slot_no int,slot_type text,player_id text,player_name text,prelim_match_id text,created_at text)`;
+    await insertScalarRows(tx,
+      "insert into public.draw_slots (id,session_id,slot_no,division_no,division_slot_no,slot_type,player_id,player_name,prelim_match_id,created_at)",
+      10,
+      slotRows.map((row) => [row.id,row.session_id,row.slot_no,row.division_no,row.division_slot_no,row.slot_type,row.player_id,row.player_name,row.prelim_match_id,row.created_at]),
+    );
 
     await tx`insert into public.audit_logs (id,actor_user_id,event_id,module_type,target_type,target_id,action,after_json,created_at)
       values (${newId("log")},${viewer.id},${input.eventId},'competition','draw_session',${sessionId},'create_draw_draft',${JSON.stringify({ groupId: input.groupId, phaseCode: input.phaseCode, versionNo, entrantCount: plan.entrantCount, bracketSize: plan.bracketSize, divisionSize: plan.divisionSize, playoffMatchCount: plan.playoffMatchCount, byeCount: plan.byeCount, randomCommitment })},${createdAt})`;

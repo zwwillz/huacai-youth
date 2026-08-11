@@ -5,6 +5,7 @@ import { getAdminViewer } from "./admin-viewer";
 import DashboardClient from "./dashboard-client";
 import LoginScreen from "./login/login-screen";
 import "./admin-home.css";
+import "./admin-command-center.css";
 import { eventStatusLabel } from "./admin-status";
 
 export const dynamic = "force-dynamic";
@@ -34,13 +35,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   if (viewer.role === "referee" && section !== "dashboard") section = "dashboard";
 
   // Structure first: the dashboard itself has no blocking business-data read.
-  // Its real frame renders immediately and only the live metrics/recent events
-  // are filled by a small private endpoint after paint.
+  // Its real frame renders immediately and the Workflow Summary fills the
+  // command-center regions through a private endpoint after paint.
   if (section === "dashboard") return <DashboardClient viewerKey={viewer.id} viewerRole={viewer.role} />;
 
-  // These legacy secondary sections still use their existing server payload.
-  // They can be migrated to the same structure-first pattern when their UI is
-  // developed further.
   const data = await getAdminHomeData(viewer.username);
   const events = data.events.map((event) => ({ id: event.id, shortTitle: event.shortTitle, stationNo: event.stationNo, status: event.status, startDate: event.startDate, endDate: event.endDate }));
   const currentEventId = data.events.some((event) => event.id === query.event) ? query.event : data.events[0]?.id;
@@ -52,15 +50,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   } as const;
   const [pageTitle, pageHint] = titles[section];
 
-  return <AdminWorkspaceShell
-    viewer={{ displayName: viewer.displayName, role: viewer.role }}
-    events={events}
-    active={section}
-    pageTitle={pageTitle}
-    pageHint={pageHint}
-    currentEventId={eventScoped ? currentEventId : undefined}
-    eventScoped={eventScoped}
-  >
+  return <AdminWorkspaceShell viewer={{ displayName: viewer.displayName, role: viewer.role }} events={events} active={section} pageTitle={pageTitle} pageHint={pageHint} currentEventId={eventScoped ? currentEventId : undefined} eventScoped={eventScoped}>
     {section === "registrations" && <ScopedPlaceholder title="报名审核" eventTitle={currentEvent?.shortTitle} description="报名审核后续会在这里处理报名资料、组别、审核状态和缴费/确认状态。当前先统一到新的后台结构。" />}
     {section === "rankings" && <RankingsOverview events={data.events} />}
   </AdminWorkspaceShell>;

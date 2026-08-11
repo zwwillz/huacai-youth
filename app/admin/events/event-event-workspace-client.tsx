@@ -2,21 +2,35 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { EventManagementData } from "@/db/event-management";
+import type { EventWorkflowSummary } from "@/db/event-workflow";
 import EventManagementClient from "./event-management-client";
 
-const cache = new Map<string, { data: EventManagementData; at: number }>();
+const cache = new Map<string, { data: EventManagementData; workflow: EventWorkflowSummary; at: number }>();
 
 function replaceUrl(eventId: string) {
   window.history.replaceState(window.history.state, "", `/admin/events/${encodeURIComponent(eventId)}`);
 }
 
-export default function EventEventWorkspaceClient({ initialData }: { initialData: EventManagementData }) {
+async function fetchEventWorkspace(eventId: string) {
+  const [eventResponse, workflowResponse] = await Promise.all([
+    fetch(`/api/admin/event-management?eventId=${encodeURIComponent(eventId)}`, { cache: "no-store" }),
+    fetch(`/api/admin/workflow-summary?event=${encodeURIComponent(eventId)}`, { cache: "no-store" }),
+  ]);
+  const eventPayload = await eventResponse.json() as { data?: EventManagementData; error?: string };
+  const workflowPayload = await workflowResponse.json() as { data?: EventWorkflowSummary; error?: string };
+  if (!eventResponse.ok || !eventPayload.data) throw new Error(eventPayload.error || "赛事资料读取失败。");
+  if (!workflowResponse.ok || !workflowPayload.data) throw new Error(workflowPayload.error || "赛事流程状态读取失败。");
+  return { data: eventPayload.data, workflow: workflowPayload.data };
+}
+
+export default function EventEventWorkspaceClient({ initialData, initialWorkflow }: { initialData: EventManagementData; initialWorkflow: EventWorkflowSummary }) {
   const [data, setData] = useState(initialData);
+  const [workflow, setWorkflow] = useState(initialWorkflow);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const requestId = useRef(0);
 
-  useEffect(() => { cache.set(initialData.event.id, { data: initialData, at: Date.now() }); }, [initialData]);
+  useEffect(() => { cache.set(initialData.event.id, { data: initialData, workflow: initialWorkflow, at: Date.now() }); }, [initialData, initialWorkflow]);
 
   useEffect(() => {
     const onSwitch = (event: Event) => {
@@ -30,16 +44,16 @@ export default function EventEventWorkspaceClient({ initialData }: { initialData
       setError("");
       if (cached) {
         setData(cached.data);
+        setWorkflow(cached.workflow);
         replaceUrl(eventId);
       }
       setLoading(true);
-      void fetch(`/api/admin/event-management?eventId=${encodeURIComponent(eventId)}`, { cache: "no-store" })
-        .then(async (response) => {
-          const payload = await response.json() as { data?: EventManagementData; error?: string };
-          if (!response.ok || !payload.data) throw new Error(payload.error || "赛事资料读取失败。");
+      void fetchEventWorkspace(eventId)
+        .then((next) => {
           if (currentRequest !== requestId.current) return;
-          cache.set(eventId, { data: payload.data, at: Date.now() });
-          setData(payload.data);
+          cache.set(eventId, { ...next, at: Date.now() });
+          setData(next.data);
+          setWorkflow(next.workflow);
           replaceUrl(eventId);
         })
         .catch((failure) => {
@@ -55,8 +69,8 @@ export default function EventEventWorkspaceClient({ initialData }: { initialData
 
   const editorKey = `${data.event.id}:${cache.get(data.event.id)?.at ?? "initial"}`;
   return <div className={loading ? "admin-local-workspace is-refreshing" : "admin-local-workspace"}>
-    {loading && <div className="admin-local-refresh"><i />正在同步赛事设置…</div>}
+    {loading && <div className="admin-local-refresh"><i />正在同步赛事设置与流程状态…</div>}
     {error && <div className="admin-local-error">{error}{cache.has(data.event.id) ? " 当前显示上一次读取的数据。" : ""}</div>}
-    <EventManagementClient key={editorKey} initialData={data} />
+    <EventManagementClient key={editorKey} initialData={data} initialWorkflow={workflow} />
   </div>;
 }
