@@ -3,14 +3,14 @@ import EventApp from "./event-app";
 import { getPublicHomeData } from "@/db/public-home";
 
 export const runtime = "nodejs";
-// The homepage only carries lightweight event-list data. Detailed event
-// content is loaded after the visitor enters a station.
-export const revalidate = 1800;
+// The homepage only carries lightweight event-list data. Registration time status is time-sensitive,
+// so keep this cache short while still avoiding per-request database reads.
+export const revalidate = 60;
 
 const getCachedPublicHomeData = unstable_cache(
   getPublicHomeData,
-  ["public-home-data-v2"],
-  { revalidate: 1800, tags: ["public-site"] },
+  ["public-home-data-v3"],
+  { revalidate: 60, tags: ["public-site"] },
 );
 
 function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicHomeData>>["stations"]) {
