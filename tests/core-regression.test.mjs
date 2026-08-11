@@ -97,6 +97,28 @@ test("event overview save is one client request backed by a server transaction",
   assert.match(source("db/event-overview.ts"), /db\.transaction/);
 });
 
+test("overview publication is updated inside the same overview transaction", () => {
+  const overview = source("db/event-overview.ts");
+  const helper = source("db/event-publication-sync.ts");
+  const oldRoute = source("app/api/admin/event-management/route.ts");
+  const newRoute = source("app/api/admin/event-overview/route.ts");
+  assert.match(overview, /syncEventOverviewPublicationInTransaction\(tx,/);
+  assert.match(helper, /tx\.insert\(publications\)/);
+  assert.match(helper, /publications\.versionNo\}\+1/);
+  assert.doesNotMatch(oldRoute, /syncEventOverviewPublication/);
+  assert.doesNotMatch(newRoute, /syncEventOverviewPublication/);
+  assert.match(oldRoute, /赛事概览发布或撤回请前往/);
+});
+
+test("registration lifecycle compatibility backfill is narrow and does not publish", () => {
+  const migration = source("db/migrations/20260811_backfill_registration_state.sql");
+  assert.match(migration, /status = 'registration_open' then 'open'/);
+  assert.match(migration, /status = 'registration_closed' then 'closed'/);
+  assert.match(migration, /where registration_state = 'not_open'/);
+  assert.match(migration, /status in \('registration_open', 'registration_closed'\)/);
+  assert.doesNotMatch(migration, /publications|snapshot|registration_url/i);
+});
+
 test("public matches initially render forty cards and load forty more", () => {
   const competition = source("app/public-competition-live-v2.tsx");
   assert.match(competition, /useState\(40\)/);
@@ -113,6 +135,20 @@ test("public URL state restores event, tab and master-schedule group", () => {
   assert.match(schedule, /groupFromUrl/);
   assert.match(schedule, /params\.set\("group", next === "青年组" \? "u20" : "u16"\)/);
   assert.match(schedule, /window\.addEventListener\("popstate", restoreGroup\)/);
+});
+
+test("returning to event center clears event detail URL state", () => {
+  const app = source("app/event-app.tsx");
+  assert.match(app, /if \(!eventId\) return `\$\{window\.location\.pathname\}\$\{window\.location\.hash\}`/);
+  assert.match(app, /if \(nextView === "event"\)[\s\S]*setSelectedId\(null\)[\s\S]*setTab\("overview"\)[\s\S]*window\.history\.pushState\(\{\}, "", eventUrl\(null\)\)/);
+});
+
+test("test events remain listed but cannot become featured when formal events exist", () => {
+  const home = source("db/public-home.ts");
+  assert.match(home, /isTest: events\.isTest/);
+  assert.match(home, /const formalRows = yearRows\.filter\(\(row\) => !row\.isTest\)/);
+  assert.match(home, /const candidates = formalRows\.length \? formalRows : yearRows/);
+  assert.doesNotMatch(home, /where[\s\S]*is_test[^\n]*false/);
 });
 
 test("drizzle events schema tracks test and registration migration fields", () => {
