@@ -34,3 +34,10 @@ export async function syncEventOverviewPublicationInTransaction(
     },
   });
 }
+
+/** Bootstrap/legacy event routes reuse the same publication writer without duplicating SQL. */
+export async function syncEventOverviewPublication(eventId: string, published: boolean, actorUserId: string | null = null) {
+  const db = getDb();
+  const timestamp = new Date().toISOString();
+  await db.transaction((tx) => syncEventOverviewPublicationInTransaction(tx, eventId, published, actorUserId, timestamp));
+}
