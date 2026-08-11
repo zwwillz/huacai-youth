@@ -14,6 +14,16 @@ Phase 1 closure invariants:
 - Dashboard, event-list Continue, and event settings consume the same Workflow Summary / Next Action. Event settings do not maintain a second `event.status -> action` map.
 - Workflow recommends actions; server lifecycle/roster services remain the final execution guard.
 
+Second-round acceptance scenarios:
+
+1. U16 starts first; U20 can still confirm and lock its roster while the event is `in_progress` if U20 has no formal competition data.
+2. Draft draw cannot start competition.
+3. Confirmed draw can start competition when that group's roster is locked.
+4. Dashboard / event-list Continue / event settings give the same Next Action direction.
+5. `registration_closed` with no Competition Ready group does not recommend start competition.
+6. `in_progress` group without formal competition may continue roster preparation.
+7. `in_progress` group with formal competition data is rejected when attempting roster reconfirm/relock.
+
 Explicitly deferred: competition-task simplification, engine rewrites, P2-05 preload/cache work, P2-07 large qualifier loading changes, registration/account/payment expansion, and broad UI redesign.
 
 The permanent Luoyang test event is used for read-only workflow regression; Taiyuan/Langfang historical results must not be changed for workflow testing.
