@@ -2,7 +2,6 @@ import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { saveEventManagementData, type EventManagementData, type EventManagementInput } from "@/db/event-management";
 import { getEventManagementDataFast } from "@/db/event-management-fast";
 import { saveEventOverviewData, type EventOverviewInput } from "@/db/event-overview";
-import { syncEventOverviewPublication } from "@/db/event-publication-sync";
 import { getSqlClient } from "@/db";
 import { revalidatePath, revalidateTag } from "next/cache";
 
@@ -151,7 +150,6 @@ export async function POST(request: Request) {
     if ("action" in payload && payload.action === "save_overview") {
       const input = payload.data;
       const data = await saveEventOverviewData(viewer.username, input);
-      await syncEventOverviewPublication(input.eventId, input.publishStatus === "published");
       refreshPublicEvent(input.eventId);
       return Response.json({ data }, { headers: { "Cache-Control": "private, no-store" } });
     }
@@ -168,14 +166,12 @@ export async function POST(request: Request) {
     const current = await getEventManagementDataFast(viewer, input.eventId);
     if (isOverviewOnlyUpdate(current, input)) {
       const data = await saveEventOverviewData(viewer.username, overviewInput(input));
-      await syncEventOverviewPublication(input.eventId, input.publishStatus === "published");
       refreshPublicEvent(input.eventId);
       return Response.json({ data }, { headers: { "Cache-Control": "private, no-store" } });
     }
 
     await saveEventManagementData(viewer.username, input);
     await normalizeEventJson(input.eventId);
-    await syncEventOverviewPublication(input.eventId, input.publishStatus === "published");
     const data = await getEventManagementDataFast(viewer, input.eventId);
     refreshPublicEvent(input.eventId);
     return Response.json({ data });
