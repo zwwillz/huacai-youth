@@ -143,16 +143,21 @@ function CompetitionRules({ station, contentState }: { station: Station; content
   const regulationUrl = regulationDocument?.published && regulationDocument.url ? regulationDocument.url : "";
   const refereeUrl = refereeDocument?.published && refereeDocument.url ? refereeDocument.url : "";
   const hasDocuments = Boolean(regulationUrl || refereeUrl);
-  const ruleStandard = contentState?.ruleStandard?.trim() || "";
+  const regulation = contentState?.regulation;
+  const ruleStandard = regulation?.ruleStandard.trim() || "";
+  const competitionFormat = regulation?.competitionFormat ?? [];
+  const drawRules = regulation?.drawRules ?? [];
+  const prizes = regulation?.prizes ?? { 少年组: [], 青年组: [] };
+  const prizeNote = regulation?.prizeNote.trim() || "";
   return <div className="regulation stack">
     <section className="regulation-head"><h1>{station.city}竞赛规程</h1><p>{station.title}</p><span>以下为竞赛规程重点摘要，具体执行以官方原文及组委会最新通知为准</span>{hasDocuments && <div className="pdf-actions">{regulationUrl && <a className="pdf-button" href={regulationUrl} target="_blank" rel="noreferrer">查看完整竞赛规程 <b>原文 ↗</b></a>}{refereeUrl && <a className="pdf-button referee-button" href={refereeUrl} target="_blank" rel="noreferrer">查看裁判员名单 <b>原文 ↗</b></a>}</div>}</section>
     <section className="rule-nav">{["基本信息", "参赛资格", "竞赛办法", "种子与抽签", "报名与费用", "奖金设置"].map((item, index) => <a href={`#rule-${station.id}-${index + 1}`} key={item}><b>{String(index + 1).padStart(2, "0")}</b>{item}</a>)}</section>
     <section id={`rule-${station.id}-1`} className="rule-section card"><header><span>01</span><div><small>赛事基本信息</small><h2>时间、地点与组织机构</h2></div></header><dl className="facts"><div><dt>比赛时间</dt><dd>资格赛：{station.qualDate}<br />正赛：{station.mainDate}</dd></div><div><dt>比赛地点</dt><dd>{station.venueDetail}</dd></div>{station.organizers.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl></section>
     <section id={`rule-${station.id}-2`} className="rule-section card"><header><span>02</span><div><small>参赛资格</small><h2>少年组与青年组</h2></div></header><div className="eligibility"><article><b>U16</b><h3>少年组</h3><p>{station.age.少年组}</p></article><article><b>U20</b><h3>青年组</h3><p>{station.age.青年组}</p></article></div><p className="rule-note">{station.minimumAge}</p></section>
-    <section id={`rule-${station.id}-3`} className="rule-section card"><header><span>03</span><div><small>竞赛办法</small><h2>比赛规则与赛制</h2></div></header>{ruleStandard && <div className="rule-standard"><h3>比赛规则</h3><p>{ruleStandard}</p></div>}<div className="competition-format-block"><h3>赛制</h3><div className="format-table"><div><b>阶段</b><b>赛制</b><b>少年组</b><b>青年组</b></div>{station.format.map((row) => <div key={row[0]}><span>{row[0]}</span><span>{row[1]}</span><span>{row[2]}</span><span>{row[3]}</span></div>)}</div></div></section>
-    <section id={`rule-${station.id}-4`} className="rule-section card"><header><span>04</span><div><small>种子与抽签</small><h2>抽签与入位规则</h2></div></header><ol>{station.draw.length ? station.draw.map((item, index) => <li key={index}>{item}</li>) : <li>抽签规则待组委会确认后发布。</li>}</ol></section>
-    <section id={`rule-${station.id}-5`} className="rule-section card"><header><span>05</span><div><small>报名与费用</small><h2>报名须知</h2></div></header><div className="fee"><strong>¥100</strong><span>单站参赛费</span></div><p className="rule-note">{station.signup}</p></section>
-    <section id={`rule-${station.id}-6`} className="rule-section card"><header><span>06</span><div><small>奖金设置</small><h2>本站总奖金 {station.totalPrize}</h2></div></header><div className="dual-prize">{(["少年组", "青年组"] as Group[]).map((group) => <article key={group}><h3>{group}</h3>{station.prizes[group].map(([rank, amount]) => <div key={rank}><span>{rank}</span><b>{amount}</b></div>)}</article>)}</div><p className="rule-note">以上均为税前奖金；奖金领取、积分和颁奖要求以正式规程为准。</p></section>
+    <section id={`rule-${station.id}-3`} className="rule-section card"><header><span>03</span><div><small>竞赛办法</small><h2>{ruleStandard ? "比赛规则与赛制" : "赛制"}</h2></div></header>{ruleStandard && <div className="rule-standard"><h3>比赛规则</h3><p>{ruleStandard}</p></div>}<div className="competition-format-block"><h3>赛制</h3><div className="format-table"><div><b>阶段</b><b>赛制</b><b>少年组</b><b>青年组</b></div>{competitionFormat.map((row) => <div key={row.join("|")}><span>{row[0]}</span><span>{row[1]}</span><span>{row[2]}</span><span>{row[3]}</span></div>)}</div></div></section>
+    <section id={`rule-${station.id}-4`} className="rule-section card"><header><span>04</span><div><small>种子与抽签</small><h2>抽签与入位规则</h2></div></header><ol>{drawRules.length ? drawRules.map((item, index) => <li key={index}>{item}</li>) : <li>抽签规则待组委会确认后发布。</li>}</ol></section>
+    <section id={`rule-${station.id}-5`} className="rule-section card"><header><span>05</span><div><small>报名与费用</small><h2>报名须知</h2></div></header><p className="rule-note">{station.signup}</p></section>
+    <section id={`rule-${station.id}-6`} className="rule-section card"><header><span>06</span><div><small>奖金设置</small><h2>本站总奖金 {station.totalPrize}</h2></div></header><div className="dual-prize">{(["少年组", "青年组"] as Group[]).map((group) => <article key={group}><h3>{group}</h3>{prizes[group].map(([rank, amount]) => <div key={rank}><span>{rank}</span><b>{amount}</b></div>)}</article>)}</div>{prizeNote && <p className="rule-note">{prizeNote}</p>}</section>
   </div>;
 }
 
@@ -160,9 +165,9 @@ function PublicModuleEmpty({ icon, title, description }: { icon: string; title: 
   return <section className="public-module-state" role="status"><div><span>{icon}</span><h2>{title}</h2><p>{description}<br />感谢关注，最新信息会在确认后及时更新。</p></div></section>;
 }
 
-function ParticipantGuide({kind,onBack}:{kind:GuideKind;onBack:()=>void}){
+function ParticipantGuide({station,kind,onBack}:{station:Station;kind:GuideKind;onBack:()=>void}){
   const isClothing=kind==="clothing";
-  return <div className="guide-page stack"><button className="draw-back" onClick={onBack}>‹ 返回赛事概览</button><section className="guide-hero"><span>{isClothing?"装":"行"}</span><div><small>参赛友好提示</small><h1>{isClothing?"服装要求":"交通住宿攻略"}</h1><p>2026中国华彩十六球青少年系列赛廊坊站</p></div></section><section className="card guide-placeholder"><span>待</span><h2>待组委会更新</h2><p>{isClothing?"参赛服装、鞋履及现场着装要求将在组委会确认后更新。":"场馆交通路线、停车信息及周边住宿建议将在组委会确认后更新。"}</p></section></div>;
+  return <div className="guide-page stack"><button className="draw-back" onClick={onBack}>‹ 返回赛事概览</button><section className="guide-hero"><span>{isClothing?"装":"行"}</span><div><small>参赛友好提示</small><h1>{isClothing?"服装要求":"交通住宿攻略"}</h1><p>{station.title}</p></div></section><section className="card guide-placeholder"><span>待</span><h2>待组委会更新</h2><p>{isClothing?"参赛服装、鞋履及现场着装要求将在组委会确认后更新。":"场馆交通路线、停车信息及周边住宿建议将在组委会确认后更新。"}</p></section></div>;
 }
 
 function eventUrl(eventId: string | null, tab: EventTab = "overview") {
@@ -280,7 +285,7 @@ export default function EventApp({ data }: { data: EventData }) {
         {view === "event" && station && <>
           <nav className="tabs public-five-tabs public-unified-tabs" aria-label="赛事内容">{([["overview", "概览"], ["rules", "竞赛规程"], ["schedule", "赛程"], ["matches", "对阵"], ["rankings", "排名"]] as [EventTab, string][]).map(([id, label]) => <button className={tab === id || (tab === "guide" && id === "overview") ? "active" : ""} onClick={() => changeTab(id)} key={id}>{label}</button>)}</nav>
           {tab === "overview" && <StationOverview station={station} contentState={contentState} registration={registration} openRules={() => changeTab("rules")} openSchedule={() => changeTab("schedule")} openGuide={openGuide} />}
-          {tab === "guide" && <ParticipantGuide kind={guideKind} onBack={() => changeTab("overview")} />}
+          {tab === "guide" && <ParticipantGuide station={station} kind={guideKind} onBack={() => changeTab("overview")} />}
           {tab === "rules" && (!contentState ? <PublicModuleEmpty icon="…" title="正在读取竞赛规程" description="赛事页面已经打开，详细规程正在后台补齐。" /> : contentState.publishedModules.includes("regulation") ? <CompetitionRules station={station} contentState={contentState} /> : <PublicModuleEmpty icon="规" title="本站竞赛规程正在完善中" description="待组委会确认后，将在这里发布正式规程、参赛要求和相关文件。" />)}
           {tab === "schedule" && <PublicMasterSchedule key={`${station.eventId}-${scheduleRevision}`} station={station} contentState={contentState} />}
           {requestedCompetitionTab && !contentState ? <PublicModuleEmpty icon="…" title="正在准备本站比赛数据" description="页面框架已打开，本站公开数据正在后台按优先级补齐。" /> : null}
