@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { shouldRestoreLegacyPublishedResults } from "../db/public-competition-legacy-policy.mjs";
 
 const source = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -39,7 +40,15 @@ test("new public competition data is snapshot-only while legacy fallback is expl
   assert.match(code, /not exists \(select 1 from public\.competition_brackets/);
   assert.match(code, /m\.source like 'static_%'/);
   assert.match(code, /m\.source like 'pdf_static_%'/);
+  assert.match(code, /shouldRestoreLegacyPublishedResults/);
   assert.match(code, /Never read live Competition-engine results/);
+});
+
+test("legacy empty published result snapshots recover only explicit legacy results", () => {
+  assert.equal(shouldRestoreLegacyPublishedResults({ isExplicitLegacy: true, snapshotMatchCount: 0, hasConfirmedLegacyResults: true }), true);
+  assert.equal(shouldRestoreLegacyPublishedResults({ isExplicitLegacy: false, snapshotMatchCount: 0, hasConfirmedLegacyResults: true }), false);
+  assert.equal(shouldRestoreLegacyPublishedResults({ isExplicitLegacy: true, snapshotMatchCount: 1, hasConfirmedLegacyResults: true }), false);
+  assert.equal(shouldRestoreLegacyPublishedResults({ isExplicitLegacy: true, snapshotMatchCount: 0, hasConfirmedLegacyResults: false }), false);
 });
 
 test("registration public data is also published snapshot-only", () => {
@@ -62,6 +71,19 @@ test("legacy qualification draw entry is explicitly deprecated", () => {
   assert.match(legacy, /@deprecated Use createQualificationDrawFast/);
 });
 
+test("qualification workspace SQL closes nested entry aggregation before FROM", () => {
+  const code = source("db/qualification-fast.ts");
+  assert.match(code, /select jsonb_agg\([\s\S]*jsonb_build_object\([\s\S]*order by case when qe\.entry_type='direct'[\s\S]*\)\s*from public\.competition_qualification_entries qe/s);
+  assert.match(code, /where qe\.batch_id=b\.id/);
+  const smoke = source("scripts/qualification-db-smoke.mjs");
+  assert.match(smoke, /event_luoyang_test_2026/);
+  assert.match(smoke, /qualifier-one/);
+  assert.match(smoke, /qualifier-two/);
+  assert.match(smoke, /main-one/);
+  assert.match(smoke, /main-two/);
+  assert.match(source("package.json"), /"test:db-smoke": "node scripts\/qualification-db-smoke\.mjs"/);
+});
+
 test("seed source requires prior finished published event with complete top16", () => {
   const code = source("db/seed-initialization.ts");
   assert.match(code, /e\.status in \('finished','archived'\)/);
@@ -78,6 +100,21 @@ test("participant locking and scoring keep server-side write guards", () => {
   assert.match(source("db/participant-roster.ts"), /requireEventAccess\([^;]+write: true/s);
   assert.match(source("db/scoring-write-fast.ts"), /write: true/);
   assert.match(source("db/scoring-write-fast.ts"), /viewer\.role === "referee" && match\.refereeUserId !== viewer\.id/);
+});
+
+test("scoring workspace bootstraps once and confirmed toggle cannot rebootstrap-loop", () => {
+  const code = source("app/admin/competition/scoring/scoring-local-workspace-client.tsx");
+  assert.match(code, /const dataRef = useRef<ScoringWorkspaceData \| null>\(initialData\)/);
+  assert.match(code, /const didBootstrapRef = useRef\(Boolean\(initialData\)\)/);
+  assert.match(code, /const currentData = dataRef\.current/);
+  assert.match(code, /if \(initialData \|\| !initialEventId \|\| didBootstrapRef\.current\) return/);
+  assert.match(code, /didBootstrapRef\.current = true/);
+  const fetchStart = code.indexOf("const fetchWorkspace = useCallback");
+  const fetchEnd = code.indexOf("useEffect(() => {", fetchStart);
+  const fetchBlock = code.slice(fetchStart, fetchEnd);
+  assert.match(fetchBlock, /\}, \[applyData, initialDate, initialGroupId, initialPhase, initialShowConfirmed\]\);/);
+  assert.doesNotMatch(fetchBlock, /\[applyData, data,/);
+  assert.match(code, /const toggleConfirmed = \(\) => \{[\s\S]*showConfirmed: !data\.filters\.showConfirmed, force: true/);
 });
 
 test("unpublished competition writes remain dirty drafts until explicit publish", () => {
@@ -127,6 +164,21 @@ test("registration lifecycle compatibility backfill is narrow and does not publi
   assert.match(migration, /where registration_state = 'not_open'/);
   assert.match(migration, /status in \('registration_open', 'registration_closed'\)/);
   assert.doesNotMatch(migration, /publications|snapshot|registration_url/i);
+});
+
+test("referee competition navigation never points to event or participant management", () => {
+  const dashboard = source("db/competition-dashboard.ts");
+  const overview = source("app/admin/competition/competition-overview-view.tsx");
+  const eventRoute = source("app/admin/events/[eventId]/page.tsx");
+  const drawPage = source("app/admin/competition/draw/page.tsx");
+  assert.match(dashboard, /viewerRole: principal\.role/);
+  assert.match(overview, /model\.viewerRole === "referee"/);
+  assert.match(overview, /等待组委会确认参赛名单/);
+  assert.doesNotMatch(overview, /\/admin\/events\//);
+  assert.match(eventRoute, /if \(viewer\.role === "referee"\) redirect\(`\/admin\/competition\?event=/);
+  assert.match(drawPage, /const refereeBlocked = viewer\.role === "referee"/);
+  assert.match(drawPage, /!refereeBlocked && <a href=\{`\/admin\/participants\?event=/);
+  assert.doesNotMatch(drawPage, /redirect\("\/admin\/events"\)/);
 });
 
 test("public matches initially render forty cards and load forty more", () => {
