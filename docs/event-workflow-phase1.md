@@ -35,3 +35,5 @@ Second-round acceptance scenarios:
 Explicitly deferred: competition-task simplification, engine rewrites, P2-05 preload/cache work, P2-07 large qualifier loading changes, registration/account/payment expansion, and broad UI redesign.
 
 The permanent Luoyang test event is used for read-only workflow regression; Taiyuan/Langfang historical results must not be changed for workflow testing.
+
+Phase 1 closure is frozen after this handoff; no next-phase competition-task work belongs in PR #60.
