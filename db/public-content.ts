@@ -1,6 +1,6 @@
 import { inArray } from "drizzle-orm";
 import { getDb, getSqlClient } from "./index";
-import { eventDocuments, publications } from "./schema";
+import { eventDetails, eventDocuments, publications } from "./schema";
 import { parseMasterScheduleSnapshot, SCHEDULE_GROUPS, type MasterScheduleStage, type ScheduleGroup } from "./schedule-publish";
 
 export type PublicContentState = {
@@ -8,6 +8,7 @@ export type PublicContentState = {
   eventId: string;
   shortTitle: string;
   publishedModules: string[];
+  ruleStandard: string;
   masterSchedule?: {
     groups: Record<ScheduleGroup, {
       published: boolean;
@@ -28,7 +29,7 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
   const db = getDb();
   const sql = getSqlClient();
   const eventIds = stations.map((station) => station.eventId);
-  const [publicationRows, documentRows, guideRows] = await Promise.all([
+  const [publicationRows, documentRows, detailRows, guideRows] = await Promise.all([
     db.select({
       eventId: publications.eventId,
       moduleType: publications.moduleType,
@@ -36,6 +37,7 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
       snapshotJson: publications.snapshotJson,
     }).from(publications).where(inArray(publications.eventId, eventIds)),
     db.select().from(eventDocuments).where(inArray(eventDocuments.eventId, eventIds)),
+    db.select({ eventId: eventDetails.eventId, ruleStandard: eventDetails.ruleStandard }).from(eventDetails).where(inArray(eventDetails.eventId, eventIds)),
     sql<GuideSummaryRow[]>`
       select id, event_id, guide_type, title, sort_order
       from public.event_guides
@@ -49,6 +51,7 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
     const modules = eventPublications.filter((row) => row.status === "published").map((row) => row.moduleType);
     const masterPublication = eventPublications.find((row) => row.moduleType === "master_schedule");
     const masterSnapshot = parseMasterScheduleSnapshot(masterPublication?.snapshotJson ?? null, masterPublication?.status === "published");
+    const detail = detailRows.find((row) => row.eventId === station.eventId);
     const document = (type: "regulation" | "referee_list") => {
       const row = documentRows.find((item) => item.eventId === station.eventId && item.documentType === type);
       return { url: row?.externalUrl || row?.fileKey || "", published: Boolean(row?.isPublished) && modules.includes("documents") };
@@ -65,6 +68,7 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
       eventId: station.eventId,
       shortTitle: station.title,
       publishedModules: modules,
+      ruleStandard: modules.includes("regulation") ? detail?.ruleStandard?.trim() || "" : "",
       masterSchedule: { groups },
       guides: guideRows.filter((row) => row.event_id === station.eventId).map((row) => ({ id: row.id, title: row.title, guideType: row.guide_type })),
       documents: {
