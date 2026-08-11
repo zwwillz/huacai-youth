@@ -6,18 +6,22 @@ import { findEligiblePreviousSeedEvent } from "./seed-initialization";
 /**
  * Keeps the existing optimized roster query intact while correcting the displayed
  * previous-station seed source to the same rules used by the write operation.
+ * Seed availability is evaluated per group so an incomplete ranking in one group
+ * never prevents the other group from using its own valid previous-station top 16.
  */
 export async function getMainRosterControlDataSafe(input: AdminPrincipalInput, eventId: string): Promise<MainRosterControlData> {
-  const [data, previousEvent] = await Promise.all([
-    getMainRosterControlDataFast(input, eventId),
-    findEligiblePreviousSeedEvent(eventId),
-  ]);
+  const data = await getMainRosterControlDataFast(input, eventId);
+  const previousEvents = await Promise.all(
+    data.groups.map((group) => findEligiblePreviousSeedEvent(eventId, group.groupName)),
+  );
+  const previousEvent = previousEvents.find((event) => Boolean(event)) ?? null;
+
   return {
     ...data,
     previousEvent,
-    groups: data.groups.map((group) => ({
+    groups: data.groups.map((group, index) => ({
       ...group,
-      canInitializeSeeds: Boolean(previousEvent) && group.seedSeats.length === 0 && !group.activeMainOneDraw,
+      canInitializeSeeds: Boolean(previousEvents[index]) && group.seedSeats.length === 0 && !group.activeMainOneDraw,
     })),
   };
 }
