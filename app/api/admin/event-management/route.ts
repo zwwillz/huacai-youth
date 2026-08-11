@@ -161,13 +161,15 @@ export async function POST(request: Request) {
 
     // The content-publishing screen historically posted the entire event bundle
     // even when only overview fields changed. Detect that case server-side and
-    // use the lightweight overview writer so cover/partner publication never
-    // rewrites event_groups or depends on a WebSocket transaction.
+    // use the atomic overview writer so event data + overview publication cannot split.
     const current = await getEventManagementDataFast(viewer, input.eventId);
     if (isOverviewOnlyUpdate(current, input)) {
       const data = await saveEventOverviewData(viewer.username, overviewInput(input));
       refreshPublicEvent(input.eventId);
       return Response.json({ data }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    if (input.publishStatus !== current.event.publishStatus) {
+      throw new Error("赛事概览发布或撤回请前往“赛事运营 → 内容发布 → 赛事概览”操作，以保证发布状态原子更新。");
     }
 
     await saveEventManagementData(viewer.username, input);
