@@ -43,7 +43,6 @@ export default function EventManagementClient({ initialData }: { initialData: Ev
   const nextAction = workflow?.nextAction ?? null;
 
   const refreshWorkflow = useCallback(async () => {
-    setWorkflowLoading(true);
     try {
       const response = await fetch(`/api/admin/workflow-summary?event=${encodeURIComponent(data.event.id)}`, { cache: "no-store" });
       const payload = await response.json() as { data?: EventWorkflowSummary; error?: string };
