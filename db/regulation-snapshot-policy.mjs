@@ -1,4 +1,4 @@
-export const REGULATION_SNAPSHOT_VERSION = 1;
+export const REGULATION_SNAPSHOT_VERSION = 2;
 
 function parseJsonValue(value) {
   if (typeof value !== "string") return value;
@@ -25,6 +25,17 @@ function asPrizeMap(value) {
   return result;
 }
 
+function asRegistrationFees(value) {
+  const normalized = parseJsonValue(value);
+  const result = { 少年组: null, 青年组: null };
+  if (!normalized || typeof normalized !== "object" || Array.isArray(normalized)) return result;
+  for (const group of ["少年组", "青年组"]) {
+    const amount = Number(normalized[group]);
+    result[group] = Number.isFinite(amount) && amount >= 0 ? Math.round(amount) : null;
+  }
+  return result;
+}
+
 export function createRegulationSnapshot(details = {}) {
   return {
     version: REGULATION_SNAPSHOT_VERSION,
@@ -33,6 +44,8 @@ export function createRegulationSnapshot(details = {}) {
     drawRules: asStrings(details.drawRules ?? details.draw_rules),
     prizeNote: String(details.prizeNote ?? details.prize_note ?? "").trim(),
     prizes: asPrizeMap(details.prizes),
+    signupNote: String(details.signupNote ?? details.signup_note ?? "").trim(),
+    registrationFees: asRegistrationFees(details.registrationFees ?? details.registration_fees),
   };
 }
 
@@ -40,6 +53,7 @@ export function parseRegulationSnapshot(value, published = true) {
   if (!published || value == null || value === "") return null;
   const parsed = parseJsonValue(value);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-  if (Number(parsed.version) !== REGULATION_SNAPSHOT_VERSION) return null;
+  const version = Number(parsed.version);
+  if (version !== 1 && version !== REGULATION_SNAPSHOT_VERSION) return null;
   return createRegulationSnapshot(parsed);
 }
