@@ -91,8 +91,10 @@ function effectiveLifecycleStatus(row: HomeEventRow) {
 function publicStatusLabel(row: HomeEventRow) {
   if (row.status !== "registration_open") return EVENT_STATUS[row.status] ?? "状态待确认";
   const timeState = registrationTimeState(row.registrationStartAt || "", row.registrationEndAt || "");
-  if (timeState === "not_started") return "待开始";
-  if (timeState === "closed") return "报名截止";
+  // Preserve the registration-window wording as a compatibility detail. It maps to
+  // the same semantic badge tones as the lifecycle labels in the public shell.
+  if (timeState === "not_started") return "报名即将开始";
+  if (timeState === "closed") return "报名已截止";
   return "报名中";
 }
 
