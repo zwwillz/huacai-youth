@@ -35,7 +35,6 @@ export async function POST(request: Request) {
     if (!eventId) throw new Error("缺少赛事ID。");
     if (action === "save") {
       const data = await saveRegistrationDraft(viewer, eventId, {
-        registrationState: String(body.registrationState || "not_open"),
         registrationStartAt: String(body.registrationStartAt || ""),
         registrationEndAt: String(body.registrationEndAt || ""),
         registrationNote: String(body.registrationNote || ""),
