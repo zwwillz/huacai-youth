@@ -3,6 +3,8 @@ import {
   confirmParticipantRoster as confirmParticipantRosterBase,
   lockParticipantRoster as lockParticipantRosterBase,
 } from "./participant-roster";
+import { hasGroupFormalCompetitionData } from "./formal-competition";
+import { participantRosterLifecycleDecision } from "./formal-competition-policy.mjs";
 import { requireEventAccess, type AdminPrincipalInput } from "./permissions";
 
 async function eventLifecycle(input: AdminPrincipalInput, eventId: string) {
@@ -13,22 +15,21 @@ async function eventLifecycle(input: AdminPrincipalInput, eventId: string) {
   return rows[0].status;
 }
 
-/** Formal roster confirmation is only legal after registration has officially closed. */
-export async function confirmParticipantRoster(input: AdminPrincipalInput, eventId: string, groupId: string) {
+async function assertRosterLifecycle(action: "confirm" | "lock", input: AdminPrincipalInput, eventId: string, groupId: string) {
   const status = await eventLifecycle(input, eventId);
-  if (status !== "registration_closed") {
-    if (status === "registration_open") throw new Error("当前赛事仍在报名中，不能确认正式参赛名单。请先执行“结束报名”。");
-    throw new Error("只有赛事进入“报名截止”阶段后，才能确认正式参赛名单。");
-  }
+  const groupFormalStarted = status === "in_progress" ? await hasGroupFormalCompetitionData(eventId, groupId) : false;
+  const decision = participantRosterLifecycleDecision(action, status, groupFormalStarted);
+  if (!decision.allowed) throw new Error(decision.message);
+}
+
+/** Group-level roster confirmation remains legal after another group has started, until this group has formal competition data. */
+export async function confirmParticipantRoster(input: AdminPrincipalInput, eventId: string, groupId: string) {
+  await assertRosterLifecycle("confirm", input, eventId, groupId);
   return confirmParticipantRosterBase(input, eventId, groupId);
 }
 
-/** Locking stays legal after the event has formally moved into competition, but never before registration closes. */
+/** Group-level roster locking follows the same independent-progress boundary as confirmation. */
 export async function lockParticipantRoster(input: AdminPrincipalInput, eventId: string, groupId: string) {
-  const status = await eventLifecycle(input, eventId);
-  if (status !== "registration_closed" && status !== "in_progress") {
-    if (status === "registration_open") throw new Error("当前赛事仍在报名中，不能锁定正式参赛名单。请先执行“结束报名”。");
-    throw new Error("只有赛事处于“报名截止”或合法“比赛中”阶段，才能锁定正式参赛名单。");
-  }
+  await assertRosterLifecycle("lock", input, eventId, groupId);
   return lockParticipantRosterBase(input, eventId, groupId);
 }
