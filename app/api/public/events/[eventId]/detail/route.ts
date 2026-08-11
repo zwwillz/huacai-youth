@@ -14,11 +14,11 @@ export const runtime = "nodejs";
 const STATUS_LABELS: Record<string, string> = {
   draft: "筹备中",
   registration_open: "报名中",
-  registration_closed: "报名结束",
-  upcoming: "即将开始",
+  registration_closed: "报名截止",
+  upcoming: "待开始",
   in_progress: "进行中",
   finished: "已结束",
-  archived: "已结束",
+  archived: "已归档",
   cancelled: "已取消",
 };
 
@@ -32,8 +32,8 @@ async function getEffectivePublicStatus(eventId: string) {
   if (!row) return "状态待确认";
   if (row.status === "registration_open") {
     const state = registrationTimeState(row.startAt || "", row.endAt || "");
-    if (state === "not_started") return "报名即将开始";
-    if (state === "closed") return "报名已截止";
+    if (state === "not_started") return "待开始";
+    if (state === "closed") return "报名截止";
   }
   return STATUS_LABELS[row.status] ?? "状态待确认";
 }
@@ -57,7 +57,7 @@ function getCachedEventDetail(eventId: string) {
       getEffectivePublicStatus(eventId),
     ]);
     return { station: { ...sourceStation, status }, contentState: contentState ?? null, registration };
-  }, ["public-event-detail-v6", eventId], {
+  }, ["public-event-detail-v7", eventId], {
     revalidate: 60,
     tags: ["public-site", "public-content", `public-event-detail-${eventId}`],
   })();
