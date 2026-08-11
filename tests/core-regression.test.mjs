@@ -69,6 +69,9 @@ test("seed source requires prior finished published event with complete top16", 
   assert.match(code, /coalesce\(e\.is_test,false\)=false/);
   assert.match(code, /display_order between 1 and 16/);
   assert.match(code, /count\(distinct er\.display_order\)/);
+  const safeRead = source("db/main-roster-safe.ts");
+  assert.match(safeRead, /data\.groups\.map\(\(group\) => findEligiblePreviousSeedEvent\(eventId, group\.groupName\)\)/);
+  assert.match(safeRead, /Boolean\(previousEvents\[index\]\)/);
 });
 
 test("participant locking and scoring keep server-side write guards", () => {
