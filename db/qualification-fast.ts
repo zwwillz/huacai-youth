@@ -224,8 +224,7 @@ export async function getQualificationWorkspaceDataFast(input: AdminPrincipalInp
   const stages = base.stages ?? [];
   if (!stages.length) return { viewerRole: principal.role, event: { id: base.id, shortTitle: base.shortTitle }, stages: [] };
 
-  // The production support query intentionally receives only the scalar eventId.
-  // It rebuilds latest_stages in PostgreSQL so the HTTPS DB bridge never has to round-trip JS arrays through jsonb_to_recordset/ANY.
+  // The support query receives only the scalar eventId and reconstructs its database relationships server-side.
   const supportRows = await loadQualificationSupportRows(sql, eventId) as SupportBundle[];
   const support = supportRows[0] ?? { matches: [], batches: [], nextCounts: [] };
   return {
