@@ -1,11 +1,12 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import type postgres from "postgres";
 import { getSqlClient } from "./index";
 import { requireEventAccess } from "./permissions";
 import { calculateQualificationPlan, getDrawSessionDetail, type DrawPhaseCode } from "./draw-engine";
 
 type Participant = { playerId: string; playerName: string; sourceType: string };
 type Viewer = { id: string; role: string };
+type DrawInsertScalar = string | number | boolean | null;
+type UnsafeTransaction = { unsafe: unknown };
 
 function now() { return new Date().toISOString(); }
 function newId(prefix: string) { return `${prefix}_${randomUUID().replaceAll("-", "")}`; }
@@ -13,7 +14,8 @@ function pad(value: number, width = 3) { return String(value).padStart(width, "0
 
 const DRAW_INSERT_CHUNK_SIZE = 200;
 
-async function insertScalarRows(tx: postgres.Sql, insertPrefix: string, columnCount: number, rows: unknown[][]) {
+async function insertScalarRows(tx: UnsafeTransaction, insertPrefix: string, columnCount: number, rows: DrawInsertScalar[][]) {
+  const unsafe = tx.unsafe as (query: string, params: DrawInsertScalar[]) => PromiseLike<unknown>;
   for (let offset = 0; offset < rows.length; offset += DRAW_INSERT_CHUNK_SIZE) {
     const chunk = rows.slice(offset, offset + DRAW_INSERT_CHUNK_SIZE);
     const params = chunk.flat();
@@ -21,7 +23,7 @@ async function insertScalarRows(tx: postgres.Sql, insertPrefix: string, columnCo
       const base = rowIndex * columnCount;
       return `(${Array.from({ length: columnCount }, (_item, columnIndex) => `$${base + columnIndex + 1}`).join(",")})`;
     }).join(",");
-    await tx.unsafe(`${insertPrefix} values ${valuesSql}`, params);
+    await unsafe(`${insertPrefix} values ${valuesSql}`, params);
   }
 }
 
