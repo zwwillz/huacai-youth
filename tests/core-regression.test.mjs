@@ -104,6 +104,17 @@ test("public matches initially render forty cards and load forty more", () => {
   assert.match(competition, /count \+ 40/);
 });
 
+test("public URL state restores event, tab and master-schedule group", () => {
+  const app = source("app/event-app.tsx");
+  assert.match(app, /params\.set\("event", eventId\)/);
+  assert.match(app, /params\.set\("tab",/);
+  assert.match(app, /window\.addEventListener\("popstate"/);
+  const schedule = source("app/public-master-schedule.tsx");
+  assert.match(schedule, /groupFromUrl/);
+  assert.match(schedule, /params\.set\("group", next === "青年组" \? "u20" : "u16"\)/);
+  assert.match(schedule, /window\.addEventListener\("popstate", restoreGroup\)/);
+});
+
 test("drizzle events schema tracks test and registration migration fields", () => {
   const schema = source("db/schema.ts");
   assert.match(schema, /registrationState: text\("registration_state"\)/);
