@@ -189,7 +189,15 @@ export default function EventApp({ data }: { data: EventData }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const back = () => { setSelectedId(null); setTab("overview"); window.history.pushState({}, "", eventUrl(null)); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const enter = (nextView: MainView) => { preloadMainView(nextView); setView(nextView); if (nextView === "event") setSelectedId(null); };
+  const enter = (nextView: MainView) => {
+    preloadMainView(nextView);
+    setView(nextView);
+    if (nextView === "event") {
+      setSelectedId(null);
+      setTab("overview");
+      window.history.pushState({}, "", eventUrl(null));
+    }
+  };
   const title = view === "players" ? "球员数据" : view === "me" ? "个人中心" : station?.city || "赛事中心";
   const openGuide = (kind: GuideKind) => { setGuideKind(kind); setTab("guide"); if (station) void warmCompetition(station.eventId, "entry"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const changeTab = (nextTab: EventTab) => {
