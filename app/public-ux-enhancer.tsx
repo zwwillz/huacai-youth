@@ -33,6 +33,11 @@ function positionActiveDay(nav: HTMLElement, buttons: HTMLButtonElement[], activ
   nav.scrollTo({ left, behavior: "smooth" });
 }
 
+function currentEventFinished() {
+  const status = document.querySelector<HTMLElement>(".station-hero .live")?.textContent || "";
+  return status.includes("已结束") || status.includes("已归档");
+}
+
 function syncMatchDay(preferUrl: boolean) {
   const nav = document.querySelector<HTMLElement>(".match-days");
   if (!nav) return;
@@ -45,6 +50,13 @@ function syncMatchDay(preferUrl: boolean) {
     if (requestedButton && !requestedButton.classList.contains("active")) {
       requestedButton.click();
       return;
+    }
+    if (!requestedButton && currentEventFinished()) {
+      const last = buttons.at(-1);
+      if (last && !last.classList.contains("active")) {
+        last.click();
+        return;
+      }
     }
   }
 
