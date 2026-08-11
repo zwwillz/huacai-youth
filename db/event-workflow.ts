@@ -1,6 +1,7 @@
 import { getSqlClient } from "./index";
 import { parseRegistrationTime, registrationTimeState } from "./registration-time-policy.mjs";
 import { buildGroupWorkflow, chooseEventNextAction, LIFECYCLE_LABELS, LIFECYCLE_PROGRESS, workflowUrgencyScore } from "./event-workflow-policy.mjs";
+import { FORMAL_COMPETITION_CONFIRMED_STATUS } from "./formal-competition-policy.mjs";
 import { resolveAdminPrincipal, type AdminPrincipalInput, type BackendRole } from "./permissions";
 
 export type WorkflowNextAction = {
@@ -230,9 +231,9 @@ async function loadWorkflowRows(input: AdminPrincipalInput, eventId = "") {
     ), formal_competition as (
       select x.event_id,x.group_id,count(*)::int as data_count
       from (
-        select ds.event_id,ds.group_id from public.draw_sessions ds join allowed_events ae on ae.id=ds.event_id where ds.status<>'void'
+        select ds.event_id,ds.group_id from public.draw_sessions ds join allowed_events ae on ae.id=ds.event_id where ds.status=${FORMAL_COMPETITION_CONFIRMED_STATUS}
         union all
-        select b.event_id,b.group_id from public.competition_brackets b join allowed_events ae on ae.id=b.event_id where b.status<>'void'
+        select b.event_id,b.group_id from public.competition_brackets b join allowed_events ae on ae.id=b.event_id where b.status=${FORMAL_COMPETITION_CONFIRMED_STATUS}
       ) x group by x.event_id,x.group_id
     ), legacy_counts as (
       select m.event_id,count(*)::int as legacy_count
