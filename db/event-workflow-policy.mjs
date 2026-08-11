@@ -167,6 +167,8 @@ export function chooseEventNextAction(summary, viewerRole) {
   if (viewerRole === "referee") return refereeAction(groups);
   if (event.status === "archived") return waitAction("赛事已经归档", "本站已经进入历史只读状态，没有新的赛事流程任务。");
   if (event.status === "finished") {
+    if (event.isTest) return waitAction("测试赛事已结束", "永久测试赛事保留用于完整流程回归，不建议归档或删除。");
+    if (event.legacyHistorical) return lifecycleAction("archive_event", "归档历史赛事", "本站属于历史只读兼容赛事，不重新生成新竞赛引擎任务；如无需继续维护，可以归档。", "archive", 58);
     const unpublished = groups.find((group) => group.rankingStatus === "confirmed" || group.rankingStatus === "draft" || group.rankingStatus === "none");
     if (unpublished) return linkAction("review_final_publication", "检查最终排名发布状态", "赛事已经结束，但仍有组别的最终排名没有完成公众发布。", rankingHref(event.id, unpublished.groupId), 64);
     return lifecycleAction("archive_event", "归档赛事", "赛事已经结束且最终排名已完成，可以将本站转入后台历史只读状态。", "archive", 58);
