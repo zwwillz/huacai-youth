@@ -2,22 +2,23 @@ import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
 import { requireEventAccess, type AdminPrincipalInput } from "./permissions";
 
-export type RegistrationBusinessState = "not_open" | "open" | "closed";
+export type RegistrationTimeState = "not_set" | "not_started" | "open" | "closed";
 export type RegistrationPublishData = {
   eventId: string;
   eventTitle: string;
-  registrationState: RegistrationBusinessState;
+  eventStatus: string;
   registrationStartAt: string;
   registrationEndAt: string;
   registrationNote: string;
   registrationUrl: string;
+  timeState: RegistrationTimeState;
   publicationStatus: "draft" | "published";
   versionNo: number;
   publishedAt: string | null;
   hasUnpublishedChanges: boolean;
 };
 export type PublicRegistrationInfo = {
-  state: RegistrationBusinessState;
+  state: "open" | "closed";
   startAt: string;
   endAt: string;
   note: string;
@@ -27,7 +28,7 @@ export type PublicRegistrationInfo = {
 type AdminRow = {
   eventId: string;
   eventTitle: string;
-  registrationState: string;
+  eventStatus: string;
   registrationStartAt: string | null;
   registrationEndAt: string | null;
   registrationNote: string | null;
@@ -40,25 +41,46 @@ type AdminRow = {
 
 function now() { return new Date().toISOString(); }
 function newId(prefix: string) { return `${prefix}_${randomUUID().replaceAll("-", "")}`; }
-function normalizeState(value: string): RegistrationBusinessState {
-  if (value === "open" || value === "closed") return value;
-  return "not_open";
+
+export function parseRegistrationTime(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return Number.NaN;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) return Date.parse(`${trimmed}${trimmed.length === 16 ? ":00" : ""}+08:00`);
+  return Date.parse(trimmed);
+}
+export function registrationTimeState(startAt: string, endAt: string, currentTime = Date.now()): RegistrationTimeState {
+  if (!startAt || !endAt) return "not_set";
+  const start = parseRegistrationTime(startAt);
+  const end = parseRegistrationTime(endAt);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) return "not_set";
+  if (currentTime < start) return "not_started";
+  if (currentTime >= end) return "closed";
+  return "open";
+}
+function formatRegistrationDateTime(value: string) {
+  const direct = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (direct && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(value)) return `${direct[1]}年${Number(direct[2])}月${Number(direct[3])}日 ${direct[4]}:${direct[5]}`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const parts = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(date);
+  const read = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
+  return `${read("year")}年${Number(read("month"))}月${Number(read("day"))}日 ${read("hour")}:${read("minute")}`;
 }
 function validateUrl(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "";
   try {
     const parsed = new URL(trimmed);
-    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
     return parsed.toString();
   } catch {
     throw new Error("报名入口需要填写有效的 http / https 链接。");
   }
 }
 function validateTimes(startAt: string, endAt: string) {
-  if (startAt && Number.isNaN(Date.parse(startAt))) throw new Error("报名开始时间格式不正确。");
-  if (endAt && Number.isNaN(Date.parse(endAt))) throw new Error("报名截止时间格式不正确。");
-  if (startAt && endAt && Date.parse(startAt) >= Date.parse(endAt)) throw new Error("报名截止时间必须晚于报名开始时间。");
+  if (startAt && !Number.isFinite(parseRegistrationTime(startAt))) throw new Error("报名开始时间格式不正确。");
+  if (endAt && !Number.isFinite(parseRegistrationTime(endAt))) throw new Error("报名截止时间格式不正确。");
+  if (startAt && endAt && parseRegistrationTime(startAt) >= parseRegistrationTime(endAt)) throw new Error("报名截止时间必须晚于报名开始时间。");
 }
 
 export async function getRegistrationPublishData(input: AdminPrincipalInput, eventId: string): Promise<RegistrationPublishData> {
@@ -68,8 +90,7 @@ export async function getRegistrationPublishData(input: AdminPrincipalInput, eve
   });
   const sql = getSqlClient();
   const rows = await sql<AdminRow[]>`
-    select e.id as "eventId",e.short_title as "eventTitle",
-      coalesce(e.registration_state,'not_open') as "registrationState",
+    select e.id as "eventId",e.short_title as "eventTitle",e.status as "eventStatus",
       e.registration_start_at as "registrationStartAt",e.registration_end_at as "registrationEndAt",
       d.signup_note as "registrationNote",e.registration_url as "registrationUrl",
       p.status as "publicationStatus",p.version_no as "versionNo",p.published_at as "publishedAt",
@@ -82,14 +103,17 @@ export async function getRegistrationPublishData(input: AdminPrincipalInput, eve
   `;
   const row = rows[0];
   if (!row) throw new Error("没有找到这场赛事。");
+  const startAt = row.registrationStartAt || "";
+  const endAt = row.registrationEndAt || "";
   return {
     eventId: row.eventId,
     eventTitle: row.eventTitle,
-    registrationState: normalizeState(row.registrationState),
-    registrationStartAt: row.registrationStartAt || "",
-    registrationEndAt: row.registrationEndAt || "",
+    eventStatus: row.eventStatus,
+    registrationStartAt: startAt,
+    registrationEndAt: endAt,
     registrationNote: row.registrationNote || "",
     registrationUrl: row.registrationUrl || "",
+    timeState: registrationTimeState(startAt, endAt),
     publicationStatus: row.publicationStatus === "published" ? "published" : "draft",
     versionNo: Number(row.versionNo || 0),
     publishedAt: row.publishedAt,
@@ -98,7 +122,6 @@ export async function getRegistrationPublishData(input: AdminPrincipalInput, eve
 }
 
 export async function saveRegistrationDraft(input: AdminPrincipalInput, eventId: string, draft: {
-  registrationState: string;
   registrationStartAt?: string;
   registrationEndAt?: string;
   registrationNote?: string;
@@ -109,7 +132,6 @@ export async function saveRegistrationDraft(input: AdminPrincipalInput, eventId:
     allowedRoles: ["system_admin", "committee"],
     deniedMessage: "当前账号没有报名发布管理权限。",
   });
-  const state = normalizeState(draft.registrationState);
   const startAt = String(draft.registrationStartAt || "").trim();
   const endAt = String(draft.registrationEndAt || "").trim();
   const note = String(draft.registrationNote || "").trim();
@@ -120,7 +142,7 @@ export async function saveRegistrationDraft(input: AdminPrincipalInput, eventId:
   await sql.begin(async (tx) => {
     await tx`
       update public.events
-      set registration_state=${state},registration_start_at=${startAt || null},registration_end_at=${endAt || null},registration_url=${url || null},updated_by=${actor.id},updated_at=${timestamp}
+      set registration_start_at=${startAt || null},registration_end_at=${endAt || null},registration_url=${url || null},updated_by=${actor.id},updated_at=${timestamp}
       where id=${eventId}
     `;
     await tx`
@@ -135,7 +157,7 @@ export async function saveRegistrationDraft(input: AdminPrincipalInput, eventId:
     `;
     await tx`
       insert into public.audit_logs (id,actor_user_id,event_id,module_type,target_type,target_id,action,after_json,created_at)
-      values (${newId("log")},${actor.id},${eventId},'registration','registration_publish',${eventId},'save_registration_draft',${JSON.stringify({ state,startAt,endAt,note,url })},${timestamp})
+      values (${newId("log")},${actor.id},${eventId},'registration','registration_publish',${eventId},'save_registration_draft',${JSON.stringify({ startAt,endAt,note,url })},${timestamp})
     `;
   });
   return getRegistrationPublishData(actor, eventId);
@@ -148,12 +170,15 @@ export async function setRegistrationPublicationStatus(input: AdminPrincipalInpu
     deniedMessage: "当前账号没有报名发布管理权限。",
   });
   const current = await getRegistrationPublishData(actor, eventId);
-  if (status === "published" && current.registrationState === "open" && !current.registrationUrl) {
-    throw new Error("报名状态为“报名中”时，请先填写报名入口 URL 再发布。");
+  if (status === "published") {
+    if (current.eventStatus !== "registration_open") throw new Error("当前赛事尚未进入报名阶段，请先在赛事管理中将赛事状态调整为“报名中”。");
+    if (!current.registrationStartAt || !current.registrationEndAt) throw new Error("请先填写完整的报名开始时间和报名截止时间。");
+    validateTimes(current.registrationStartAt, current.registrationEndAt);
+    if (parseRegistrationTime(current.registrationEndAt) <= Date.now()) throw new Error("当前报名截止时间已经过去，如需继续报名，请先调整截止时间。");
+    if (!current.registrationUrl) throw new Error("报名期间必须填写有效报名入口。");
   }
   const timestamp = now();
-  const snapshot: PublicRegistrationInfo = {
-    state: current.registrationState,
+  const snapshot = {
     startAt: current.registrationStartAt,
     endAt: current.registrationEndAt,
     note: current.registrationNote,
@@ -190,19 +215,27 @@ export async function getPublicRegistrationInfo(eventId: string): Promise<Public
     from public.publications p
     join public.events e on e.id=p.event_id
     where p.event_id=${eventId} and p.module_type='registration' and p.status='published'
-      and e.publish_status='published' and coalesce(e.is_hidden,false)=false
+      and e.publish_status='published' and e.status='registration_open' and coalesce(e.is_hidden,false)=false
     limit 1
   `;
   const value = rows[0]?.snapshotJson;
   if (!value) return null;
   try {
-    const parsed = JSON.parse(value) as Partial<PublicRegistrationInfo>;
+    const parsed = JSON.parse(value) as Partial<{ startAt: string; endAt: string; note: string; url: string }>;
+    const startAt = String(parsed.startAt || "");
+    const endAt = String(parsed.endAt || "");
+    const state = registrationTimeState(startAt, endAt);
+    if (state === "not_set" || state === "not_started") return null;
+    const rawNote = String(parsed.note || "");
+    const note = state === "closed"
+      ? `报名已于 ${formatRegistrationDateTime(endAt)} 截止。${rawNote ? ` ${rawNote}` : ""}`
+      : `报名时间：${formatRegistrationDateTime(startAt)} 至 ${formatRegistrationDateTime(endAt)}。${rawNote ? ` ${rawNote}` : ""}`;
     return {
-      state: normalizeState(String(parsed.state || "not_open")),
-      startAt: String(parsed.startAt || ""),
-      endAt: String(parsed.endAt || ""),
-      note: String(parsed.note || ""),
-      url: String(parsed.url || ""),
+      state,
+      startAt,
+      endAt,
+      note,
+      url: state === "open" ? String(parsed.url || "") : "",
     };
   } catch {
     return null;
