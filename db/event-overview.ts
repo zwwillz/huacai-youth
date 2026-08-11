@@ -3,6 +3,7 @@ import { getDb } from "./index";
 import { requireEventAccess } from "./permissions";
 import { auditLogs, eventDetails, eventGuides, eventSponsors, events, venues } from "./schema";
 import { getEventManagementData, type EventManagementData } from "./event-management";
+import { syncEventOverviewPublicationInTransaction } from "./event-publication-sync";
 
 export type EventOverviewInput = {
   eventId: string;
@@ -29,7 +30,7 @@ function validate(input: EventOverviewInput) {
   }
 }
 
-/** Save only overview-owned fields, atomically. */
+/** Save only overview-owned fields, including its publication state, atomically. */
 export async function saveEventOverviewData(username: string, input: EventOverviewInput): Promise<EventManagementData> {
   validate(input);
   const account = await requireEventAccess(username, input.eventId, { write: true, allowedRoles: ["system_admin", "committee"], deniedMessage: "当前账号没有编辑赛事概览的权限。" });
@@ -58,6 +59,7 @@ export async function saveEventOverviewData(username: string, input: EventOvervi
       if (existing) await tx.update(eventGuides).set(next).where(eq(eventGuides.id, existing.id));
       else await tx.insert(eventGuides).values({ id: id("guide"), eventId: input.eventId, guideType: guide.guideType, ...next, createdBy: account.id, createdAt: updatedAt });
     }
+    await syncEventOverviewPublicationInTransaction(tx, input.eventId, input.publishStatus === "published", account.id, updatedAt);
     await tx.insert(auditLogs).values({ id: id("log"), actorUserId: account.id, eventId: input.eventId, moduleType: "content", targetType: "event_overview", targetId: input.eventId, action: "save_overview", beforeJson: JSON.stringify({ publishStatus: beforeEvent.publishStatus, coverImageKey: beforeEvent.coverImageKey }), afterJson: JSON.stringify({ publishStatus: input.publishStatus, coverImageKey: clean(input.coverImageKey), sponsorCount: sponsorRows.length }), createdAt: updatedAt });
   });
   return getEventManagementData(username, input.eventId);
