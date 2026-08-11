@@ -110,6 +110,16 @@ test("overview publication is updated inside the same overview transaction", () 
   assert.match(oldRoute, /赛事概览发布或撤回请前往/);
 });
 
+test("existing overview publication mismatches are reconciled idempotently", () => {
+  const migration = source("db/migrations/20260811_reconcile_overview_publication_state.sql");
+  assert.match(migration, /p\.module_type = 'overview'/);
+  assert.match(migration, /p\.status is distinct from e\.publish_status/);
+  assert.match(migration, /p\.version_no \+ 1/);
+  assert.match(migration, /published_by = case/);
+  assert.match(migration, /published_at = case/);
+  assert.doesNotMatch(migration, /insert\s+into/i);
+});
+
 test("registration lifecycle compatibility backfill is narrow and does not publish", () => {
   const migration = source("db/migrations/20260811_backfill_registration_state.sql");
   assert.match(migration, /status = 'registration_open' then 'open'/);
