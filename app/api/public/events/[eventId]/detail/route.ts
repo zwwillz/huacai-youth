@@ -32,8 +32,8 @@ async function getEffectivePublicStatus(eventId: string) {
   if (!row) return "状态待确认";
   if (row.status === "registration_open") {
     const state = registrationTimeState(row.startAt || "", row.endAt || "");
-    if (state === "not_started") return "待开始";
-    if (state === "closed") return "报名截止";
+    if (state === "not_started") return "报名即将开始";
+    if (state === "closed") return "报名已截止";
   }
   return STATUS_LABELS[row.status] ?? "状态待确认";
 }
