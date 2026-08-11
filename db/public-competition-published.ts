@@ -1,6 +1,7 @@
 import { getSqlClient } from "./index";
 import type { PublicCompetitionEvent, PublicLiveMatch } from "./public-competition-live";
 import { getCompetitionMatches, type CompetitionMatch } from "./competition-matches";
+import { shouldRestoreLegacyPublishedResults } from "./public-competition-legacy-policy.mjs";
 
 type MatchSnapshot = { eventId: string; matches: Array<Pick<PublicLiveMatch, "id" | "playerAId" | "playerA" | "playerBId" | "playerB" | "scoreA" | "scoreB" | "resultType" | "resultStatus" | "status" | "winnerPlayerId" | "winnerPlayerName">> };
 type PublicationRow = { eventId: string; moduleType: "schedule" | "matches"; status: string; snapshotJson: string | null };
@@ -219,7 +220,11 @@ export async function getPublishedCompetitionEvents(eventIds: string[]): Promise
     if (parsedResult) {
       // Explicit legacy imports can carry a historical published matches row whose snapshot is structurally valid but empty.
       // Only those already-classified legacy events may recover their previously published scores from the imported database rows.
-      if (legacy && parsedResult.matches.length === 0 && hasConfirmedLegacyResults(legacy)) return overlay(base, currentResults(legacy));
+      if (shouldRestoreLegacyPublishedResults({
+        isExplicitLegacy: Boolean(legacy),
+        snapshotMatchCount: parsedResult.matches.length,
+        hasConfirmedLegacyResults: hasConfirmedLegacyResults(legacy),
+      })) return overlay(base, currentResults(legacy!));
       return overlay(base, parsedResult);
     }
     if (legacy) return overlay(base, currentResults(legacy));
