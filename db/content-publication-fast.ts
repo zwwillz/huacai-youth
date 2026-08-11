@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
 import { assertAdminRole, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 import { getContentManagementDataFast } from "./content-management-fast";
-import { createRegulationSnapshot } from "./regulation-snapshot-policy.mjs";
+import { createRegulationSnapshot, REGULATION_SNAPSHOT_VERSION } from "./regulation-snapshot-policy.mjs";
 
 function newId(prefix: string) { return `${prefix}_${randomUUID().replaceAll("-", "")}`; }
 
@@ -37,11 +37,18 @@ export async function setContentPublicationStatusFast(
         drawRules: unknown;
         prizeNote: string | null;
         prizes: unknown;
+        signupNote: string | null;
+        registrationFees: unknown;
       }>>`
-        select competition_format as "competitionFormat",rule_standard as "ruleStandard",draw_rules as "drawRules",
-          prize_note as "prizeNote",prizes
-        from public.event_details
-        where event_id=${eventId}
+        select d.competition_format as "competitionFormat",d.rule_standard as "ruleStandard",d.draw_rules as "drawRules",
+          d.prize_note as "prizeNote",d.prizes,d.signup_note as "signupNote",
+          coalesce((
+            select jsonb_object_agg(g.name,g.registration_fee_cents)
+            from public.event_groups g
+            where g.event_id=${eventId} and g.status='active' and g.name in ('少年组','青年组')
+          ),'{}'::jsonb) as "registrationFees"
+        from public.event_details d
+        where d.event_id=${eventId}
         limit 1
       `;
       regulationSnapshotJson = JSON.stringify(createRegulationSnapshot(detailRows[0] ?? {}));
@@ -67,7 +74,7 @@ export async function setContentPublicationStatusFast(
       (id,actor_user_id,event_id,module_type,target_type,target_id,action,before_json,after_json,created_at)
       values (${newId("log")},${viewer.id},${eventId},'content','publication',${publicationId},${status === "published" ? "publish" : "unpublish"},
         ${JSON.stringify({ status: before.status, versionNo: before.versionNo })},
-        ${JSON.stringify({ status, versionNo, publishedAt: status === "published" ? updatedAt : null, regulationSnapshotVersion: regulationSnapshotJson ? 1 : undefined })},${updatedAt})`;
+        ${JSON.stringify({ status, versionNo, publishedAt: status === "published" ? updatedAt : null, regulationSnapshotVersion: regulationSnapshotJson ? REGULATION_SNAPSHOT_VERSION : undefined })},${updatedAt})`;
   });
   return getContentManagementDataFast(viewer, eventId);
 }
