@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import { getSqlClient } from "./index";
+import { isEventCompetitionReadyToStart } from "./formal-competition";
 import { requireEventAccess, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 
 export type EventLifecycleAction = "open_registration" | "close_registration" | "start_competition" | "finish_event" | "force_finish" | "archive" | "restore";
@@ -61,20 +62,6 @@ function assertOpenRegistrationReady(row: LifecycleRow) {
   if (!validUrl(row.registrationUrl)) throw new Error("当前赛事还不能开放报名，请先填写有效的 http / https 报名入口。");
 }
 
-async function competitionReadyToStart(tx: postgres.TransactionSql, eventId: string) {
-  const rows = await tx<Array<{ ready: boolean }>>`
-    select exists(
-      select 1 from public.event_groups g
-      where g.event_id=${eventId} and g.status='active' and g.participant_roster_status='locked'
-        and (
-          exists(select 1 from public.draw_sessions ds where ds.event_id=g.event_id and ds.group_id=g.id and ds.status<>'void')
-          or exists(select 1 from public.competition_brackets b where b.event_id=g.event_id and b.group_id=g.id and b.status<>'void')
-        )
-    ) as ready
-  `;
-  return Boolean(rows[0]?.ready);
-}
-
 async function unfinishedRankingGroups(tx: postgres.TransactionSql, eventId: string) {
   return tx<Array<{ groupId: string; groupName: string }>>`
     select g.id as "groupId",g.name as "groupName"
@@ -116,7 +103,7 @@ export async function changeEventLifecycle(input: AdminPrincipalInput, eventId: 
       nextStatus = "registration_closed";
     } else if (action === "start_competition") {
       if (current.status !== "registration_closed") throw new Error("只有已经“报名截止”的赛事才能正式进入比赛中。");
-      if (!(await competitionReadyToStart(tx, eventId))) throw new Error("当前还不能开始比赛：至少需要一个组别的正式名单已锁定，并且已经产生正式抽签或签表数据。");
+      if (!(await isEventCompetitionReadyToStart(eventId))) throw new Error("当前还不能开始比赛：至少需要一个组别的正式名单已锁定，并且正式抽签或正式签表已经确认。抽签草稿不能作为开始比赛依据。");
       nextStatus = "in_progress";
     } else if (action === "finish_event") {
       if (current.status !== "in_progress") throw new Error("只有处于“比赛中”的赛事才能正常结束。");
