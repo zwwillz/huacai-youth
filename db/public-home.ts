@@ -73,6 +73,7 @@ type HomeEventRow = {
   coverImage: string | null;
   summary: string | null;
   status: string;
+  isTest: boolean;
   venueName: string | null;
   venueProvince: string | null;
   venueCity: string | null;
@@ -85,7 +86,9 @@ function activeEventIds(rows: HomeEventRow[]) {
   for (const row of rows) byYear.set(row.year, [...(byYear.get(row.year) ?? []), row]);
   const ids = new Set<string>();
   for (const yearRows of byYear.values()) {
-    const selected = [...yearRows].sort((a, b) => {
+    const formalRows = yearRows.filter((row) => !row.isTest);
+    const candidates = formalRows.length ? formalRows : yearRows;
+    const selected = [...candidates].sort((a, b) => {
       const priority = (ACTIVE_PRIORITY[b.status] ?? -20) - (ACTIVE_PRIORITY[a.status] ?? -20);
       if (priority) return priority;
       if (a.status === "finished" || a.status === "archived") {
@@ -155,6 +158,7 @@ export async function getPublicHomeData(): Promise<EventData> {
       coverImage: events.coverImageKey,
       summary: events.summary,
       status: events.status,
+      isTest: events.isTest,
       venueName: venues.name,
       venueProvince: venues.province,
       venueCity: venues.city,
