@@ -57,7 +57,7 @@ function getCachedEventDetail(eventId: string) {
       getEffectivePublicStatus(eventId),
     ]);
     return { station: { ...sourceStation, status }, contentState: contentState ?? null, registration };
-  }, ["public-event-detail-v7", eventId], {
+  }, ["public-event-detail-v8", eventId], {
     revalidate: 60,
     tags: ["public-site", "public-content", `public-event-detail-${eventId}`],
   })();
