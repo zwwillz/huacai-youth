@@ -30,100 +30,29 @@ function refreshPublicEvent(eventId: string) {
   revalidatePath(`/api/public/events/${eventId}/detail`);
 }
 
-function stableMembers(values: string[] | undefined) {
-  return [...new Set(values ?? [])].sort();
-}
-
+function stableMembers(values: string[] | undefined) { return [...new Set(values ?? [])].sort(); }
 function managementSnapshot(data: EventManagementData) {
   return {
-    year: data.event.year,
-    stationNo: data.event.stationNo,
-    fullTitle: data.event.fullTitle,
-    city: data.event.city,
-    startDate: data.event.startDate,
-    endDate: data.event.endDate,
-    registrationStartAt: data.event.registrationStartAt,
-    registrationEndAt: data.event.registrationEndAt,
-    status: data.event.status,
-    organizations: data.event.organizations,
-    groups: data.event.groups.map((group) => ({
-      id: group.id,
-      name: group.name,
-      code: group.code,
-      birthDateFrom: group.birthDateFrom,
-      birthDateTo: group.birthDateTo,
-      minimumAge: group.minimumAge,
-      registrationFeeYuan: group.registrationFeeYuan,
-      registrationLimit: group.registrationLimit,
-      mainDrawSize: group.mainDrawSize,
-      status: group.status,
-      ageRuleText: group.ageRuleText,
-    })),
-    memberIds: stableMembers(data.event.memberIds),
-    minimumAgeNote: data.event.details.minimumAgeNote,
-    signupNote: data.event.details.signupNote,
+    year: data.event.year,stationNo: data.event.stationNo,fullTitle: data.event.fullTitle,city: data.event.city,startDate: data.event.startDate,endDate: data.event.endDate,
+    registrationStartAt: data.event.registrationStartAt,registrationEndAt: data.event.registrationEndAt,status: data.event.status,organizations: data.event.organizations,
+    groups: data.event.groups.map((group) => ({ id: group.id,name: group.name,code: group.code,birthDateFrom: group.birthDateFrom,birthDateTo: group.birthDateTo,minimumAge: group.minimumAge,registrationFeeYuan: group.registrationFeeYuan,registrationLimit: group.registrationLimit,mainDrawSize: group.mainDrawSize,status: group.status,ageRuleText: group.ageRuleText })),
+    memberIds: stableMembers(data.event.memberIds),minimumAgeNote: data.event.details.minimumAgeNote,signupNote: data.event.details.signupNote,
   };
 }
-
 function inputManagementSnapshot(input: EventManagementInput) {
   return {
-    year: Number(input.year),
-    stationNo: Number(input.stationNo),
-    fullTitle: input.fullTitle.trim(),
-    city: input.city.trim(),
-    startDate: input.startDate,
-    endDate: input.endDate,
-    registrationStartAt: input.registrationStartAt ?? "",
-    registrationEndAt: input.registrationEndAt ?? "",
-    status: input.status,
-    organizations: input.organizations,
-    groups: (input.groups ?? []).map((group) => ({
-      id: group.id,
-      name: group.name,
-      code: group.code,
-      birthDateFrom: group.birthDateFrom ?? "",
-      birthDateTo: group.birthDateTo ?? "",
-      minimumAge: group.minimumAge ?? null,
-      registrationFeeYuan: Number(group.registrationFeeYuan ?? 0),
-      registrationLimit: group.registrationLimit ?? null,
-      mainDrawSize: group.mainDrawSize ?? null,
-      status: group.status,
-      ageRuleText: group.ageRuleText ?? "",
-    })),
-    memberIds: stableMembers(input.memberIds),
-    minimumAgeNote: input.details.minimumAgeNote ?? "",
-    signupNote: input.details.signupNote ?? "",
+    year: Number(input.year),stationNo: Number(input.stationNo),fullTitle: input.fullTitle.trim(),city: input.city.trim(),startDate: input.startDate,endDate: input.endDate,
+    registrationStartAt: input.registrationStartAt ?? "",registrationEndAt: input.registrationEndAt ?? "",status: input.status,organizations: input.organizations,
+    groups: (input.groups ?? []).map((group) => ({ id: group.id,name: group.name,code: group.code,birthDateFrom: group.birthDateFrom ?? "",birthDateTo: group.birthDateTo ?? "",minimumAge: group.minimumAge ?? null,registrationFeeYuan: Number(group.registrationFeeYuan ?? 0),registrationLimit: group.registrationLimit ?? null,mainDrawSize: group.mainDrawSize ?? null,status: group.status,ageRuleText: group.ageRuleText ?? "" })),
+    memberIds: stableMembers(input.memberIds),minimumAgeNote: input.details.minimumAgeNote ?? "",signupNote: input.details.signupNote ?? "",
   };
 }
-
-function isOverviewOnlyUpdate(current: EventManagementData, input: EventManagementInput) {
-  return JSON.stringify(managementSnapshot(current)) === JSON.stringify(inputManagementSnapshot(input));
-}
-
+function isOverviewOnlyUpdate(current: EventManagementData, input: EventManagementInput) { return JSON.stringify(managementSnapshot(current)) === JSON.stringify(inputManagementSnapshot(input)); }
 function overviewInput(input: EventManagementInput): EventOverviewInput {
   return {
-    eventId: input.eventId,
-    shortTitle: input.shortTitle,
-    summary: input.summary,
-    publishStatus: input.publishStatus,
-    coverImageKey: input.coverImageKey,
-    venue: { ...input.venue },
-    details: {
-      sponsorLabel: input.details.sponsorLabel,
-      durationLabel: input.details.durationLabel,
-      qualifierDateLabel: input.details.qualifierDateLabel,
-      mainDateLabel: input.details.mainDateLabel,
-      totalPrizeLabel: input.details.totalPrizeLabel,
-      mainSizeLabel: input.details.mainSizeLabel,
-    },
-    sponsors: (input.sponsors ?? []).map((sponsor) => ({
-      name: sponsor.name,
-      sponsorType: sponsor.sponsorType,
-      logoKey: sponsor.logoKey,
-      websiteUrl: sponsor.websiteUrl,
-      isPublished: sponsor.isPublished,
-    })),
-    guides: [],
+    eventId: input.eventId,shortTitle: input.shortTitle,summary: input.summary,publishStatus: input.publishStatus,coverImageKey: input.coverImageKey,venue: { ...input.venue },
+    details: { sponsorLabel: input.details.sponsorLabel,durationLabel: input.details.durationLabel,qualifierDateLabel: input.details.qualifierDateLabel,mainDateLabel: input.details.mainDateLabel,totalPrizeLabel: input.details.totalPrizeLabel,mainSizeLabel: input.details.mainSizeLabel },
+    sponsors: (input.sponsors ?? []).map((sponsor) => ({ name: sponsor.name,sponsorType: sponsor.sponsorType,logoKey: sponsor.logoKey,websiteUrl: sponsor.websiteUrl,isPublished: sponsor.isPublished })),guides: [],
   };
 }
 
@@ -136,9 +65,7 @@ export async function GET(request: Request) {
   try {
     const data = await getEventManagementDataFast(viewer, eventId);
     return Response.json({ data }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `app;dur=${(performance.now() - startedAt).toFixed(1)}` } });
-  } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "赛事资料读取失败。" }, { status: 400 });
-  }
+  } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "赛事资料读取失败。" }, { status: 400 }); }
 }
 
 export async function POST(request: Request) {
@@ -146,7 +73,6 @@ export async function POST(request: Request) {
   if (!viewer) return Response.json({ error: "请先登录后台。" }, { status: 401 });
   try {
     const payload = await request.json() as RequestPayload;
-
     if ("action" in payload && payload.action === "save_overview") {
       const input = payload.data;
       const data = await saveEventOverviewData(viewer.username, input);
@@ -159,25 +85,21 @@ export async function POST(request: Request) {
     const rows = await sql<Array<{ status: string }>>`select status from public.events where id=${input.eventId} limit 1`;
     if (rows[0]?.status === "archived") throw new Error("已归档赛事为只读状态，不能继续修改。");
 
-    // The content-publishing screen historically posted the entire event bundle
-    // even when only overview fields changed. Detect that case server-side and
-    // use the atomic overview writer so event data + overview publication cannot split.
     const current = await getEventManagementDataFast(viewer, input.eventId);
+    if (input.status !== current.event.status) {
+      throw new Error("赛事生命周期不能作为普通资料直接修改，请使用赛事页面的“下一步流程”操作推进状态。");
+    }
     if (isOverviewOnlyUpdate(current, input)) {
       const data = await saveEventOverviewData(viewer.username, overviewInput(input));
       refreshPublicEvent(input.eventId);
       return Response.json({ data }, { headers: { "Cache-Control": "private, no-store" } });
     }
-    if (input.publishStatus !== current.event.publishStatus) {
-      throw new Error("赛事概览发布或撤回请前往“赛事运营 → 内容发布 → 赛事概览”操作，以保证发布状态原子更新。");
-    }
+    if (input.publishStatus !== current.event.publishStatus) throw new Error("赛事概览发布或撤回请前往“赛事运营 → 内容发布 → 赛事概览”操作，以保证发布状态原子更新。");
 
-    await saveEventManagementData(viewer.username, input);
+    await saveEventManagementData(viewer.username, { ...input, status: current.event.status as EventManagementInput["status"] });
     await normalizeEventJson(input.eventId);
     const data = await getEventManagementDataFast(viewer, input.eventId);
     refreshPublicEvent(input.eventId);
     return Response.json({ data });
-  } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "赛事资料保存失败。" }, { status: 400 });
-  }
+  } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "赛事资料保存失败。" }, { status: 400 }); }
 }
