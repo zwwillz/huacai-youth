@@ -7,6 +7,7 @@ import AdminWorkspaceShell from "../../admin-workspace-shell";
 import EventEventWorkspaceClient from "../event-event-workspace-client";
 import { captureAdminLoad } from "../../capture-admin-load";
 import "../event-management-v2.css";
+import "../event-lifecycle-panel.css";
 
 export const dynamic = "force-dynamic";
 
