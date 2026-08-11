@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { EventData, Station } from "@/app/public-types";
 import { getDb } from "./index";
+import { registrationTimeState } from "./registration-time-policy.mjs";
 import { events, venues } from "./schema";
 
 const EVENT_STATUS: Record<string, string> = {
@@ -70,6 +71,8 @@ type HomeEventRow = {
   city: string;
   startDate: string;
   endDate: string;
+  registrationStartAt: string | null;
+  registrationEndAt: string | null;
   coverImage: string | null;
   summary: string | null;
   status: string;
@@ -81,6 +84,18 @@ type HomeEventRow = {
   venueAddress: string | null;
 };
 
+function effectiveLifecycleStatus(row: HomeEventRow) {
+  if (row.status !== "registration_open") return row.status;
+  return registrationTimeState(row.registrationStartAt || "", row.registrationEndAt || "") === "closed" ? "registration_closed" : row.status;
+}
+function publicStatusLabel(row: HomeEventRow) {
+  if (row.status !== "registration_open") return EVENT_STATUS[row.status] ?? "状态待确认";
+  const timeState = registrationTimeState(row.registrationStartAt || "", row.registrationEndAt || "");
+  if (timeState === "not_started") return "报名即将开始";
+  if (timeState === "closed") return "报名已截止";
+  return "报名中";
+}
+
 function activeEventIds(rows: HomeEventRow[]) {
   const byYear = new Map<number, HomeEventRow[]>();
   for (const row of rows) byYear.set(row.year, [...(byYear.get(row.year) ?? []), row]);
@@ -89,9 +104,11 @@ function activeEventIds(rows: HomeEventRow[]) {
     const formalRows = yearRows.filter((row) => !row.isTest);
     const candidates = formalRows.length ? formalRows : yearRows;
     const selected = [...candidates].sort((a, b) => {
-      const priority = (ACTIVE_PRIORITY[b.status] ?? -20) - (ACTIVE_PRIORITY[a.status] ?? -20);
+      const aStatus = effectiveLifecycleStatus(a);
+      const bStatus = effectiveLifecycleStatus(b);
+      const priority = (ACTIVE_PRIORITY[bStatus] ?? -20) - (ACTIVE_PRIORITY[aStatus] ?? -20);
       if (priority) return priority;
-      if (a.status === "finished" || a.status === "archived") {
+      if (aStatus === "finished" || aStatus === "archived") {
         const dateOrder = b.endDate.localeCompare(a.endDate);
         if (dateOrder) return dateOrder;
       }
@@ -116,7 +133,7 @@ function loadingStation(row: HomeEventRow, active: boolean): Station {
     stop: `第${chineseNumber(row.stationNo)}站`,
     city: `${row.city}站`,
     shortCity: shortCity(row.city),
-    status: EVENT_STATUS[row.status] ?? "状态待确认",
+    status: publicStatusLabel(row),
     active,
     title: row.title,
     sponsor: "中国华彩十六球青少年系列赛",
@@ -155,6 +172,8 @@ export async function getPublicHomeData(): Promise<EventData> {
       city: events.city,
       startDate: events.startDate,
       endDate: events.endDate,
+      registrationStartAt: events.registrationStartAt,
+      registrationEndAt: events.registrationEndAt,
       coverImage: events.coverImageKey,
       summary: events.summary,
       status: events.status,
