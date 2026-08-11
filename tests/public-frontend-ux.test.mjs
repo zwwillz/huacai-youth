@@ -33,8 +33,8 @@ test("schedule and match navigation preserve compact context", () => {
   assert.match(schedule, /public-master-detail-content \.draw-back\{display:none!important\}/);
   assert.match(schedule, /赛程说明：/);
   assert.match(enhancer, /params\.set\("date", value\)/);
-  assert.match(enhancer, /scrollIntoView/);
-  assert.match(enhancer, /index <= 0 \? "start" : index >= buttons\.length - 1 \? "end" : "center"/);
+  assert.match(enhancer, /nav\.scrollTo\(\{ left, behavior: "smooth" \}\)/);
+  assert.match(enhancer, /index <= 0 \? 0 : index >= buttons\.length - 1 \? maxLeft/);
 });
 
 test("published guides return to their own event overview", () => {
