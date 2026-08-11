@@ -26,7 +26,8 @@ function now() { return new Date().toISOString(); }
 function parseChinaLocal(value: string | null) {
   if (!value) return NaN;
   if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(value)) return Date.parse(value);
-  return Date.parse(`${value}:00+08:00`);
+  const normalized = value.length === 16 ? `${value}:00` : value;
+  return Date.parse(`${normalized}+08:00`);
 }
 function validUrl(value: string | null) {
   if (!value) return false;
