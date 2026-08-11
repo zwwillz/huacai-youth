@@ -23,3 +23,5 @@ Taiyuan U16 exposed `cannot call jsonb_to_recordset on a non-array` while genera
 The draw persistence transport now keeps the existing calculation and transaction boundaries but writes `draw_prelim_matches`, `draw_participants`, and `draw_slots` as chunked scalar-parameter `INSERT ... VALUES` statements. No qualification-plan, randomization, division, slot, 16+8 advancement, q1/q2, or seed algorithm was changed.
 
 Taiyuan validation remains read-only. U16 q1 still contains only its two historical `void` sessions; the failed browser attempt did not leave a new draft.
+
+Final code validation is green on TypeScript, ESLint, Core Regression, and production builds. The remaining gate is EdgeOne Preview browser re-test of Taiyuan U16 draw generation; PR #60 remains Draft until that real path passes.
