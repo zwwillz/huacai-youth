@@ -1,4 +1,5 @@
 import { getSqlClient } from "./index";
+import { getEventWorkflowSummaries, type EventWorkflowSummary } from "./event-workflow";
 import { assertAdminRole, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 
 export type DashboardRecentEvent = {
@@ -12,6 +13,14 @@ export type DashboardRecentEvent = {
   venueName: string;
 };
 
+export type DashboardEventOption = {
+  id: string;
+  title: string;
+  status: string;
+  lifecycleLabel: string;
+  urgencyScore: number;
+};
+
 export type AdminDashboardSummary = {
   metrics: {
     eventCount: number;
@@ -20,6 +29,8 @@ export type AdminDashboardSummary = {
     draftPublicationCount: number;
   };
   recentEvents: DashboardRecentEvent[];
+  eventOptions: DashboardEventOption[];
+  currentWorkflow: EventWorkflowSummary | null;
 };
 
 function normalizeRecentEvents(value: unknown): DashboardRecentEvent[] {
@@ -35,7 +46,7 @@ function normalizeRecentEvents(value: unknown): DashboardRecentEvent[] {
   return [];
 }
 
-export async function getAdminDashboardSummaryFast(input: AdminPrincipalInput): Promise<AdminDashboardSummary> {
+async function getDashboardMetrics(input: AdminPrincipalInput) {
   const principal = await resolveAdminPrincipal(input);
   const sql = getSqlClient();
   const rows = await sql<Array<{
@@ -61,19 +72,13 @@ export async function getAdminDashboardSummaryFast(input: AdminPrincipalInput): 
     )
     select
       (select count(*) from allowed_events)::int as "eventCount",
-      (select count(*) from allowed_events where status in ('registration_open','in_progress'))::int as "activeEventCount",
+      (select count(*) from allowed_events where status in ('registration_open','registration_closed','in_progress'))::int as "activeEventCount",
       (select count(*) from public.registrations r join allowed_events ae on ae.id=r.event_id where r.status='pending')::int as "pendingRegistrationCount",
       (select count(*) from public.publications p join allowed_events ae on ae.id=p.event_id where p.status='draft')::int as "draftPublicationCount",
       coalesce((
         select jsonb_agg(jsonb_build_object(
-          'id',id,
-          'shortTitle',short_title,
-          'stationNo',station_no,
-          'status',status,
-          'startDate',start_date,
-          'endDate',end_date,
-          'city',city,
-          'venueName',coalesce(venue_name,'')
+          'id',id,'shortTitle',short_title,'stationNo',station_no,'status',status,'startDate',start_date,'endDate',end_date,
+          'city',city,'venueName',coalesce(venue_name,'')
         ) order by year desc,station_no desc)
         from recent
       ), '[]'::jsonb) as "recentEvents"
@@ -87,6 +92,28 @@ export async function getAdminDashboardSummaryFast(input: AdminPrincipalInput): 
       draftPublicationCount: Number(row?.draftPublicationCount ?? 0),
     },
     recentEvents: normalizeRecentEvents(row?.recentEvents),
+  };
+}
+
+export async function getAdminDashboardSummaryFast(input: AdminPrincipalInput, requestedEventId = ""): Promise<AdminDashboardSummary> {
+  const [base, workflows] = await Promise.all([
+    getDashboardMetrics(input),
+    getEventWorkflowSummaries(input),
+  ]);
+  const currentWorkflow = workflows.find((item) => item.event.id === requestedEventId)
+    ?? workflows.find((item) => item.event.status !== "archived")
+    ?? workflows[0]
+    ?? null;
+  return {
+    ...base,
+    eventOptions: workflows.map((workflow) => ({
+      id: workflow.event.id,
+      title: workflow.event.title,
+      status: workflow.event.status,
+      lifecycleLabel: workflow.lifecycle.label,
+      urgencyScore: workflow.urgencyScore,
+    })),
+    currentWorkflow,
   };
 }
 
