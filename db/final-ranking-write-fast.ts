@@ -18,13 +18,7 @@ function labelFor(order: number) {
 }
 function parsePrizeAmount(value: string) { const digits = value.replace(/[^0-9]/g, ""); return digits ? Number(digits) * 100 : 0; }
 
-type BatchForWrite = {
-  eventId: string;
-  groupId: string;
-  status: string;
-  groupName: string;
-  prizes: unknown;
-};
+type BatchForWrite = { eventId: string; groupId: string; status: string; groupName: string; prizes: unknown };
 
 async function loadBatchForWrite(principal: Awaited<ReturnType<typeof resolveAdminPrincipal>>, batchId: string) {
   const sql = getSqlClient();
@@ -41,11 +35,7 @@ async function loadBatchForWrite(principal: Awaited<ReturnType<typeof resolveAdm
   `;
   const batch = rows[0];
   if (!batch) throw new Error("没有找到最终排名批次，或当前账号未被分配到本站。");
-  await requireEventAccess(principal, batch.eventId, {
-    write: true,
-    allowedRoles: ["system_admin", "committee"],
-    deniedMessage: "最终排名维护需要系统管理员或组委会权限。",
-  });
+  await requireEventAccess(principal, batch.eventId, { write: true,allowedRoles: ["system_admin", "committee"],deniedMessage: "最终排名维护需要系统管理员或组委会权限。" });
   return batch;
 }
 
@@ -73,14 +63,7 @@ export async function saveFinalRankingManualOrderFast(inputPrincipal: AdminPrinc
     const tier = labelFor(displayOrder);
     return { displayOrder, placementLabel: tier.label, playerId, playerName: playerMap.get(playerId)!, prizeDisplay: prizeMap.get(tier.label) || "", isExactPlace: tier.exact };
   });
-  const updateRows = ranking.map((row) => ({
-    player_id: row.playerId,
-    display_order: row.displayOrder,
-    placement_label: row.placementLabel,
-    prize_display: row.prizeDisplay,
-    prize_amount_cents: parsePrizeAmount(row.prizeDisplay),
-    is_exact_place: row.isExactPlace,
-  }));
+  const updateRows = ranking.map((row) => ({ player_id: row.playerId,display_order: row.displayOrder,placement_label: row.placementLabel,prize_display: row.prizeDisplay,prize_amount_cents: parsePrizeAmount(row.prizeDisplay),is_exact_place: row.isExactPlace }));
   const timestamp = now();
   const note = String(reason || "").trim() || "组委会人工调整";
   await sql.begin(async (tx) => {
@@ -139,15 +122,6 @@ export async function publishFinalRankingFast(inputPrincipal: AdminPrincipalInpu
     await tx`insert into public.audit_logs (id,actor_user_id,event_id,module_type,target_type,target_id,action,created_at)
       values (${newId("log")},${viewer.id},${batch.eventId},'competition','final_ranking',${batchId},'publish_final_ranking',${timestamp})`;
   });
-  await sql`
-    update public.events e set status='finished',updated_at=${timestamp},updated_by=${viewer.id}
-    where e.id=${batch.eventId}
-      and exists(select 1 from public.event_groups g where g.event_id=e.id and g.status='active')
-      and not exists(
-        select 1 from public.event_groups g
-        where g.event_id=e.id and g.status='active'
-          and (select count(*) from public.event_rankings r where r.event_id=e.id and r.group_id=g.id and r.status='published') < 64
-      )
-  `;
+  // Publishing is a content action. Event lifecycle now advances only through the explicit lifecycle state machine.
   return { ok: true };
 }
