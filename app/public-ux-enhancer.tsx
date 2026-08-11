@@ -27,10 +27,10 @@ function replaceDateParam(value: string) {
 
 function positionActiveDay(nav: HTMLElement, buttons: HTMLButtonElement[], active: HTMLButtonElement) {
   const index = buttons.indexOf(active);
-  const inline: ScrollLogicalPosition = index <= 0 ? "start" : index >= buttons.length - 1 ? "end" : "center";
-  active.scrollIntoView({ block: "nearest", inline, behavior: "smooth" });
-  // Keep vertical position completely untouched; only the horizontal date strip should move.
-  nav.scrollTop = 0;
+  const maxLeft = Math.max(0, nav.scrollWidth - nav.clientWidth);
+  const centered = active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
+  const left = index <= 0 ? 0 : index >= buttons.length - 1 ? maxLeft : Math.min(maxLeft, Math.max(0, centered));
+  nav.scrollTo({ left, behavior: "smooth" });
 }
 
 function syncMatchDay(preferUrl: boolean) {
@@ -64,7 +64,7 @@ export default function PublicUxEnhancer() {
 
     const root = document.querySelector<HTMLElement>("main[data-huacai-view]");
     const observer = root ? new MutationObserver(() => queueSync(true)) : null;
-    observer?.observe(root!, { childList: true, subtree: true });
+    if (root && observer) observer.observe(root, { childList: true, subtree: true });
 
     const onClick = (event: MouseEvent) => {
       const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(".match-days button");
