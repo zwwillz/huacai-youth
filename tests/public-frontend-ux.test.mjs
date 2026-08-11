@@ -6,22 +6,35 @@ function source(path) {
   return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("public event shell keeps the compact mobile navigation contract", () => {
+test("public event shell keeps compact mobile navigation and visible center title", () => {
   const app = source("app/event-app.tsx");
   const css = source("app/public-ux-polish.css");
   assert.doesNotMatch(app, /返回赛事中心/);
   assert.match(app, /admin-short[^>]*[^]*>管</);
+  assert.match(app, /view === "players" \? "球员数据"[^]*station\?\.city \|\| "赛事中心"/);
+  assert.match(css, /\.top h3\{display:block!important\}/);
+  assert.match(css, /\.top \.admin\{grid-column:3;justify-self:end/);
   assert.match(css, /grid-template-columns:repeat\(5,minmax\(0,1fr\)\)!important/);
   assert.match(css, /min-height:42px!important/);
   assert.doesNotMatch(css, /safe-area-inset|viewport-fit|Home Indicator/i);
 });
 
-test("overview and regulation content do not expose misleading or empty content", () => {
+test("overview group cards restore age, main draw size and champion prize from data", () => {
+  const app = source("app/event-app.tsx");
+  const publicData = source("db/public.ts");
+  assert.doesNotMatch(app, /station\.format\[0\]/);
+  assert.match(app, /station\.age\[group\]/);
+  assert.match(app, /groupMainSize\(station, group\)/);
+  assert.match(app, /station\.prizes\[group\]\[0\]/);
+  assert.match(publicData, /registrationFeeCents: eventGroups\.registrationFeeCents/);
+  assert.match(publicData, /mainDrawSize: eventGroups\.mainDrawSize/);
+  assert.match(publicData, /groupDetails: groupDetailsByEvent\.get\(row\.id\)/);
+});
+
+test("regulation content remains snapshot-backed and handles empty rule standard", () => {
   const app = source("app/event-app.tsx");
   const content = source("db/public-content.ts");
-  assert.doesNotMatch(app, /station\.format\[0\]/);
   assert.doesNotMatch(app, /pdf-pending/);
-  assert.match(app, /冠军奖金 \{station\.prizes\.少年组/);
   assert.match(app, /<h2>\{ruleStandard \? "比赛规则与赛制" : "赛制"\}<\/h2>/);
   assert.match(app, /ruleStandard && <div className="rule-standard"/);
   assert.match(app, /const competitionFormat = regulation\?\.competitionFormat/);
@@ -44,11 +57,38 @@ test("placeholder participant guide is isolated to the current event", () => {
   assert.match(app, /<ParticipantGuide station=\{station\}/);
 });
 
-test("public regulation has no fixed single-station fee", () => {
+test("published guides use prefetched navigation, cached data and unified station header", () => {
   const app = source("app/event-app.tsx");
+  const guidePage = source("app/guide/[guideId]/page.tsx");
+  assert.match(app, /<Link prefetch href=\{`\/guide\//);
+  assert.match(guidePage, /unstable_cache/);
+  assert.match(guidePage, /revalidate: 300/);
+  assert.match(guidePage, /<header className="top public-guide-unified-top"/);
+  assert.match(guidePage, /<h3>\{stationTitle\}<\/h3>/);
+  assert.match(guidePage, /event=\$\{encodeURIComponent\(guide\.eventId\)\}&tab=overview/);
+});
+
+test("public regulation fees are dynamic, grouped and remain inside published snapshot", () => {
+  const app = source("app/event-app.tsx");
+  const publisher = source("db/content-publication-fast.ts");
+  const migration = source("db/migrations/20260812_upgrade_regulation_snapshot_fees.sql");
   assert.doesNotMatch(app, /¥100/);
-  assert.doesNotMatch(app, /单站参赛费/);
-  assert.match(app, /<h2>报名须知<\/h2>[^]*\{station\.signup\}/);
+  assert.match(app, /regulation\?\.registrationFees\.少年组/);
+  assert.match(app, /regulation\?\.registrationFees\.青年组/);
+  assert.match(app, /const sameFee = Boolean\(u16Fee && u20Fee && u16Fee === u20Fee\)/);
+  assert.match(app, /public-fee-grid/);
+  assert.match(app, /本站参赛费用/);
+  assert.match(publisher, /registration_fee_cents/);
+  assert.match(publisher, /signup_note as "signupNote"/);
+  assert.match(migration, /'registrationFees'/);
+  assert.match(migration, /'signupNote'/);
+  assert.doesNotMatch(migration, /update public\.events|update public\.matches|update public\.event_documents/);
+});
+
+test("regulation format table is compact on mobile", () => {
+  const css = source("app/public-ux-polish.css");
+  assert.match(css, /\.regulation \.format-table>div\{min-width:500px!important/);
+  assert.doesNotMatch(css, /\.regulation \.format-table>div\{min-width:650px/);
 });
 
 test("regulation publication writes a complete snapshot and public only reads it", () => {
@@ -63,7 +103,7 @@ test("regulation publication writes a complete snapshot and public only reads it
   assert.match(publicContent, /regulation: RegulationSnapshot \| null/);
 });
 
-test("regulation backfill is narrow and snapshot-complete", () => {
+test("original regulation backfill remains narrow and snapshot-complete", () => {
   const migration = source("db/migrations/20260812_backfill_regulation_publication_snapshots.sql");
   for (const field of ["ruleStandard", "competitionFormat", "drawRules", "prizeNote", "prizes"]) assert.match(migration, new RegExp(`'${field}'`));
   assert.match(migration, /p\.module_type = 'regulation'/);
@@ -72,13 +112,24 @@ test("regulation backfill is narrow and snapshot-complete", () => {
   assert.doesNotMatch(migration, /update public\.events|update public\.matches|update public\.event_documents/);
 });
 
-test("schedule and match navigation preserve compact context", () => {
+test("schedule group switches stay independent and finished events override stale phase status", () => {
+  const schedule = source("app/public-master-schedule.tsx");
+  assert.match(schedule, /const effectiveGroup = group;/);
+  assert.doesNotMatch(schedule, /!u16Published && u20Published/);
+  assert.match(schedule, /const eventFinished = station\.status === "已结束" \|\| station\.status === "已归档"/);
+  assert.match(schedule, /const status = eventFinished \? "已结束" : phase\?\.status \|\| "待开始"/);
+  assert.match(schedule, /赛程待组委会发布/);
+});
+
+test("match navigation keeps date context and ended events default to their final available day", () => {
   const schedule = source("app/public-master-schedule.tsx");
   const enhancer = source("app/public-ux-enhancer.tsx");
   assert.doesNotMatch(schedule, /<strong>晋级说明<\/strong>/);
   assert.match(schedule, /public-master-detail-content \.draw-back\{display:none!important\}/);
   assert.match(schedule, /赛程说明：/);
   assert.match(enhancer, /params\.set\("date", value\)/);
+  assert.match(enhancer, /currentEventFinished\(\)/);
+  assert.match(enhancer, /const last = buttons\.at\(-1\)/);
   assert.match(enhancer, /nav\.scrollTo\(\{ left, behavior: "smooth" \}\)/);
   assert.match(enhancer, /index <= 0 \? 0 : index >= buttons\.length - 1 \? maxLeft/);
 });
@@ -87,7 +138,6 @@ test("published guides return to their own event overview", () => {
   const guidePage = source("app/guide/[guideId]/page.tsx");
   const guides = source("db/guides.ts");
   assert.match(guides, /eventId: row\.event_id/);
-  assert.match(guidePage, /event=\$\{encodeURIComponent\(guide\.eventId\)\}&tab=overview/);
   assert.match(guidePage, /返回赛事概览/);
 });
 
