@@ -27,12 +27,12 @@ function toDraft(data: EventManagementData): EventManagementInput {
   };
 }
 
-export default function EventManagementClient({ initialData, initialWorkflow }: { initialData: EventManagementData; initialWorkflow: EventWorkflowSummary }) {
+export default function EventManagementClient({ initialData, initialWorkflow }: { initialData: EventManagementData; initialWorkflow?: EventWorkflowSummary }) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
   const [draft, setDraft] = useState<EventManagementInput>(() => toDraft(initialData));
-  const [workflow, setWorkflow] = useState<EventWorkflowSummary>(initialWorkflow);
-  const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [workflow, setWorkflow] = useState<EventWorkflowSummary | null>(initialWorkflow ?? null);
+  const [workflowLoading, setWorkflowLoading] = useState(!initialWorkflow);
   const [working, setWorking] = useState(false);
   const [lifecycleWorking, setLifecycleWorking] = useState(false);
   const [notice, setNotice] = useState("");
@@ -40,7 +40,7 @@ export default function EventManagementClient({ initialData, initialWorkflow }: 
   const { ask, dialog } = useAdminActionDialog();
   const archived = draft.status === "archived";
   const assignedAccounts = useMemo(() => new Set(draft.memberIds ?? []), [draft.memberIds]);
-  const nextAction = workflow.nextAction;
+  const nextAction = workflow?.nextAction ?? null;
 
   const refreshWorkflow = useCallback(async () => {
     setWorkflowLoading(true);
@@ -93,7 +93,7 @@ export default function EventManagementClient({ initialData, initialWorkflow }: 
   };
 
   const runLifecycle = async () => {
-    if (nextAction.kind !== "lifecycle" || !nextAction.lifecycleAction || lifecycleWorking) return;
+    if (!nextAction || nextAction.kind !== "lifecycle" || !nextAction.lifecycleAction || lifecycleWorking) return;
     const ok = await ask({ title: nextAction.title, description: nextAction.description, confirmLabel: nextAction.title });
     if (ok) await postLifecycle(nextAction.lifecycleAction);
   };
@@ -104,7 +104,7 @@ export default function EventManagementClient({ initialData, initialWorkflow }: 
 
   const forceFinish = async () => {
     if (data.viewerRole !== "system_admin" || lifecycleWorking || archived || draft.status === "finished") return;
-    let currentWorkflow: EventWorkflowSummary | null = workflow;
+    let currentWorkflow = workflow;
     if (!currentWorkflow) currentWorkflow = await refreshWorkflow();
     if (!currentWorkflow) return;
     const incomplete = currentWorkflow.groups.filter((group) => !["confirmed", "published"].includes(group.rankingStatus)).map((group) => `${group.groupName}最终排名尚未确认`);
@@ -136,10 +136,10 @@ export default function EventManagementClient({ initialData, initialWorkflow }: 
             <label><span>比赛开始日期</span><input disabled={archived} type="date" value={draft.startDate} onChange={(e) => updateRoot("startDate", e.target.value)} required /></label>
             <label><span>比赛结束日期</span><input disabled={archived} type="date" value={draft.endDate} onChange={(e) => updateRoot("endDate", e.target.value)} required /></label>
           </div>
-          {!archived && <div className="event-v2-lifecycle-actions"><div><div><small>CURRENT / NEXT ACTION</small><strong>{workflowLoading ? "正在同步统一 Workflow…" : nextAction.title || "当前没有新的流程动作"}</strong><p>{workflowLoading ? "正在根据当前赛事、报名和竞赛事实刷新下一步。" : nextAction.description || "当前页面不会根据赛事状态自行猜测下一步，请返回工作台查看最新流程状态。"}</p></div>
-            {!workflowLoading && nextAction.kind === "lifecycle" && nextAction.lifecycleAction && <button type="button" disabled={lifecycleWorking} onClick={runLifecycle}>{lifecycleWorking ? "处理中…" : nextAction.title}</button>}
-            {!workflowLoading && nextAction.kind === "link" && nextAction.code === "complete_event_basics" && <button type="button" onClick={focusCurrentAction}>{nextAction.title}</button>}
-            {!workflowLoading && nextAction.kind === "link" && nextAction.code !== "complete_event_basics" && nextAction.href && <Link href={nextAction.href}>{nextAction.title}</Link>}
+          {!archived && <div className="event-v2-lifecycle-actions"><div><div><small>CURRENT / NEXT ACTION</small><strong>{workflowLoading || !nextAction ? "正在读取统一 Workflow…" : nextAction.title}</strong><p>{workflowLoading || !nextAction ? "正在根据当前赛事、报名和竞赛事实读取下一步。" : nextAction.description}</p></div>
+            {!workflowLoading && nextAction?.kind === "lifecycle" && nextAction.lifecycleAction && <button type="button" disabled={lifecycleWorking} onClick={runLifecycle}>{lifecycleWorking ? "处理中…" : nextAction.title}</button>}
+            {!workflowLoading && nextAction?.kind === "link" && nextAction.code === "complete_event_basics" && <button type="button" onClick={focusCurrentAction}>{nextAction.title}</button>}
+            {!workflowLoading && nextAction?.kind === "link" && nextAction.code !== "complete_event_basics" && nextAction.href && <Link href={nextAction.href}>{nextAction.title}</Link>}
           </div>
             {data.viewerRole === "system_admin" && !["finished","archived"].includes(draft.status) && <details className="event-v2-lifecycle-advanced"><summary>高级操作 / 异常处理</summary><p>强制结束会绕过正常排名确认条件，必须填写原因并写入操作日志。普通赛事请不要使用。</p><button type="button" disabled={lifecycleWorking} onClick={forceFinish}>强制结束赛事</button></details>}
           </div>}
