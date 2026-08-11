@@ -3,13 +3,14 @@ import { getAdminDashboardSummaryFast } from "@/db/admin-structure-first";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   const startedAt = performance.now();
   const viewer = await getAdminViewer();
   if (!viewer) return Response.json({ error: "登录状态已失效，请重新登录。" }, { status: 401 });
 
   try {
-    const data = await getAdminDashboardSummaryFast(viewer);
+    const requestedEventId = new URL(request.url).searchParams.get("event") || "";
+    const data = await getAdminDashboardSummaryFast(viewer, requestedEventId);
     return Response.json({ data }, {
       headers: {
         "Cache-Control": "private, no-store",
