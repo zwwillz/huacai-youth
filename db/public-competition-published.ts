@@ -12,6 +12,9 @@ function emptyEvent(eventId: string): PublicCompetitionEvent {
 function hasCompetitionData(event: PublicCompetitionEvent | null) {
   return Boolean(event && (event.matches.length || event.phaseSummaries.length || event.mainRoster.length));
 }
+function hasConfirmedLegacyResults(event: PublicCompetitionEvent | null) {
+  return Boolean(event?.matches.some((match) => match.resultStatus === "confirmed" && match.scoreA !== null && match.scoreB !== null));
+}
 function legacyRoundNo(match: CompetitionMatch) {
   if (match.phaseId?.startsWith("qualifier")) return /附加赛|N进512/.test(`${match.round} ${match.progress}`) ? 0 : /256进128/.test(match.progress) ? 2 : /128进64/.test(match.progress) ? 3 : /64进32/.test(match.progress) ? 4 : /32进16/.test(match.progress) ? 5 : 1;
   if (match.phaseId === "main-one") return /晋级轮/.test(match.round) ? 2 : 1;
@@ -213,9 +216,14 @@ export async function getPublishedCompetitionEvents(eventIds: string[]): Promise
 
     if (matches?.status !== "published") return base;
     const parsedResult = parseMatches(matches.snapshotJson, eventId);
-    if (parsedResult) return overlay(base, parsedResult);
+    if (parsedResult) {
+      // Explicit legacy imports can carry a historical published matches row whose snapshot is structurally valid but empty.
+      // Only those already-classified legacy events may recover their previously published scores from the imported database rows.
+      if (legacy && parsedResult.matches.length === 0 && hasConfirmedLegacyResults(legacy)) return overlay(base, currentResults(legacy));
+      return overlay(base, parsedResult);
+    }
     if (legacy) return overlay(base, currentResults(legacy));
-    // Never read live Competition-engine results for a new database event when its published snapshot is absent/invalid.
+    // Never read live Competition-engine results for a new database event when its published snapshot is absent/invalid/empty.
     return base;
   });
 }
