@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
 import { assertAdminRole, resolveAdminPrincipal, type AdminPrincipalInput } from "./permissions";
 import { getContentManagementDataFast } from "./content-management-fast";
+import { createRegulationSnapshot, REGULATION_SNAPSHOT_VERSION } from "./regulation-snapshot-policy.mjs";
 
 function newId(prefix: string) { return `${prefix}_${randomUUID().replaceAll("-", "")}`; }
 
@@ -14,8 +15,8 @@ export async function setContentPublicationStatusFast(
   const viewer = await resolveAdminPrincipal(inputPrincipal);
   assertAdminRole(viewer, ["system_admin", "committee"], "当前账号没有编辑和发布赛事内容的权限。");
   const sql = getSqlClient();
-  const rows = await sql<Array<{ id: string; status: string; versionNo: number }>>`
-    select p.id,p.status,p.version_no as "versionNo"
+  const rows = await sql<Array<{ id: string; moduleType: string; status: string; versionNo: number }>>`
+    select p.id,p.module_type as "moduleType",p.status,p.version_no as "versionNo"
     from public.publications p
     where p.id=${publicationId} and p.event_id=${eventId}
       and (${viewer.role}='system_admin' or exists (
@@ -28,18 +29,52 @@ export async function setContentPublicationStatusFast(
   const updatedAt = new Date().toISOString();
   const versionNo = Number(before.versionNo) + 1;
   await sql.begin(async (tx) => {
-    const updated = await tx<Array<{ id: string }>>`
-      update public.publications
-      set status=${status},version_no=${versionNo},published_by=${status === "published" ? viewer.id : null},
-        published_at=${status === "published" ? updatedAt : null},updated_at=${updatedAt}
-      where id=${publicationId} and event_id=${eventId} and version_no=${before.versionNo}
-      returning id
-    `;
+    let regulationSnapshotJson: string | null = null;
+    if (before.moduleType === "regulation" && status === "published") {
+      const detailRows = await tx<Array<{
+        competitionFormat: unknown;
+        ruleStandard: string | null;
+        drawRules: unknown;
+        prizeNote: string | null;
+        prizes: unknown;
+        signupNote: string | null;
+        registrationFees: unknown;
+      }>>`
+        select d.competition_format as "competitionFormat",d.rule_standard as "ruleStandard",d.draw_rules as "drawRules",
+          d.prize_note as "prizeNote",d.prizes,d.signup_note as "signupNote",
+          coalesce((
+            select jsonb_object_agg(g.name,g.registration_fee_cents)
+            from public.event_groups g
+            where g.event_id=${eventId} and g.status='active' and g.name in ('少年组','青年组')
+          ),'{}'::jsonb) as "registrationFees"
+        from public.event_details d
+        where d.event_id=${eventId}
+        limit 1
+      `;
+      regulationSnapshotJson = JSON.stringify(createRegulationSnapshot(detailRows[0] ?? {}));
+    }
+
+    const updated = before.moduleType === "regulation" && status === "published"
+      ? await tx<Array<{ id: string }>>`
+          update public.publications
+          set status=${status},version_no=${versionNo},snapshot_json=${regulationSnapshotJson},published_by=${viewer.id},
+            published_at=${updatedAt},updated_at=${updatedAt}
+          where id=${publicationId} and event_id=${eventId} and version_no=${before.versionNo}
+          returning id
+        `
+      : await tx<Array<{ id: string }>>`
+          update public.publications
+          set status=${status},version_no=${versionNo},published_by=${status === "published" ? viewer.id : null},
+            published_at=${status === "published" ? updatedAt : null},updated_at=${updatedAt}
+          where id=${publicationId} and event_id=${eventId} and version_no=${before.versionNo}
+          returning id
+        `;
     if (!updated.length) throw new Error("发布状态已被其他人修改，请刷新后重试。");
     await tx`insert into public.audit_logs
       (id,actor_user_id,event_id,module_type,target_type,target_id,action,before_json,after_json,created_at)
       values (${newId("log")},${viewer.id},${eventId},'content','publication',${publicationId},${status === "published" ? "publish" : "unpublish"},
-        ${JSON.stringify({ status: before.status, versionNo: before.versionNo })},${JSON.stringify({ status, versionNo, publishedAt: status === "published" ? updatedAt : null })},${updatedAt})`;
+        ${JSON.stringify({ status: before.status, versionNo: before.versionNo })},
+        ${JSON.stringify({ status, versionNo, publishedAt: status === "published" ? updatedAt : null, regulationSnapshotVersion: regulationSnapshotJson ? REGULATION_SNAPSHOT_VERSION : undefined })},${updatedAt})`;
   });
   return getContentManagementDataFast(viewer, eventId);
 }

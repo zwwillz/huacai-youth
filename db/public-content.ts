@@ -2,12 +2,15 @@ import { inArray } from "drizzle-orm";
 import { getDb, getSqlClient } from "./index";
 import { eventDocuments, publications } from "./schema";
 import { parseMasterScheduleSnapshot, SCHEDULE_GROUPS, type MasterScheduleStage, type ScheduleGroup } from "./schedule-publish";
+import { parseRegulationSnapshot, type RegulationSnapshot } from "./regulation-snapshot-policy.mjs";
 
 export type PublicContentState = {
   stationId: string;
   eventId: string;
   shortTitle: string;
   publishedModules: string[];
+  regulation: RegulationSnapshot | null;
+  ruleStandard: string;
   masterSchedule?: {
     groups: Record<ScheduleGroup, {
       published: boolean;
@@ -46,7 +49,11 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
 
   return stations.map((station) => {
     const eventPublications = publicationRows.filter((row) => row.eventId === station.eventId);
-    const modules = eventPublications.filter((row) => row.status === "published").map((row) => row.moduleType);
+    const regulationPublication = eventPublications.find((row) => row.moduleType === "regulation");
+    const regulation = parseRegulationSnapshot(regulationPublication?.snapshotJson ?? null, regulationPublication?.status === "published");
+    const modules = eventPublications
+      .filter((row) => row.status === "published" && (row.moduleType !== "regulation" || Boolean(regulation)))
+      .map((row) => row.moduleType);
     const masterPublication = eventPublications.find((row) => row.moduleType === "master_schedule");
     const masterSnapshot = parseMasterScheduleSnapshot(masterPublication?.snapshotJson ?? null, masterPublication?.status === "published");
     const document = (type: "regulation" | "referee_list") => {
@@ -65,6 +72,8 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
       eventId: station.eventId,
       shortTitle: station.title,
       publishedModules: modules,
+      regulation,
+      ruleStandard: regulation?.ruleStandard ?? "",
       masterSchedule: { groups },
       guides: guideRows.filter((row) => row.event_id === station.eventId).map((row) => ({ id: row.id, title: row.title, guideType: row.guide_type })),
       documents: {

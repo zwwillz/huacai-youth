@@ -3,6 +3,7 @@ import { getDb, getSqlClient } from "./index";
 import {
   eventDetails,
   eventDocuments,
+  eventGroups,
   eventOrganizations,
   eventPhases,
   eventSponsors,
@@ -155,11 +156,18 @@ export async function getPublicSiteData(): Promise<EventData> {
   const eventIds = eventRows.map((row) => row.id);
   const legacyEventId = eventRows.find((row) => visualId(row.id) === "langfang")?.id ?? eventIds[0];
 
-  const [orgRows, sponsorRows, documentRows, phaseRows, [publicCounts]] = await Promise.all([
+  const [orgRows, sponsorRows, documentRows, phaseRows, groupRows, [publicCounts]] = await Promise.all([
     db.select().from(eventOrganizations).where(inArray(eventOrganizations.eventId, eventIds)).orderBy(asc(eventOrganizations.sortOrder)),
     db.select().from(eventSponsors).where(inArray(eventSponsors.eventId, eventIds)).orderBy(asc(eventSponsors.sortOrder)),
     db.select().from(eventDocuments).where(inArray(eventDocuments.eventId, eventIds)),
     db.select().from(eventPhases).where(inArray(eventPhases.eventId, eventIds)).orderBy(asc(eventPhases.sortOrder)),
+    db.select({
+      eventId: eventGroups.eventId,
+      name: eventGroups.name,
+      mainDrawSize: eventGroups.mainDrawSize,
+      registrationFeeCents: eventGroups.registrationFeeCents,
+      status: eventGroups.status,
+    }).from(eventGroups).where(inArray(eventGroups.eventId, eventIds)),
     sql<Array<{ playerCount: number; matchCount: number }>>`
       select
         (select count(distinct r.player_id)::int
@@ -200,6 +208,17 @@ export async function getPublicSiteData(): Promise<EventData> {
       website: row.websiteUrl ?? "",
     });
     sponsorsByEvent.set(row.eventId, current);
+  }
+
+  const groupDetailsByEvent = new Map<string, NonNullable<Station["groupDetails"]>>();
+  for (const row of groupRows) {
+    if (row.status !== "active" || !GROUPS.includes(row.name as Group)) continue;
+    const current = groupDetailsByEvent.get(row.eventId) ?? {};
+    current[row.name as Group] = {
+      mainDrawSize: row.mainDrawSize ?? null,
+      registrationFeeCents: row.registrationFeeCents ?? null,
+    };
+    groupDetailsByEvent.set(row.eventId, current);
   }
 
   const docsByEvent = new Map<string, Record<string, string>>();
@@ -255,6 +274,7 @@ export async function getPublicSiteData(): Promise<EventData> {
       signup: row.signupNote || "报名信息待组委会发布。",
       prizes,
       phases: phasesByEvent.get(row.id) ?? [],
+      groupDetails: groupDetailsByEvent.get(row.id),
       partners,
       publicPlayerCount: id === "langfang" ? Number(publicCounts?.playerCount) || 0 : undefined,
       publicMatchCount: id === "langfang" ? Number(publicCounts?.matchCount) || 0 : undefined,

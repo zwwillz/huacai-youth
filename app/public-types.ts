@@ -9,6 +9,11 @@ export type EventPartner = {
   website: string;
 };
 
+export type PublicGroupDetails = {
+  mainDrawSize: number | null;
+  registrationFeeCents: number | null;
+};
+
 export type Match = {
   id: string;
   eventId: string;
@@ -72,6 +77,7 @@ export type Station = {
   signup: string;
   prizes: PrizeMap;
   phases: Phase[];
+  groupDetails?: Partial<Record<Group, PublicGroupDetails>>;
   partners?: EventPartner[];
   publicPlayerCount?: number;
   publicMatchCount?: number;

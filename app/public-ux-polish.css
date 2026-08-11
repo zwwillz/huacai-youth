@@ -1,0 +1,94 @@
+/* Phase 1 public frontend UX polish.
+ * Intentionally does not touch viewport or iPhone safe-area rules. */
+
+.admin-short{display:none}
+.top h3{min-width:0;margin:0;overflow:hidden;text-align:center;text-overflow:ellipsis;white-space:nowrap}
+
+.event-status{display:inline-flex!important;align-items:center;justify-content:center;width:max-content;padding:5px 9px!important;border:1px solid transparent!important;border-radius:999px!important;font-size:9px!important;font-weight:800!important;line-height:1.2!important;white-space:nowrap}
+.event-status.status-preparing{color:#8a5b13!important;border-color:#ead6a7!important;background:#fff7df!important}
+.event-status.status-upcoming{color:#315f9f!important;border-color:#d2e0f4!important;background:#f2f7ff!important}
+.event-status.status-registration{color:#6335a6!important;border-color:#ddd0f2!important;background:#f5f0fc!important}
+.event-status.status-registration-closed{color:#9a5c25!important;border-color:#edd9c6!important;background:#fff7ef!important}
+.event-status.status-live{color:#28745a!important;border-color:#cce7dc!important;background:#eef9f4!important}
+.event-status.status-ended{color:#6f6b76!important;border-color:#e0dde4!important;background:#f5f4f6!important}
+.event-status.status-archived{color:#8c8990!important;border-color:#ebe9ed!important;background:#faf9fa!important}
+.event-status.status-cancelled{color:#8f555f!important;border-color:#ead6da!important;background:#fbf3f5!important}
+
+.overview-group-card{padding-top:20px;padding-bottom:20px}
+.overview-group-card h2{font-size:18px}
+.overview-group-card .overview-group-age{min-height:38px;margin:10px 0 8px;color:#746a7d;font-size:11px;font-weight:500;line-height:1.65}
+.overview-group-card dl div{padding:10px 0}
+.overview-group-card dl dd{color:#4e288f}
+
+.rule-standard{margin:0 0 18px;padding:16px;border:1px solid #e9e3f0;border-radius:14px;background:#fbf9fd}
+.rule-standard h3,.competition-format-block>h3{margin:0 0 9px;color:#4d287f;font-size:12px}
+.rule-standard p{margin:0;color:#62596a;font-size:12px;line-height:1.85;white-space:pre-wrap}
+.competition-format-block>h3{margin-top:0}
+.regulation .format-table{width:min(100%,640px)}
+.regulation .format-table>div{grid-template-columns:88px minmax(170px,1fr) 92px 92px!important}
+.regulation .format-table b,.regulation .format-table span{padding:9px 8px}
+
+.public-fee-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.public-fee-grid article{min-width:0;padding:14px 16px;border:1px solid #e8e1ef;border-radius:14px;background:#f8f5fb;display:flex;flex-direction:column;align-items:flex-start}
+.public-fee-grid small{margin-bottom:8px;color:#826ba1;font-size:9px;font-weight:800;letter-spacing:.06em}
+.public-fee-grid strong,.public-fee-single strong{color:#4d2699;font-size:30px;line-height:1.05}
+.public-fee-grid span{margin-top:6px;color:#716b7e;font-size:10px}
+.public-fee-single{margin-top:0}
+
+.phase-card{position:relative}
+.phase-status{border:1px solid transparent!important;box-shadow:none!important}
+.phase-status.status-筹备中{color:#8a5b13!important;border-color:#ead6a7!important;background:#fff7df!important}
+.phase-status.status-待开始{color:#315f9f!important;border-color:#d2e0f4!important;background:#f2f7ff!important}
+.phase-status.status-报名中{color:#6335a6!important;border-color:#ddd0f2!important;background:#f5f0fc!important}
+.phase-status.status-报名截止,.phase-status.status-报名结束{color:#9a5c25!important;border-color:#edd9c6!important;background:#fff7ef!important}
+.phase-status.status-进行中{color:#28745a!important;border-color:#cce7dc!important;background:#eef9f4!important}
+.phase-status.status-已结束{color:#6f6b76!important;border-color:#e0dde4!important;background:#f5f4f6!important}
+.phase-status.status-已归档{color:#8c8990!important;border-color:#ebe9ed!important;background:#faf9fa!important}
+.public-master-schedule .compact-phase{padding-top:17px!important;padding-bottom:17px!important}
+.public-master-schedule .phase-status-line{min-height:24px;padding-right:76px}
+.public-master-schedule .phase-status-line .phase-status{position:absolute;top:15px;right:15px}
+.public-master-schedule .master-qualification{margin-top:10px!important;padding:9px 11px!important}
+.public-master-schedule .compact-phase>footer{margin-top:12px!important}
+.public-master-schedule .master-schedule-note{order:10;margin-top:-2px;background:transparent!important;border-style:dashed!important}
+.public-master-detail-content .draw-back{display:none!important}
+
+.match-days{scroll-behavior:smooth;scrollbar-width:none}
+.match-days::-webkit-scrollbar{display:none}
+.match-days button{scroll-margin-inline:8px}
+
+@media(max-width:900px){
+  .top h3{display:block!important}
+  main[data-huacai-view] .tabs.public-five-tabs,
+  main[data-huacai-view] .tabs.public-unified-tabs{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;width:100%!important;max-width:100%!important;gap:3px!important;padding:4px!important}
+  main[data-huacai-view] .tabs.public-five-tabs button,
+  main[data-huacai-view] .tabs.public-unified-tabs button{min-width:0!important;min-height:42px!important;padding:8px 1px!important;font-size:12px!important;line-height:1.15!important;white-space:nowrap!important}
+  .regulation .format-table{width:100%;overflow:auto}
+  .regulation .format-table>div{min-width:500px!important;grid-template-columns:82px minmax(160px,1fr) 88px 88px!important}
+}
+
+@media(max-width:680px){
+  .top{grid-template-columns:minmax(42px,1fr) minmax(0,2.6fr) minmax(34px,1fr);column-gap:7px;padding-left:12px;padding-right:12px}
+  .top .brand{grid-column:1;justify-self:start}
+  .top .brand strong{display:none}
+  .top h3{grid-column:2;display:block!important;font-size:15px}
+  .top .admin{grid-column:3;justify-self:end;min-width:34px;height:34px;padding:0;display:grid;place-items:center;border-radius:10px;font-size:12px}
+  .admin-full{display:none}
+  .admin-short{display:inline;font-size:12px;font-weight:900}
+  .rules{gap:10px}
+  .overview-group-card{padding:17px}
+  .overview-group-card h2{font-size:16px}
+  .overview-group-card .overview-group-age{min-height:44px;margin-top:8px;font-size:10px}
+  .overview-group-card dl div{padding:9px 0;font-size:10px}
+  .rule-standard{padding:13px}
+  .rule-standard p{font-size:11px;line-height:1.8}
+  .public-fee-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .public-fee-grid article{padding:12px}
+  .public-fee-grid strong,.public-fee-single strong{font-size:27px}
+}
+
+@media(max-width:360px){
+  .top{grid-template-columns:40px minmax(0,1fr) 34px;column-gap:5px;padding-left:10px;padding-right:10px}
+  .top h3{font-size:14px}
+  main[data-huacai-view] .tabs.public-five-tabs button,
+  main[data-huacai-view] .tabs.public-unified-tabs button{font-size:11px!important}
+}

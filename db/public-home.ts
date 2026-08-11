@@ -7,11 +7,11 @@ import { events, venues } from "./schema";
 const EVENT_STATUS: Record<string, string> = {
   draft: "筹备中",
   registration_open: "报名中",
-  registration_closed: "报名结束",
-  upcoming: "即将开始",
+  registration_closed: "报名截止",
+  upcoming: "待开始",
   in_progress: "进行中",
   finished: "已结束",
-  archived: "已结束",
+  archived: "已归档",
   cancelled: "已取消",
 };
 
@@ -91,6 +91,8 @@ function effectiveLifecycleStatus(row: HomeEventRow) {
 function publicStatusLabel(row: HomeEventRow) {
   if (row.status !== "registration_open") return EVENT_STATUS[row.status] ?? "状态待确认";
   const timeState = registrationTimeState(row.registrationStartAt || "", row.registrationEndAt || "");
+  // Preserve the registration-window wording as a compatibility detail. It maps to
+  // the same semantic badge tones as the lifecycle labels in the public shell.
   if (timeState === "not_started") return "报名即将开始";
   if (timeState === "closed") return "报名已截止";
   return "报名中";
