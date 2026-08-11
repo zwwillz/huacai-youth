@@ -1,7 +1,7 @@
 import { getSqlClient } from "./index";
 import { parseRegistrationTime, registrationTimeState } from "./registration-time-policy.mjs";
 import { buildGroupWorkflow, chooseEventNextAction, LIFECYCLE_LABELS, LIFECYCLE_PROGRESS, workflowUrgencyScore } from "./event-workflow-policy.mjs";
-import { FORMAL_COMPETITION_CONFIRMED_STATUS } from "./formal-competition-policy.mjs";
+import { FORMAL_COMPETITION_CONFIRMED_STATUS, groupReadyToStartCompetition } from "./formal-competition-policy.mjs";
 import { resolveAdminPrincipal, type AdminPrincipalInput, type BackendRole } from "./permissions";
 
 export type WorkflowNextAction = {
@@ -334,7 +334,7 @@ function buildSummaries(rows: WorkflowRow[], viewerRole: BackendRole): EventWork
       publishStatus: first.publishStatus, isHidden: Boolean(first.isHidden), isTest: Boolean(first.isTest), startDate: first.startDate, endDate: first.endDate, basicReady, legacyHistorical,
     };
     const registration = { state: first.eventStatus === "registration_open" ? "open" : first.eventStatus === "registration_closed" ? "closed" : "inactive", timeState, startAt, endAt, configReady, totalCount: registrationTotal, pendingCount: pendingTotal, approvedCount: approvedTotal };
-    const competitionReadyToStart = eventRows.some((row) => row.groupId && row.rosterStatus === "locked" && n(row.formalCompetitionCount) > 0);
+    const competitionReadyToStart = eventRows.some((row) => row.groupId && groupReadyToStartCompetition({ rosterLocked: row.rosterStatus === "locked", confirmedEntryCount: n(row.formalCompetitionCount) }));
     const allRankingsConfirmed = groups.length > 0 && groups.every((group) => group.rankingStatus === "confirmed" || group.rankingStatus === "published");
     const allRankingsPublished = groups.length > 0 && groups.every((group) => group.rankingStatus === "published");
     const blockers = groups.map((group) => group.competition.blocker).filter((value): value is string => Boolean(value));
