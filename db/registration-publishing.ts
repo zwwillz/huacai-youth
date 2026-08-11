@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSqlClient } from "./index";
+import { parseRegistrationTime, registrationTimeState } from "./registration-time-policy.mjs";
 import { requireEventAccess, type AdminPrincipalInput } from "./permissions";
 
 export type RegistrationTimeState = "not_set" | "not_started" | "open" | "closed";
@@ -41,22 +42,6 @@ type AdminRow = {
 
 function now() { return new Date().toISOString(); }
 function newId(prefix: string) { return `${prefix}_${randomUUID().replaceAll("-", "")}`; }
-
-export function parseRegistrationTime(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return Number.NaN;
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) return Date.parse(`${trimmed}${trimmed.length === 16 ? ":00" : ""}+08:00`);
-  return Date.parse(trimmed);
-}
-export function registrationTimeState(startAt: string, endAt: string, currentTime = Date.now()): RegistrationTimeState {
-  if (!startAt || !endAt) return "not_set";
-  const start = parseRegistrationTime(startAt);
-  const end = parseRegistrationTime(endAt);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) return "not_set";
-  if (currentTime < start) return "not_started";
-  if (currentTime >= end) return "closed";
-  return "open";
-}
 function formatRegistrationDateTime(value: string) {
   const direct = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
   if (direct && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(value)) return `${direct[1]}年${Number(direct[2])}月${Number(direct[3])}日 ${direct[4]}:${direct[5]}`;
@@ -113,7 +98,7 @@ export async function getRegistrationPublishData(input: AdminPrincipalInput, eve
     registrationEndAt: endAt,
     registrationNote: row.registrationNote || "",
     registrationUrl: row.registrationUrl || "",
-    timeState: registrationTimeState(startAt, endAt),
+    timeState: registrationTimeState(startAt, endAt) as RegistrationTimeState,
     publicationStatus: row.publicationStatus === "published" ? "published" : "draft",
     versionNo: Number(row.versionNo || 0),
     publishedAt: row.publishedAt,
@@ -224,7 +209,7 @@ export async function getPublicRegistrationInfo(eventId: string): Promise<Public
     const parsed = JSON.parse(value) as Partial<{ startAt: string; endAt: string; note: string; url: string }>;
     const startAt = String(parsed.startAt || "");
     const endAt = String(parsed.endAt || "");
-    const state = registrationTimeState(startAt, endAt);
+    const state = registrationTimeState(startAt, endAt) as RegistrationTimeState;
     if (state === "not_set" || state === "not_started") return null;
     const rawNote = String(parsed.note || "");
     const note = state === "closed"
