@@ -138,8 +138,8 @@ export async function saveGuideManagementData(username: string, eventId: string,
 
 export async function getPublicGuide(guideId: string) {
   const sql = getSqlClient();
-  const rows = await sql<Array<{ id: string; title: string; content_json: unknown; body: string | null; short_title: string; city: string }>>`
-    select g.id, g.title, g.content_json, g.body, e.short_title, e.city
+  const rows = await sql<Array<{ id: string; event_id: string; title: string; content_json: unknown; body: string | null; short_title: string; city: string }>>`
+    select g.id, g.event_id, g.title, g.content_json, g.body, e.short_title, e.city
     from public.event_guides g
     join public.events e on e.id = g.event_id
     where g.id = ${guideId}
@@ -152,5 +152,5 @@ export async function getPublicGuide(guideId: string) {
   if (!row) return null;
   let blocks = normalizeBlocks(row.content_json);
   if (!blocks.length && row.body) blocks = [{ id: newId("block"), type: "paragraph", text: row.body }];
-  return { id: row.id, title: row.title, shortTitle: row.short_title, city: row.city, blocks };
+  return { id: row.id, eventId: row.event_id, title: row.title, shortTitle: row.short_title, city: row.city, blocks };
 }
