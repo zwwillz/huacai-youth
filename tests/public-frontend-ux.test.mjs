@@ -22,8 +22,54 @@ test("overview and regulation content do not expose misleading or empty content"
   assert.doesNotMatch(app, /station\.format\[0\]/);
   assert.doesNotMatch(app, /pdf-pending/);
   assert.match(app, /冠军奖金 \{station\.prizes\.少年组/);
+  assert.match(app, /<h2>\{ruleStandard \? "比赛规则与赛制" : "赛制"\}<\/h2>/);
   assert.match(app, /ruleStandard && <div className="rule-standard"/);
-  assert.match(content, /ruleStandard: modules\.includes\("regulation"\)/);
+  assert.match(app, /const competitionFormat = regulation\?\.competitionFormat/);
+  assert.match(app, /const drawRules = regulation\?\.drawRules/);
+  assert.match(app, /const prizes = regulation\?\.prizes/);
+  assert.match(app, /const prizeNote = regulation\?\.prizeNote/);
+  assert.doesNotMatch(content, /eventDetails/);
+  assert.match(content, /parseRegulationSnapshot/);
+  assert.match(content, /row\.moduleType !== "regulation" \|\| Boolean\(regulation\)/);
+});
+
+test("placeholder participant guide is isolated to the current event", () => {
+  const app = source("app/event-app.tsx");
+  const start = app.indexOf("function ParticipantGuide");
+  const end = app.indexOf("function eventUrl", start);
+  const guide = app.slice(start, end);
+  assert.match(guide, /station:Station/);
+  assert.match(guide, /<p>\{station\.title\}<\/p>/);
+  assert.doesNotMatch(guide, /廊坊站|太原站|洛阳站|济南站|朝阳站/);
+  assert.match(app, /<ParticipantGuide station=\{station\}/);
+});
+
+test("public regulation has no fixed single-station fee", () => {
+  const app = source("app/event-app.tsx");
+  assert.doesNotMatch(app, /¥100/);
+  assert.doesNotMatch(app, /单站参赛费/);
+  assert.match(app, /<h2>报名须知<\/h2>[^]*\{station\.signup\}/);
+});
+
+test("regulation publication writes a complete snapshot and public only reads it", () => {
+  const publisher = source("db/content-publication-fast.ts");
+  const publicContent = source("db/public-content.ts");
+  assert.match(publisher, /before\.moduleType === "regulation" && status === "published"/);
+  assert.match(publisher, /createRegulationSnapshot/);
+  assert.match(publisher, /snapshot_json=\$\{regulationSnapshotJson\}/);
+  assert.match(publisher, /sql\.begin/);
+  assert.match(publisher, /insert into public\.audit_logs/);
+  assert.doesNotMatch(publicContent, /event_details|eventDetails/);
+  assert.match(publicContent, /regulation: RegulationSnapshot \| null/);
+});
+
+test("regulation backfill is narrow and snapshot-complete", () => {
+  const migration = source("db/migrations/20260812_backfill_regulation_publication_snapshots.sql");
+  for (const field of ["ruleStandard", "competitionFormat", "drawRules", "prizeNote", "prizes"]) assert.match(migration, new RegExp(`'${field}'`));
+  assert.match(migration, /p\.module_type = 'regulation'/);
+  assert.match(migration, /p\.status = 'published'/);
+  assert.match(migration, /p\.snapshot_json is null/);
+  assert.doesNotMatch(migration, /update public\.events|update public\.matches|update public\.event_documents/);
 });
 
 test("schedule and match navigation preserve compact context", () => {
