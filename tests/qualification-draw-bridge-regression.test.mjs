@@ -11,7 +11,7 @@ test("qualification draw persistence never sends row arrays through jsonb_to_rec
   assert.doesNotMatch(drawWrite, /jsonb_to_recordset/);
   assert.match(code, /const DRAW_INSERT_CHUNK_SIZE = 200/);
   assert.match(code, /async function insertScalarRows/);
-  assert.match(code, /tx\.unsafe\(`\$\{insertPrefix\} values \$\{valuesSql\}`, params\)/);
+  assert.match(code, /await unsafe\(`\$\{insertPrefix\} values \$\{valuesSql\}`, params\)/);
   assert.match(drawWrite, /insert into public\.draw_prelim_matches/);
   assert.match(drawWrite, /insert into public\.draw_participants/);
   assert.match(drawWrite, /insert into public\.draw_slots/);
