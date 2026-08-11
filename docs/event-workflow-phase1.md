@@ -14,6 +14,14 @@ Phase 1 closure invariants:
 - Dashboard, event-list Continue, and event settings consume the same Workflow Summary / Next Action. Event settings do not maintain a second `event.status -> action` map.
 - Workflow recommends actions; server lifecycle/roster services remain the final execution guard.
 
+Shared closure implementation:
+
+- `db/formal-competition-policy.mjs`: common pure formal-competition / Competition Ready policy.
+- `db/formal-competition.ts`: read-only formal competition fact queries used by server guards.
+- `db/participant-roster-lifecycle.ts`: group-aware confirm/lock lifecycle boundary.
+- `db/event-lifecycle.ts`: confirmed-only start-competition boundary.
+- `db/event-workflow.ts`: confirmed-only Workflow readiness and the same shared ready predicate.
+
 Second-round acceptance scenarios:
 
 1. U16 starts first; U20 can still confirm and lock its roster while the event is `in_progress` if U20 has no formal competition data.
