@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { shouldRestoreLegacyPublishedResults } from "../db/public-competition-legacy-policy.mjs";
+import { parseRegistrationTime, registrationTimeState } from "../db/registration-time-policy.mjs";
 
 const source = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -51,11 +52,60 @@ test("legacy empty published result snapshots recover only explicit legacy resul
   assert.equal(shouldRestoreLegacyPublishedResults({ isExplicitLegacy: true, snapshotMatchCount: 0, hasConfirmedLegacyResults: false }), false);
 });
 
-test("registration public data is also published snapshot-only", () => {
+test("registration public data is published snapshot plus lifecycle only", () => {
   const code = source("db/registration-publishing.ts");
   assert.match(code, /module_type='registration' and p\.status='published'/);
   assert.match(code, /p\.snapshot_json/);
+  assert.match(code, /e\.status='registration_open'/);
   assert.match(code, /coalesce\(e\.is_hidden,false\)=false/);
+  const publicRead = code.slice(code.indexOf("export async function getPublicRegistrationInfo"));
+  assert.doesNotMatch(publicRead, /registration_state/);
+});
+
+test("registration time policy treats stored local timestamps as Asia Shanghai", () => {
+  assert.equal(parseRegistrationTime("2026-08-22T18:00"), Date.parse("2026-08-22T18:00:00+08:00"));
+  assert.equal(registrationTimeState("2026-08-12T00:00", "2026-08-25T23:59", Date.parse("2026-08-11T13:50:00+08:00")), "not_started");
+  assert.equal(registrationTimeState("2026-08-06T00:00", "2026-08-22T18:00", Date.parse("2026-08-11T13:50:00+08:00")), "open");
+  assert.equal(registrationTimeState("2026-08-06T00:00", "2026-08-10T18:00", Date.parse("2026-08-11T13:50:00+08:00")), "closed");
+});
+
+test("registration workspace remounts per event and guards stale submissions", () => {
+  const page = source("app/admin/registration-publish/page.tsx");
+  const client = source("app/admin/registration-publish/registration-publish-client.tsx");
+  const route = source("app/api/admin/registration-publish/route.ts");
+  assert.match(page, /key=\{currentEventId\}/);
+  assert.match(page, /currentEventId=\{currentEventId\}/);
+  assert.match(client, /currentEventId !== data\.eventId/);
+  assert.match(client, /当前赛事上下文发生变化，请刷新页面后重试/);
+  assert.doesNotMatch(client, /报名状态<\/span><select/);
+  assert.doesNotMatch(route, /registrationState/);
+});
+
+test("registration publish validates lifecycle time and URL with clear errors", () => {
+  const code = source("db/registration-publishing.ts");
+  assert.match(code, /current\.eventStatus !== "registration_open"/);
+  assert.match(code, /当前赛事尚未进入报名阶段/);
+  assert.match(code, /请先填写完整的报名开始时间和报名截止时间/);
+  assert.match(code, /当前报名截止时间已经过去/);
+  assert.match(code, /报名期间必须填写有效报名入口/);
+  const saveSection = code.slice(code.indexOf("export async function saveRegistrationDraft"), code.indexOf("export async function setRegistrationPublicationStatus"));
+  assert.doesNotMatch(saveSection, /registration_state/);
+});
+
+test("public registration card timing and event status are derived without DB lifecycle writes", () => {
+  const registration = source("db/registration-publishing.ts");
+  const home = source("db/public-home.ts");
+  const detail = source("app/api/public/events/[eventId]/detail/route.ts");
+  const page = source("app/page.tsx");
+  assert.match(registration, /state === "not_set" \|\| state === "not_started"/);
+  assert.match(registration, /state === "closed"[\s\S]*报名已于/);
+  assert.match(registration, /url: state === "open" \? String\(parsed\.url \|\| ""\) : ""/);
+  assert.match(home, /报名即将开始/);
+  assert.match(home, /报名已截止/);
+  assert.match(home, /effectiveLifecycleStatus/);
+  assert.match(detail, /getEffectivePublicStatus/);
+  assert.match(detail, /revalidate = 60/);
+  assert.match(page, /revalidate = 60/);
 });
 
 test("qualification draw API uses q1/q2 fast implementation", () => {
@@ -71,17 +121,19 @@ test("legacy qualification draw entry is explicitly deprecated", () => {
   assert.match(legacy, /@deprecated Use createQualificationDrawFast/);
 });
 
-test("qualification workspace SQL closes nested entry aggregation before FROM", () => {
-  const code = source("db/qualification-fast.ts");
-  assert.match(code, /select jsonb_agg\([\s\S]*jsonb_build_object\([\s\S]*order by case when qe\.entry_type='direct'[\s\S]*\)\s*from public\.competition_qualification_entries qe/s);
-  assert.match(code, /where qe\.batch_id=b\.id/);
+test("qualification production support query uses only scalar eventId and is shared by DB smoke", () => {
+  const production = source("db/qualification-fast.ts");
+  const shared = source("db/qualification-support-query.mjs");
   const smoke = source("scripts/qualification-db-smoke.mjs");
-  assert.match(smoke, /event_luoyang_test_2026/);
-  assert.match(smoke, /qualifier-one/);
-  assert.match(smoke, /qualifier-two/);
-  assert.match(smoke, /main-one/);
-  assert.match(smoke, /main-two/);
-  assert.doesNotMatch(smoke, /\b(insert|update|delete|alter|drop|truncate)\b/i);
+  assert.match(production, /loadQualificationSupportRows\(sql, eventId\)/);
+  assert.doesNotMatch(production, /jsonb_to_recordset|stageFilter|JSON\.stringify\(stageFilter\)|drawSessionIds/);
+  assert.match(shared, /with latest_stages as/);
+  assert.match(shared, /b\.event_id=\$1/);
+  assert.match(shared, /join public\.competition_bracket_matches bm on bm\.bracket_id=ls\."bracketId"/);
+  assert.match(shared, /join public\.competition_qualification_batches qb on qb\.draw_session_id=ls\."drawSessionId"/);
+  assert.match(smoke, /import \{ loadQualificationSupportRows \} from "\.\.\/db\/qualification-support-query\.mjs"/);
+  assert.match(smoke, /loadQualificationSupportRows\(smokeSql, eventId\)/);
+  assert.doesNotMatch(shared, /\b(insert|update|delete|alter|drop|truncate)\b/i);
   assert.match(source("package.json"), /"test:db-smoke": "node scripts\/qualification-db-smoke\.mjs"/);
 });
 
