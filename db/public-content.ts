@@ -4,11 +4,6 @@ import { eventDocuments, publications } from "./schema";
 import { parseMasterScheduleSnapshot, SCHEDULE_GROUPS, type MasterScheduleStage, type ScheduleGroup } from "./schedule-publish";
 import { parseRegulationSnapshot, type RegulationSnapshot } from "./regulation-snapshot-policy.mjs";
 
-export type PublicGuideBlock =
-  | { id: string; type: "paragraph"; text: string }
-  | { id: string; type: "image"; imageUrl: string; caption: string }
-  | { id: string; type: "columns"; left: string; right: string };
-
 export type PublicContentState = {
   stationId: string;
   eventId: string;
@@ -22,50 +17,14 @@ export type PublicContentState = {
       stages: MasterScheduleStage[];
     }>;
   };
-  guides: Array<{ id: string; title: string; guideType: string; blocks: PublicGuideBlock[] }>;
+  guides: Array<{ id: string; title: string; guideType: string }>;
   documents: {
     regulation: { url: string; published: boolean };
     referee_list: { url: string; published: boolean };
   };
 };
 
-type GuideSummaryRow = {
-  id: string;
-  event_id: string;
-  guide_type: string;
-  title: string;
-  sort_order: number;
-  content_json: unknown;
-  body: string | null;
-};
-
-function publicGuideBlocks(guideId: string, value: unknown, body: string | null): PublicGuideBlock[] {
-  const source = Array.isArray(value) ? value : [];
-  const blocks: PublicGuideBlock[] = [];
-  for (let index = 0; index < source.length; index += 1) {
-    const raw = source[index];
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
-    const row = raw as Record<string, unknown>;
-    const id = String(row.id || `${guideId}_block_${index + 1}`);
-    if (row.type === "paragraph") {
-      const text = String(row.text || "");
-      if (text) blocks.push({ id, type: "paragraph", text });
-      continue;
-    }
-    if (row.type === "image") {
-      const imageUrl = String(row.imageUrl || "");
-      if (imageUrl) blocks.push({ id, type: "image", imageUrl, caption: String(row.caption || "") });
-      continue;
-    }
-    if (row.type === "columns") {
-      const left = String(row.left || "");
-      const right = String(row.right || "");
-      if (left || right) blocks.push({ id, type: "columns", left, right });
-    }
-  }
-  if (!blocks.length && body) blocks.push({ id: `${guideId}_body`, type: "paragraph", text: body });
-  return blocks;
-}
+type GuideSummaryRow = { id: string; event_id: string; guide_type: string; title: string; sort_order: number };
 
 export async function getPublicContentState(stations: Array<{ id: string; eventId: string; title: string }>): Promise<PublicContentState[]> {
   if (!stations.length) return [];
@@ -81,7 +40,7 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
     }).from(publications).where(inArray(publications.eventId, eventIds)),
     db.select().from(eventDocuments).where(inArray(eventDocuments.eventId, eventIds)),
     sql<GuideSummaryRow[]>`
-      select id, event_id, guide_type, title, sort_order, content_json, body
+      select id, event_id, guide_type, title, sort_order
       from public.event_guides
       where event_id = any(${eventIds}::text[]) and publish_status = 'published'
       order by event_id, sort_order asc, created_at asc
@@ -116,14 +75,7 @@ export async function getPublicContentState(stations: Array<{ id: string; eventI
       regulation,
       ruleStandard: regulation?.ruleStandard ?? "",
       masterSchedule: { groups },
-      guides: guideRows
-        .filter((row) => row.event_id === station.eventId)
-        .map((row) => ({
-          id: row.id,
-          title: row.title,
-          guideType: row.guide_type,
-          blocks: publicGuideBlocks(row.id, row.content_json, row.body),
-        })),
+      guides: guideRows.filter((row) => row.event_id === station.eventId).map((row) => ({ id: row.id, title: row.title, guideType: row.guide_type })),
       documents: {
         regulation: document("regulation"),
         referee_list: document("referee_list"),
