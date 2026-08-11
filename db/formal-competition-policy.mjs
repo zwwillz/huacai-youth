@@ -1,7 +1,8 @@
 export const FORMAL_COMPETITION_CONFIRMED_STATUS = "confirmed";
 
 export function groupReadyToStartCompetition(fact) {
-  return Boolean(fact?.rosterLocked && (fact?.confirmedDraw || fact?.confirmedBracket));
+  const confirmedEntryCount = Number(fact?.confirmedEntryCount || 0);
+  return Boolean(fact?.rosterLocked && (confirmedEntryCount > 0 || fact?.confirmedDraw || fact?.confirmedBracket));
 }
 
 export function groupHasFormalCompetitionData(fact) {
