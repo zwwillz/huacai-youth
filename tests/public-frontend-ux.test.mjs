@@ -105,15 +105,18 @@ test("placeholder participant guide is isolated to the current event", () => {
   assert.match(app, /<ParticipantGuide station=\{station\}/);
 });
 
-test("published guides use prefetched navigation, cached data and unified station header", () => {
+test("published guides stay inside the event shell and avoid independent route latency", () => {
   const app = source("app/event-app.tsx");
-  const guidePage = source("app/guide/[guideId]/page.tsx");
-  assert.match(app, /<Link prefetch href=\{`\/guide\//);
-  assert.match(guidePage, /unstable_cache/);
-  assert.match(guidePage, /revalidate: 300/);
-  assert.match(guidePage, /<header className="top public-guide-unified-top"/);
-  assert.match(guidePage, /<h3>\{stationTitle\}<\/h3>/);
-  assert.match(guidePage, /event=\$\{encodeURIComponent\(guide\.eventId\)\}&tab=overview/);
+  const content = source("db/public-content.ts");
+  const detailRoute = source("app/api/public/events/[eventId]/detail/route.ts");
+  assert.doesNotMatch(app, /<Link prefetch href=\{`\/guide\//);
+  assert.match(app, /guides\.map\(\(guide\) => <button onClick=\{\(\) => openGuide\(guide\.id\)\}/);
+  assert.match(app, /const activeGuide = contentState\?\.guides\.find/);
+  assert.match(app, /guide=\{activeGuide\}/);
+  assert.match(content, /content_json, body/);
+  assert.match(content, /blocks: publicGuideBlocks\(row\.content_json, row\.body\)/);
+  assert.match(content, /replace\(\/\\\\n\/g, "\\n"\)/);
+  assert.match(detailRoute, /public-event-detail-v10/);
 });
 
 test("public regulation fees are dynamic, grouped and remain inside published snapshot", () => {
