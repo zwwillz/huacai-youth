@@ -60,7 +60,7 @@ function hrefFor(range: SiteMonitorRange, query: string) {
 
 export default async function SiteMonitorPage({ searchParams }: PageProps) {
   const viewer = await getAdminViewer();
-  if (!viewer) redirect("/admin/login");
+  if (!viewer) redirect("/admin/login?next=%2Fsite-monitor");
   if (viewer.username !== "admin" || viewer.role !== "system_admin") notFound();
 
   const params = await searchParams;
