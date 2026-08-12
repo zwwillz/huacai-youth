@@ -14,6 +14,13 @@
 .event-status.status-archived{color:#8c8990!important;border-color:#ebe9ed!important;background:#faf9fa!important}
 .event-status.status-cancelled{color:#8f555f!important;border-color:#ead6da!important;background:#fbf3f5!important}
 
+.registration-public-card{border-color:#d9c9f5!important;background:radial-gradient(circle at 92% 8%,#f440a21a,transparent 32%),linear-gradient(135deg,#fbf8ff 0%,#f2ebff 54%,#fff9fc 100%)!important;box-shadow:0 18px 44px #5c2bdd16!important}
+.registration-public-card>div:first-child small{color:#7446ba}
+.registration-public-card h2{color:#351872}
+.registration-public-card p{color:#5f5670}
+.registration-public-card .inline-actions a{min-height:42px;padding:10px 18px;border:0;border-radius:10px;color:#fff!important;background:linear-gradient(135deg,#6b35dc,#b637e6);box-shadow:0 10px 24px #6931c82b;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font-size:10px;font-weight:900;line-height:1.2;cursor:pointer}
+.registration-public-card .inline-actions a:hover{filter:brightness(1.04)}
+
 .overview-group-card{padding-top:20px;padding-bottom:20px}
 .overview-group-card h2{font-size:18px}
 .overview-group-card .overview-group-age{min-height:38px;margin:10px 0 8px;color:#746a7d;font-size:11px;font-weight:500;line-height:1.65}
@@ -52,6 +59,11 @@
 .public-master-schedule .master-schedule-note{order:10;margin-top:-2px;background:transparent!important;border-style:dashed!important}
 .public-master-detail-content .draw-back{display:none!important}
 
+.public-prelim-grid{grid-template-columns:repeat(4,230px)!important;gap:12px 18px!important;width:max-content}
+.public-prelim-grid .stage-tree-match{width:230px!important;padding-right:76px}
+.public-prelim-grid .stage-competitor,.public-prelim-grid .stage-between{width:154px}
+.public-prelim-grid .stage-game-no{left:auto!important;right:0!important;top:27px!important;width:70px;max-width:70px;overflow:hidden;text-overflow:ellipsis;text-align:center}
+
 .match-days{scroll-behavior:smooth;scrollbar-width:none}
 .match-days::-webkit-scrollbar{display:none}
 .match-days button{scroll-margin-inline:8px}
@@ -64,6 +76,7 @@
   main[data-huacai-view] .tabs.public-unified-tabs button{min-width:0!important;min-height:42px!important;padding:8px 1px!important;font-size:12px!important;line-height:1.15!important;white-space:nowrap!important}
   .regulation .format-table{width:100%;overflow:auto}
   .regulation .format-table>div{min-width:500px!important;grid-template-columns:82px minmax(160px,1fr) 88px 88px!important}
+  .public-prelim-grid{grid-template-columns:repeat(3,230px)!important}
 }
 
 @media(max-width:680px){
@@ -84,6 +97,10 @@
   .public-fee-grid{grid-template-columns:1fr 1fr;gap:8px}
   .public-fee-grid article{padding:12px}
   .public-fee-grid strong,.public-fee-single strong{font-size:27px}
+}
+
+@media(max-width:520px){
+  .registration-public-card .inline-actions a{width:100%}
 }
 
 @media(max-width:360px){
