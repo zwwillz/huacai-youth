@@ -54,6 +54,25 @@ test("qualifier playoffs stay in three or four columns and keep the game label i
   assert.doesNotMatch(css, /\.public-prelim-grid\{grid-template-columns:154px/);
 });
 
+test("mobile detailed schedule uses a fixed viewport shell with back and zoom controls while desktop markup stays intact", () => {
+  const enhancer = source("app/public-ux-enhancer.tsx");
+  const css = source("app/public-ux-polish.css");
+  const live = source("app/public-competition-live-v2.tsx");
+  assert.match(enhancer, /public-mobile-stage-topbar/);
+  assert.match(enhancer, /public-stage-detail-open/);
+  assert.match(enhancer, /返回赛程页/);
+  assert.match(enhancer, /querySelector<HTMLButtonElement>\("\.draw-back"\)\?\.click\(\)/);
+  assert.match(enhancer, /clickStageControl\(detail, action\.controlIndex\)/);
+  assert.match(enhancer, /main\[data-huacai-view\] > \.top h3/);
+  assert.match(css, /@media\(max-width:900px\)[^]*\.public-live-stage-detail\{position:fixed!important;inset:0!important/);
+  assert.match(css, /html\.public-stage-detail-open,html\.public-stage-detail-open body\{height:100%;overflow:hidden!important/);
+  assert.match(css, /\.public-live-stage-detail>\.bracket-title\{display:none!important\}/);
+  assert.match(css, /\.public-live-stage-detail \.draw-toolbar\{display:none!important\}/);
+  assert.match(css, /\.public-live-stage-detail \.drag-tip\{display:none!important\}/);
+  assert.match(css, /\.public-mobile-stage-controls/);
+  assert.match(live, /fullscreen-btn/);
+});
+
 test("regulation content remains snapshot-backed and handles empty rule standard", () => {
   const app = source("app/event-app.tsx");
   const content = source("db/public-content.ts");
