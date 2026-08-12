@@ -63,6 +63,7 @@
 .public-prelim-grid .stage-tree-match{width:230px!important;padding-right:76px}
 .public-prelim-grid .stage-competitor,.public-prelim-grid .stage-between{width:154px}
 .public-prelim-grid .stage-game-no{left:auto!important;right:0!important;top:27px!important;width:70px;max-width:70px;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.public-mobile-stage-topbar{display:none}
 
 .match-days{scroll-behavior:smooth;scrollbar-width:none}
 .match-days::-webkit-scrollbar{display:none}
@@ -77,6 +78,22 @@
   .regulation .format-table{width:100%;overflow:auto}
   .regulation .format-table>div{min-width:500px!important;grid-template-columns:82px minmax(160px,1fr) 88px 88px!important}
   .public-prelim-grid{grid-template-columns:repeat(3,230px)!important}
+
+  html.public-stage-detail-open,html.public-stage-detail-open body{height:100%;overflow:hidden!important;overscroll-behavior:none}
+  html.public-stage-detail-open main[data-huacai-view]{height:100dvh;overflow:hidden}
+  .public-live-stage-detail{position:fixed!important;inset:0!important;z-index:120!important;width:100vw!important;height:100dvh!important;min-height:0!important;margin:0!important;padding:0!important;gap:0!important;overflow:hidden!important;border-radius:0!important;background:#151b3c!important}
+  .public-live-stage-detail>.bracket-title{display:none!important}
+  .public-live-stage-detail>.draw-shell{height:auto!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:#151b3c!important;display:flex!important;flex:1 1 auto!important;flex-direction:column!important;overflow:hidden!important}
+  .public-live-stage-detail .draw-toolbar{display:none!important}
+  .public-live-stage-detail .unified-viewport{height:auto!important;min-height:0!important;flex:1 1 auto!important;border-radius:0!important;box-shadow:none!important}
+  .public-live-stage-detail .unified-canvas{padding:18px 16px 80px!important}
+  .public-live-stage-detail .drag-tip{display:none!important}
+  .public-mobile-stage-topbar{height:58px;min-height:58px;padding:0 10px;border-bottom:1px solid #e8e4ee;background:#fff;color:#171528;display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:6px;align-items:center;position:relative;z-index:4}
+  .public-mobile-stage-back{height:36px;padding:0 6px;border:0;border-radius:9px;color:#542aa0;background:#f2edf9;font-size:11px;font-weight:900;cursor:pointer}
+  .public-mobile-stage-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:15px;font-weight:800}
+  .public-mobile-stage-controls{display:flex;align-items:center;justify-content:flex-end;gap:4px}
+  .public-mobile-stage-controls button{height:34px;min-width:32px;padding:0 8px;border:1px solid #dfd8ea;border-radius:9px;color:#3d2862;background:#fff;font-size:13px;font-weight:900;cursor:pointer}
+  .public-mobile-stage-controls button:last-child{min-width:42px;font-size:10px}
 }
 
 @media(max-width:680px){
@@ -108,4 +125,9 @@
   .top h3{font-size:14px}
   main[data-huacai-view] .tabs.public-five-tabs button,
   main[data-huacai-view] .tabs.public-unified-tabs button{font-size:11px!important}
+  .public-mobile-stage-topbar{grid-template-columns:52px minmax(0,1fr) auto;padding:0 7px;gap:4px}
+  .public-mobile-stage-controls{gap:3px}
+  .public-mobile-stage-controls button{min-width:29px;padding:0 6px}
+  .public-mobile-stage-controls button:last-child{min-width:38px}
+  .public-mobile-stage-title{font-size:14px}
 }
