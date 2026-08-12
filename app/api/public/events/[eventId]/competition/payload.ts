@@ -13,26 +13,34 @@ export type PublicDisplayMatch = Pick<PublicLiveMatch,
 export type PublicCompetitionDisplayEvent = Omit<PublicCompetitionEvent, "matches"> & { matches: PublicDisplayMatch[] };
 
 function compactEvent(event: PublicCompetitionEvent): PublicCompetitionDisplayEvent {
-  const matches: PublicDisplayMatch[] = event.matches.map((match) => ({
-    id: match.id,
-    group: match.group,
-    phaseId: match.phaseId,
-    divisionNo: match.divisionNo,
-    roundNo: match.roundNo,
-    roundName: match.roundName,
-    matchCode: match.matchCode,
-    playerA: match.playerA,
-    playerB: match.playerB,
-    scoreA: match.scoreA,
-    scoreB: match.scoreB,
-    resultStatus: match.resultStatus,
-    status: match.status,
-    winnerPlayerName: match.winnerPlayerName,
-    date: match.date,
-    time: match.time,
-    table: match.table,
-    isTv: match.isTv,
-  }));
+  const matches: PublicDisplayMatch[] = event.matches.map((match) => {
+    const isBye = match.status === "auto_advanced"
+      || match.resultType === "bye"
+      || match.sourceAType === "bye"
+      || match.sourceBType === "bye";
+    const byeOnA = isBye && (match.sourceAType === "bye" || (!match.playerA && Boolean(match.playerB)));
+    const byeOnB = isBye && (match.sourceBType === "bye" || (!match.playerB && Boolean(match.playerA)));
+    return {
+      id: match.id,
+      group: match.group,
+      phaseId: match.phaseId,
+      divisionNo: match.divisionNo,
+      roundNo: match.roundNo,
+      roundName: match.roundName,
+      matchCode: match.matchCode,
+      playerA: byeOnA ? "BYE" : match.playerA,
+      playerB: byeOnB ? "BYE" : match.playerB,
+      scoreA: match.scoreA,
+      scoreB: match.scoreB,
+      resultStatus: match.resultStatus,
+      status: isBye ? "auto_advanced" : match.status,
+      winnerPlayerName: match.winnerPlayerName,
+      date: match.date,
+      time: match.time,
+      table: match.table,
+      isTv: match.isTv,
+    };
+  });
   return { ...event, matches };
 }
 
@@ -40,7 +48,7 @@ export function getCachedCompetitionEvent(eventId: string) {
   return unstable_cache(async () => {
     const events = await getPublishedCompetitionEvents([eventId]);
     return compactEvent(events[0] ?? { eventId, phaseSummaries: [], matches: [], qualificationEntries: [], mainRoster: [] });
-  }, ["public-competition-event-v4", eventId], {
+  }, ["public-competition-event-v5", eventId], {
     revalidate: 300,
     tags: [`public-competition-${eventId}`],
   })();
