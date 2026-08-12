@@ -66,12 +66,49 @@ function syncMatchDay(preferUrl: boolean) {
   positionActiveDay(nav, buttons, active);
 }
 
+function createMobileStageTopbar(detail: HTMLElement) {
+  const bar = document.createElement("div");
+  bar.className = "public-mobile-stage-topbar";
+
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "public-mobile-stage-back";
+  back.textContent = "‹ 返回";
+  back.setAttribute("aria-label", "返回赛程页");
+  back.addEventListener("click", () => {
+    detail.closest(".public-competition-overlay")?.querySelector<HTMLButtonElement>(".draw-back")?.click();
+  });
+
+  const title = document.createElement("strong");
+  title.className = "public-mobile-stage-title";
+
+  bar.append(back, title);
+  detail.prepend(bar);
+  return bar;
+}
+
+function syncMobileStageShell() {
+  const detail = document.querySelector<HTMLElement>(".public-live-stage-detail");
+  document.documentElement.classList.toggle("public-stage-detail-open", Boolean(detail));
+  if (!detail) return;
+
+  const bar = detail.querySelector<HTMLElement>(".public-mobile-stage-topbar") ?? createMobileStageTopbar(detail);
+  const title = bar.querySelector<HTMLElement>(".public-mobile-stage-title");
+  const stationTitle = document.querySelector<HTMLElement>("main[data-huacai-view] > .top h3")?.textContent?.trim()
+    || detail.querySelector<HTMLElement>(".event-name-kicker")?.textContent?.trim()
+    || "赛程表";
+  if (title && title.textContent !== stationTitle) title.textContent = stationTitle;
+}
+
 export default function PublicUxEnhancer() {
   useEffect(() => {
     let frame = 0;
     const queueSync = (preferUrl = false) => {
       window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => syncMatchDay(preferUrl));
+      frame = window.requestAnimationFrame(() => {
+        syncMatchDay(preferUrl);
+        syncMobileStageShell();
+      });
     };
 
     const root = document.querySelector<HTMLElement>("main[data-huacai-view]");
@@ -95,6 +132,7 @@ export default function PublicUxEnhancer() {
       document.removeEventListener("click", onClick, true);
       window.removeEventListener("popstate", onPopState);
       window.cancelAnimationFrame(frame);
+      document.documentElement.classList.remove("public-stage-detail-open");
     };
   }, []);
 

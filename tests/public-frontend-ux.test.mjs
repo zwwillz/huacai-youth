@@ -31,6 +31,54 @@ test("overview group cards restore age, main draw size and champion prize from d
   assert.match(publicData, /groupDetails: groupDetailsByEvent\.get\(row\.id\)/);
 });
 
+test("overview registration card is emphasized and open registration uses a button-like CTA", () => {
+  const app = source("app/event-app.tsx");
+  const css = source("app/public-ux-polish.css");
+  assert.match(app, /registration-public-card/);
+  assert.match(app, /<a href=\{registration\.url\}[^>]*>立即报名<\/a>/);
+  assert.match(css, /\.registration-public-card\{[^}]*background:/);
+  assert.match(css, /\.registration-public-card \.inline-actions a\{[^}]*min-height:42px/);
+  assert.match(css, /\.registration-public-card \.inline-actions a\{[^}]*display:inline-flex/);
+  assert.match(css, /\.registration-public-card \.inline-actions a\{[^}]*background:linear-gradient/);
+});
+
+test("qualifier playoffs stay in three or four columns and keep the game label in a reserved right-side lane", () => {
+  const live = source("app/public-competition-live-v2.tsx");
+  const css = source("app/public-ux-polish.css");
+  assert.match(live, /<b>附加赛<\/b>/);
+  assert.match(live, /className="public-prelim-grid"/);
+  assert.match(css, /\.public-prelim-grid\{grid-template-columns:repeat\(4,230px\)!important/);
+  assert.match(css, /@media\(max-width:900px\)[^]*\.public-prelim-grid\{grid-template-columns:repeat\(3,230px\)!important\}/);
+  assert.match(css, /\.public-prelim-grid \.stage-tree-match\{width:230px!important;padding-right:76px\}/);
+  assert.match(css, /\.public-prelim-grid \.stage-game-no\{left:auto!important;right:0!important/);
+  assert.doesNotMatch(css, /\.public-prelim-grid\{grid-template-columns:154px/);
+});
+
+test("mobile detailed schedule keeps station-only topbar and restores title search with zoom controls beside the title", () => {
+  const enhancer = source("app/public-ux-enhancer.tsx");
+  const css = source("app/public-ux-polish.css");
+  const live = source("app/public-competition-live-v2.tsx");
+  assert.match(enhancer, /public-mobile-stage-topbar/);
+  assert.match(enhancer, /public-stage-detail-open/);
+  assert.match(enhancer, /返回赛程页/);
+  assert.match(enhancer, /querySelector<HTMLButtonElement>\("\.draw-back"\)\?\.click\(\)/);
+  assert.match(enhancer, /main\[data-huacai-view\] > \.top h3/);
+  assert.doesNotMatch(enhancer, /public-mobile-stage-controls|clickStageControl/);
+  assert.match(css, /@media\(max-width:900px\)[^]*\.public-live-stage-detail\{position:fixed!important;inset:0!important/);
+  assert.match(css, /html\.public-stage-detail-open,html\.public-stage-detail-open body\{height:100%;overflow:hidden!important/);
+  assert.match(css, /\.public-live-stage-detail>\.bracket-title\{display:none!important\}/);
+  assert.match(css, /\.public-live-stage-detail \.draw-toolbar\{[^}]*display:grid!important[^}]*grid-template-areas:"title controls" "search search"!important/);
+  assert.match(css, /\.public-live-stage-detail \.draw-toolbar>label\{grid-area:search/);
+  assert.match(css, /\.public-live-stage-detail \.draw-toolbar>\.board-controls\{grid-area:controls/);
+  assert.match(css, /\.public-live-stage-detail \.draw-toolbar>\.board-controls \.fullscreen-btn\{display:none!important\}/);
+  assert.match(css, /\.public-mobile-stage-topbar\{[^}]*grid-template-columns:58px minmax\(0,1fr\) 58px/);
+  assert.match(css, /\.public-mobile-stage-topbar:after/);
+  assert.match(css, /\.public-live-stage-detail \.drag-tip\{display:none!important\}/);
+  assert.match(live, /<small>\{group\} · 详细赛程表<\/small><h2>\{PHASE_LABELS\[phaseId\]\}<\/h2>/);
+  assert.match(live, /placeholder="搜索球员、球台或场次"/);
+  assert.match(live, /fullscreen-btn/);
+});
+
 test("regulation content remains snapshot-backed and handles empty rule standard", () => {
   const app = source("app/event-app.tsx");
   const content = source("db/public-content.ts");
