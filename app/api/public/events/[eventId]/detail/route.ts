@@ -18,7 +18,7 @@ const STATUS_LABELS: Record<string, string> = {
   upcoming: "待开始",
   in_progress: "进行中",
   finished: "已结束",
-  archived: "已归档",
+  archived: "已结束",
   cancelled: "已取消",
 };
 
@@ -57,7 +57,7 @@ function getCachedEventDetail(eventId: string) {
       getEffectivePublicStatus(eventId),
     ]);
     return { station: { ...sourceStation, status }, contentState: contentState ?? null, registration };
-  }, ["public-event-detail-v8", eventId], {
+  }, ["public-event-detail-v9", eventId], {
     revalidate: 60,
     tags: ["public-site", "public-content", `public-event-detail-${eventId}`],
   })();
