@@ -35,13 +35,21 @@ function eventVisualCss(stations: Awaited<ReturnType<typeof getPublicHomeData>>[
   }).join("\n");
 }
 
+function normalizePublicEventStatuses(data: Awaited<ReturnType<typeof getPublicHomeData>>) {
+  return {
+    ...data,
+    stations: data.stations.map((station) => station.status === "已归档" ? { ...station, status: "已结束" } : station),
+  };
+}
+
 export default async function Home() {
   const useCiBuildFallback = process.env.GITHUB_ACTIONS === "true"
     && (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY);
   const data: Awaited<ReturnType<typeof getPublicHomeData>> = useCiBuildFallback
     ? { stations: [], matches: [], players: [] }
     : await getCachedPublicHomeData();
-  const visualCss = eventVisualCss(data.stations);
+  const publicData = normalizePublicEventStatuses(data);
+  const visualCss = eventVisualCss(publicData.stations);
 
   return <>
     <style dangerouslySetInnerHTML={{ __html: visualCss }} />
@@ -57,6 +65,6 @@ export default async function Home() {
       @media(max-width:900px){.tabs.public-five-tabs,.tabs.public-unified-tabs{display:flex!important;width:max-content!important}.tabs.public-five-tabs button,.tabs.public-unified-tabs button{padding:8px 14px!important;font-size:11px!important}.partner-logo-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
       @media(max-width:620px){.partner-logo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.partner-logo-card{min-height:108px;padding:11px}.sponsor-section .partner-logo-card img{height:50px!important}}
     `}</style>
-    <EventApp data={data} />
+    <EventApp data={publicData} />
   </>;
 }
