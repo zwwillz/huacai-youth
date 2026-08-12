@@ -21,13 +21,33 @@ test("admin login only restores the explicit site-monitor destination", () => {
   assert.match(login, /window\.location\.replace\(loginDestination\(\)\)/);
 });
 
-test("site monitor time ranges always use valid bounded timestamps", () => {
-  const reader = read("db/site-monitor.ts");
+test("site monitor avoids Intl timezone dependency in EdgeOne server rendering", () => {
+  const page = read("app/site-monitor/page.tsx");
+  const reader = read("db/site-monitor-runtime.ts");
+  assert.doesNotMatch(page, /Intl\.DateTimeFormat/);
+  assert.doesNotMatch(reader, /Intl\.DateTimeFormat/);
+  assert.match(page, /CHINA_OFFSET_MS/);
+  assert.match(reader, /CHINA_OFFSET_MS/);
+});
+
+test("site monitor runtime uses bounded ISO text ranges and partial-query isolation", () => {
+  const reader = read("db/site-monitor-runtime.ts");
   assert.match(reader, /const nowIso = now\.toISOString\(\)/);
   assert.match(reader, /return \{ from: todayStart, to: nowIso \}/);
-  assert.match(reader, /al\.created_at::timestamptz<\$\{to\}::timestamptz/);
-  assert.match(reader, /attempted_at::timestamptz<\$\{to\}::timestamptz/);
-  assert.doesNotMatch(reader, /\$\{to\}=''|to: ""/);
+  assert.match(reader, /Promise\.allSettled/);
+  assert.match(reader, /rowsOrWarning/);
+  assert.match(reader, /al\.created_at>=\$\{from\}/);
+  assert.match(reader, /al\.created_at<\$\{to\}/);
+  assert.match(reader, /attempted_at>=\$\{from\}/);
+  assert.match(reader, /attempted_at<\$\{to\}/);
+  assert.doesNotMatch(reader, /::timestamptz|\$\{to\}=''|to: ""/);
+});
+
+test("site monitor page renders a warning instead of crashing when data load fails", () => {
+  const page = read("app/site-monitor/page.tsx");
+  assert.match(page, /try \{/);
+  assert.match(page, /page data load failed/);
+  assert.match(page, /部分监测数据暂未读取成功/);
 });
 
 test("public visit logging is asynchronous, deduplicated, rate-limited, and excludes private paths", () => {
@@ -59,8 +79,8 @@ test("visitor geo uses EdgeOne context without third-party geo API", () => {
   assert.doesNotMatch(geo, /fetch\(/);
 });
 
-test("site monitor reuses existing audit/login data and adds no migration", () => {
-  const reader = read("db/site-monitor.ts");
+test("site monitor reuses existing audit/login/session data and adds no migration", () => {
+  const reader = read("db/site-monitor-runtime.ts");
   assert.match(reader, /public\.audit_logs/);
   assert.match(reader, /public\.admin_login_attempts/);
   assert.match(reader, /public\.admin_sessions/);
