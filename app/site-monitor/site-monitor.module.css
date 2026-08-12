@@ -110,6 +110,17 @@
   font-size: 13px;
 }
 
+.warning {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid #eadfbd;
+  border-radius: 10px;
+  background: #fffaf0;
+  color: #735e25;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .tableCard {
   overflow: hidden;
   background: #fff;
