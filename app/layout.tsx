@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./public-ux-polish.css";
+import PublicVisitTracker from "./public-visit-tracker";
 
 export const metadata: Metadata = {
   title: "中国华彩十六球青少年系列赛｜官方赛事平台",
@@ -21,7 +22,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        {children}
+        <PublicVisitTracker />
+      </body>
     </html>
   );
 }
