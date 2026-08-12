@@ -54,7 +54,7 @@ test("qualifier playoffs stay in three or four columns and keep the game label i
   assert.doesNotMatch(css, /\.public-prelim-grid\{grid-template-columns:154px/);
 });
 
-test("mobile detailed schedule uses a fixed viewport shell with back and zoom controls while desktop markup stays intact", () => {
+test("mobile detailed schedule keeps station-only topbar and restores title search with zoom controls beside the title", () => {
   const enhancer = source("app/public-ux-enhancer.tsx");
   const css = source("app/public-ux-polish.css");
   const live = source("app/public-competition-live-v2.tsx");
@@ -62,14 +62,20 @@ test("mobile detailed schedule uses a fixed viewport shell with back and zoom co
   assert.match(enhancer, /public-stage-detail-open/);
   assert.match(enhancer, /返回赛程页/);
   assert.match(enhancer, /querySelector<HTMLButtonElement>\("\.draw-back"\)\?\.click\(\)/);
-  assert.match(enhancer, /clickStageControl\(detail, action\.controlIndex\)/);
   assert.match(enhancer, /main\[data-huacai-view\] > \.top h3/);
+  assert.doesNotMatch(enhancer, /public-mobile-stage-controls|clickStageControl/);
   assert.match(css, /@media\(max-width:900px\)[^]*\.public-live-stage-detail\{position:fixed!important;inset:0!important/);
   assert.match(css, /html\.public-stage-detail-open,html\.public-stage-detail-open body\{height:100%;overflow:hidden!important/);
   assert.match(css, /\.public-live-stage-detail>\.bracket-title\{display:none!important\}/);
-  assert.match(css, /\.public-live-stage-detail \.draw-toolbar\{display:none!important\}/);
+  assert.match(css, /\.public-live-stage-detail \.draw-toolbar\{[^}]*display:grid!important[^}]*grid-template-areas:"title controls" "search search"!important/);
+  assert.match(css, /\.public-live-stage-detail \.draw-toolbar>label\{grid-area:search/);
+  assert.match(css, /\.public-live-stage-detail \.draw-toolbar>\.board-controls\{grid-area:controls/);
+  assert.match(css, /\.public-live-stage-detail \.draw-toolbar>\.board-controls \.fullscreen-btn\{display:none!important\}/);
+  assert.match(css, /\.public-mobile-stage-topbar\{[^}]*grid-template-columns:58px minmax\(0,1fr\) 58px/);
+  assert.match(css, /\.public-mobile-stage-topbar:after/);
   assert.match(css, /\.public-live-stage-detail \.drag-tip\{display:none!important\}/);
-  assert.match(css, /\.public-mobile-stage-controls/);
+  assert.match(live, /<small>\{group\} · 详细赛程表<\/small><h2>\{PHASE_LABELS\[phaseId\]\}<\/h2>/);
+  assert.match(live, /placeholder="搜索球员、球台或场次"/);
   assert.match(live, /fullscreen-btn/);
 });
 
