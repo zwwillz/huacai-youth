@@ -8,10 +8,26 @@ test("site monitor is root-admin only and remains a single list page", () => {
   const page = read("app/site-monitor/page.tsx");
   assert.match(page, /viewer\.username !== "admin"/);
   assert.match(page, /viewer\.role !== "system_admin"/);
+  assert.match(page, /\/admin\/login\?next=%2Fsite-monitor/);
   for (const column of ["时间", "类型", "用户 \/ 访客", "IP", "地区", "设备", "页面 \/ 模块", "赛事", "操作"]) {
     assert.ok(page.includes(column), `missing monitor column: ${column}`);
   }
   assert.doesNotMatch(page, /详情|查看详情|pagination|下一页|上一页/);
+});
+
+test("admin login only restores the explicit site-monitor destination", () => {
+  const login = read("app/admin/login/login-form.tsx");
+  assert.match(login, /params\.get\("next"\) === "\/site-monitor" \? "\/site-monitor" : "\/admin"/);
+  assert.match(login, /window\.location\.replace\(loginDestination\(\)\)/);
+});
+
+test("site monitor time ranges always use valid bounded timestamps", () => {
+  const reader = read("db/site-monitor.ts");
+  assert.match(reader, /const nowIso = now\.toISOString\(\)/);
+  assert.match(reader, /return \{ from: todayStart, to: nowIso \}/);
+  assert.match(reader, /al\.created_at::timestamptz<\$\{to\}::timestamptz/);
+  assert.match(reader, /attempted_at::timestamptz<\$\{to\}::timestamptz/);
+  assert.doesNotMatch(reader, /\$\{to\}=''|to: ""/);
 });
 
 test("public visit logging is asynchronous, deduplicated, rate-limited, and excludes private paths", () => {
