@@ -48,3 +48,9 @@ test("site monitor reuses existing audit/login data and adds no migration", () =
   assert.match(reader, /al\.module_type='public_visit'/);
   assert.match(reader, /al\.module_type<>'public_visit'/);
 });
+
+test("existing operation log excludes public page views", () => {
+  const audit = read("db/audit-log.ts");
+  const matches = audit.match(/al\.module_type<>'public_visit'/g) || [];
+  assert.ok(matches.length >= 2, "operation log list and detail should both exclude public_visit rows");
+});
