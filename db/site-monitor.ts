@@ -176,7 +176,7 @@ export async function getSiteMonitorRows(
       al.created_at as "createdAt",
       al.target_id as "visitorId",
       al.ip_address as "ipAddress",
-      coalesce(evt.short_title,evt.title) as "eventTitle",
+      evt.short_title as "eventTitle",
       al.after_json as "afterJson"
     from public.audit_logs al
     left join public.events evt on evt.id=al.event_id
@@ -193,8 +193,8 @@ export async function getSiteMonitorRows(
       al.created_at as "createdAt",
       actor.display_name as "actorName",
       actor.username as "actorUsername",
-      al.ip_address as "ipAddress",
-      coalesce(evt.short_title,evt.title) as "eventTitle",
+      coalesce(al.ip_address,session_device.ip_address) as "ipAddress",
+      evt.short_title as "eventTitle",
       al.module_type as "moduleType",
       al.action,
       session_device.user_agent as "userAgent"
@@ -202,7 +202,7 @@ export async function getSiteMonitorRows(
     left join public.users actor on actor.id=al.actor_user_id
     left join public.events evt on evt.id=al.event_id
     left join lateral (
-      select s.user_agent
+      select s.user_agent,s.ip_address
       from public.admin_sessions s
       where s.user_id=al.actor_user_id
         and s.created_at::timestamptz<=al.created_at::timestamptz
