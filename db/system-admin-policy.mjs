@@ -1,5 +1,5 @@
 export const ROOT_SYSTEM_ADMIN_USERNAME = "admin";
-export const MAX_SECONDARY_SYSTEM_ADMINS = 2;
+export const MAX_SECONDARY_SYSTEM_ADMINS = 3;
 
 export function isRootSystemAdminUsername(username) {
   return String(username || "").trim().toLowerCase() === ROOT_SYSTEM_ADMIN_USERNAME;
