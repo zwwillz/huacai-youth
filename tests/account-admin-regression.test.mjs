@@ -23,12 +23,13 @@ test("root system admin identity is exact and secondary admins never see root", 
   assert.equal(canManageSystemAdminTarget("admin", "lytest_admin"), true);
 });
 
-test("secondary system administrator capacity is exactly two", () => {
-  assert.equal(MAX_SECONDARY_SYSTEM_ADMINS, 2);
+test("secondary system administrator capacity is exactly three", () => {
+  assert.equal(MAX_SECONDARY_SYSTEM_ADMINS, 3);
   assert.equal(hasSecondarySystemAdminCapacity(0), true);
   assert.equal(hasSecondarySystemAdminCapacity(1), true);
-  assert.equal(hasSecondarySystemAdminCapacity(2), false);
+  assert.equal(hasSecondarySystemAdminCapacity(2), true);
   assert.equal(hasSecondarySystemAdminCapacity(3), false);
+  assert.equal(hasSecondarySystemAdminCapacity(4), false);
 });
 
 test("account reader filters root admin for non-root system admins", () => {
@@ -53,6 +54,8 @@ test("account UI exposes system-admin creation only to root and keeps ordinary a
   const page = source("app/admin/accounts/page.tsx");
   const client = source("app/admin/accounts/account-management-client.tsx");
   assert.match(page, /canManageSystemAdmins=\{isRootSystemAdminUsername\(viewer\.username\)\}/);
+  assert.match(client, /secondaryAdminCount >= 3/);
+  assert.match(client, /最多3个系统管理员/);
   assert.match(client, /canManageSystemAdmins && <option value="system_admin"/);
   assert.match(client, /副系统管理员/);
   assert.match(client, /根系统管理员/);
