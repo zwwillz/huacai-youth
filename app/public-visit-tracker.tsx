@@ -71,7 +71,7 @@ async function loadGeo(): Promise<GeoResponse> {
 function currentPageContext() {
   const pathname = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
-  const eventId = params.get("event") || "";
+  const requestedEventId = params.get("event") || "";
   const root = document.querySelector<HTMLElement>("main[data-huacai-view]");
   const view = root?.dataset.huacaiView || "";
   const stationId = root?.dataset.huacaiStation || "";
@@ -79,15 +79,18 @@ function currentPageContext() {
   const headerTitle = document.querySelector<HTMLElement>("header.top h3")?.textContent?.trim() || "";
 
   let pageLabel = pathname === "/" ? "赛事中心" : pathname;
+  let eventId = "";
   let eventLabel = "";
 
   if (pathname.startsWith("/guide/")) {
     pageLabel = "参赛指南";
+    eventId = requestedEventId;
   } else if (view === "players") {
     pageLabel = "球员数据";
   } else if (view === "me") {
     pageLabel = "个人中心";
   } else if (view === "event" && stationId) {
+    eventId = requestedEventId;
     eventLabel = headerTitle || stationId;
     pageLabel = `${eventLabel} · ${TAB_LABELS[tab] || "赛事页面"}`;
   } else if (view === "event") {
