@@ -136,7 +136,6 @@ const ACTION_LABELS: Record<string, string> = {
   publish_master_schedule_group: "发布组别赛程",
   unpublish_master_schedule: "撤回总赛程",
   update_points_rule: "修改积分规则",
-  create: "创建",
   save: "保存",
   delete: "删除",
   confirm: "确认",
