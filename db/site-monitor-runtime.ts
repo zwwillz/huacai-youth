@@ -2,9 +2,15 @@ import { describeDevice } from "@/lib/site-monitor";
 import { getSqlClient } from "./index";
 import type { SiteMonitorRange, SiteMonitorRow } from "./site-monitor";
 
+export const SITE_MONITOR_PAGE_SIZE = 100;
+
 export type SiteMonitorData = {
   rows: SiteMonitorRow[];
   warnings: string[];
+  page: number;
+  pageSize: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
 };
 
 type PublicVisitRow = {
@@ -156,6 +162,11 @@ function clean(value: string | undefined, max = 100) {
   return (value || "").trim().slice(0, max);
 }
 
+function normalizePage(value: number | undefined) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(1, Math.min(10_000, Math.floor(value || 1)));
+}
+
 function parseMeta(value: string | null): MonitorMeta {
   if (!value) return {};
   try {
@@ -199,14 +210,6 @@ function visitorLabel(visitorId: string | null) {
   return `游客 ${compact.slice(-4).toUpperCase() || "----"}`;
 }
 
-function matchesQuery(row: SiteMonitorRow, query: string) {
-  if (!query) return true;
-  return [row.type, row.visitor, row.ip, row.region, row.device, row.page, row.event, row.action]
-    .join(" ")
-    .toLowerCase()
-    .includes(query.toLowerCase());
-}
-
 function rowsOrWarning<T>(
   result: PromiseSettledResult<T[]>,
   label: string,
@@ -220,13 +223,17 @@ function rowsOrWarning<T>(
 
 export async function getSiteMonitorData(
   username: string,
-  input: { range?: SiteMonitorRange; query?: string } = {},
+  input: { range?: SiteMonitorRange; query?: string; page?: number } = {},
 ): Promise<SiteMonitorData> {
   if (username !== "admin") throw new Error("只有根管理员 admin 可以查看网站监测。");
 
   const sql = getSqlClient();
   const range = input.range || "today";
   const query = clean(input.query, 80);
+  const searchPattern = query ? `%${query.toLowerCase()}%` : "";
+  const page = normalizePage(input.page);
+  const offset = (page - 1) * SITE_MONITOR_PAGE_SIZE;
+  const sourceLimit = offset + SITE_MONITOR_PAGE_SIZE + 1;
   const { from, to } = rangeBounds(range);
 
   const publicPromise = sql<PublicVisitRow[]>`
@@ -242,8 +249,12 @@ export async function getSiteMonitorData(
     where al.module_type='public_visit'
       and al.created_at>=${from}
       and al.created_at<${to}
+      and (
+        ${searchPattern}=''
+        or lower(concat_ws(' ',al.target_id,al.ip_address,evt.short_title,al.after_json)) like ${searchPattern}
+      )
     order by al.created_at desc,al.id desc
-    limit 700
+    limit ${sourceLimit}
   `;
 
   const adminPromise = sql<AdminActionRow[]>`
@@ -263,8 +274,12 @@ export async function getSiteMonitorData(
     where al.module_type<>'public_visit'
       and al.created_at>=${from}
       and al.created_at<${to}
+      and (
+        ${searchPattern}=''
+        or lower(concat_ws(' ',actor.display_name,actor.username,al.ip_address,evt.short_title,al.module_type,al.action)) like ${searchPattern}
+      )
     order by al.created_at desc,al.id desc
-    limit 700
+    limit ${sourceLimit}
   `;
 
   const loginPromise = sql<LoginRow[]>`
@@ -278,8 +293,12 @@ export async function getSiteMonitorData(
     from public.admin_login_attempts
     where attempted_at>=${from}
       and attempted_at<${to}
+      and (
+        ${searchPattern}=''
+        or lower(concat_ws(' ',username_key,ip_address,user_agent,case when success then '登录成功' else '登录失败' end)) like ${searchPattern}
+      )
     order by attempted_at desc,id desc
-    limit 700
+    limit ${sourceLimit}
   `;
 
   const sessionPromise = sql<SessionDeviceRow[]>`
@@ -347,11 +366,15 @@ export async function getSiteMonitorData(
     }),
   ];
 
+  const sortedRows = rows.sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+  const pageWindow = sortedRows.slice(offset, offset + SITE_MONITOR_PAGE_SIZE + 1);
+
   return {
     warnings,
-    rows: rows
-      .filter((row) => matchesQuery(row, query))
-      .sort((a, b) => Date.parse(b.time) - Date.parse(a.time))
-      .slice(0, 500),
+    page,
+    pageSize: SITE_MONITOR_PAGE_SIZE,
+    hasPrevious: page > 1,
+    hasNext: pageWindow.length > SITE_MONITOR_PAGE_SIZE,
+    rows: pageWindow.slice(0, SITE_MONITOR_PAGE_SIZE),
   };
 }
