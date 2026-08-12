@@ -22,7 +22,7 @@ export default async function PublicGuidePage({ params }: { params: Promise<{ gu
   const stationTitle = guide.city.endsWith("站") ? guide.city : `${guide.city}站`;
 
   return <main className="public-guide-page">
-    <header className="top public-guide-third-level-top">
+    <header className="top public-guide-unified-top public-guide-third-level-top">
       <Link className="public-guide-top-back" href={returnHref} aria-label="返回赛事概览">← 返回</Link>
       <h3>{stationTitle}</h3>
       <span className="public-guide-top-spacer" aria-hidden="true" />
