@@ -141,12 +141,13 @@ test("published guides return to their own event overview", () => {
   assert.match(guidePage, /返回赛事概览/);
 });
 
-test("public event lifecycle labels have distinct semantics", () => {
+test("public event lifecycle labels keep public-only semantics", () => {
   const home = source("db/public-home.ts");
   const detail = source("app/api/public/events/[eventId]/detail/route.ts");
   for (const current of [home, detail]) {
     assert.match(current, /registration_closed: "报名截止"/);
     assert.match(current, /upcoming: "待开始"/);
-    assert.match(current, /archived: "已归档"/);
   }
+  assert.match(detail, /archived: "已结束"/);
+  assert.doesNotMatch(detail, /archived: "已归档"/);
 });
