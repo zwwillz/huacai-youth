@@ -2,7 +2,6 @@
 /* eslint-disable @next/next/no-img-element */
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import MePreview from "./me-preview";
@@ -16,6 +15,7 @@ import type { PublicRegistrationInfo } from "@/db/registration-publishing";
 type MainView = "event" | "players" | "me";
 type EventTab = "overview" | "rules" | "schedule" | "matches" | "rankings" | "guide";
 type GuideKind = "transport" | "clothing";
+type PublicGuide = PublicContentState["guides"][number];
 type EventDetail = { station: Station; contentState: PublicContentState | null; registration: PublicRegistrationInfo | null };
 type CompetitionWarmIntent = "entry" | PublicCompetitionTab;
 type PublicStatusTone = "preparing" | "upcoming" | "registration" | "registration-closed" | "live" | "ended" | "archived" | "cancelled";
@@ -129,7 +129,7 @@ function PartnerSection({ station }: { station: Station }) {
   return null;
 }
 
-function StationOverview({station,contentState,registration,openRules,openSchedule,openGuide}:{station:Station;contentState?:PublicContentState;registration?:PublicRegistrationInfo|null;openRules:()=>void;openSchedule:()=>void;openGuide:(kind:GuideKind)=>void}) {
+function StationOverview({station,contentState,registration,openRules,openSchedule,openGuide}:{station:Station;contentState?:PublicContentState;registration?:PublicRegistrationInfo|null;openRules:()=>void;openSchedule:()=>void;openGuide:(target:string)=>void}) {
   const isLangfang = station.id === "langfang";
   const guides = contentState?.guides ?? [];
   const registrationTitle = registration?.state === "open" ? "报名进行中" : registration?.state === "closed" ? "报名已截止" : "报名尚未开放";
@@ -146,7 +146,7 @@ function StationOverview({station,contentState,registration,openRules,openSchedu
       {(["少年组", "青年组"] as Group[]).map((group) => <article className="card overview-group-card" key={group}><small>{group} {group === "少年组" ? "U16" : "U20"}</small><h2>{group}</h2><p className="overview-group-age">{station.age[group]}</p><dl><div><dt>正赛规模</dt><dd>{groupMainSize(station, group)}</dd></div><div><dt>冠军奖金</dt><dd>{station.prizes[group][0]?.[1] ?? "待公布"}</dd></div></dl></article>)}
     </section>
     <section className="card organizers"><div><small>官方信息</small><h2>赛事组织</h2></div><dl>{station.organizers.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}<div><dt>比赛地点</dt><dd>{station.venueDetail}</dd></div></dl></section>
-    <section className="card participant-tips"><header><div><small>参赛提示</small><h2>参赛友好提示</h2></div><b>信息将持续更新</b></header><div className="tip-links">{guides.length ? guides.map((guide) => <Link prefetch href={`/guide/${encodeURIComponent(guide.id)}`} className="dynamic-guide-link" key={guide.id}><span>{guideIcon(guide.title, guide.guideType)}</span><div><strong>{guide.title}</strong><small>查看组委会发布的参赛提示</small></div><b>查看 ›</b></Link>) : <><button onClick={() => openGuide("transport")}><span>行</span><div><strong>交通住宿攻略</strong><small>路线、场馆周边及住宿信息</small></div><b>查看 ›</b></button><button onClick={() => openGuide("clothing")}><span>装</span><div><strong>服装要求</strong><small>查看参赛着装相关提示</small></div><b>查看 ›</b></button></>}</div></section>
+    <section className="card participant-tips"><header><div><small>参赛提示</small><h2>参赛友好提示</h2></div><b>信息将持续更新</b></header><div className="tip-links">{guides.length ? guides.map((guide) => <button onClick={() => openGuide(guide.id)} key={guide.id}><span>{guideIcon(guide.title, guide.guideType)}</span><div><strong>{guide.title}</strong><small>查看组委会发布的参赛提示</small></div><b>查看 ›</b></button>) : <><button onClick={() => openGuide("transport")}><span>行</span><div><strong>交通住宿攻略</strong><small>路线、场馆周边及住宿信息</small></div><b>查看 ›</b></button><button onClick={() => openGuide("clothing")}><span>装</span><div><strong>服装要求</strong><small>查看参赛着装相关提示</small></div><b>查看 ›</b></button></>}</div></section>
     <PartnerSection station={station} />
   </div>;
 }
@@ -183,9 +183,15 @@ function PublicModuleEmpty({ icon, title, description }: { icon: string; title: 
   return <section className="public-module-state" role="status"><div><span>{icon}</span><h2>{title}</h2><p>{description}<br />感谢关注，最新信息会在确认后及时更新。</p></div></section>;
 }
 
-function ParticipantGuide({station,kind,onBack}:{station:Station;kind:GuideKind;onBack:()=>void}){
+function ParticipantGuide({station,kind,guide,onBack}:{station:Station;kind:GuideKind;guide?:PublicGuide;onBack:()=>void}){
   const isClothing=kind==="clothing";
-  return <div className="guide-page stack"><button className="draw-back" onClick={onBack}>‹ 返回赛事概览</button><section className="guide-hero"><span>{isClothing?"装":"行"}</span><div><small>参赛友好提示</small><h1>{isClothing?"服装要求":"交通住宿攻略"}</h1><p>{station.title}</p></div></section><section className="card guide-placeholder"><span>待</span><h2>待组委会更新</h2><p>{isClothing?"参赛服装、鞋履及现场着装要求将在组委会确认后更新。":"场馆交通路线、停车信息及周边住宿建议将在组委会确认后更新。"}</p></section></div>;
+  const title=guide?.title ?? (isClothing?"服装要求":"交通住宿攻略");
+  const icon=guide ? guideIcon(guide.title, guide.guideType) : isClothing?"装":"行";
+  return <div className="guide-page stack"><button className="draw-back" onClick={onBack}>‹ 返回赛事概览</button><section className="guide-hero"><span>{icon}</span><div><small>参赛友好提示</small><h1>{title}</h1><p>{station.title}</p></div></section>{guide ? <section className="card guide-published-content">{guide.blocks.length ? guide.blocks.map((block) => {
+    if (block.type === "image") return <figure key={block.id}><img src={block.imageUrl} alt={block.caption || title} />{block.caption && <figcaption>{block.caption}</figcaption>}</figure>;
+    if (block.type === "columns") return <div className="guide-published-columns" key={block.id}><p>{block.left}</p><p>{block.right}</p></div>;
+    return <p className="guide-published-paragraph" key={block.id}>{block.text}</p>;
+  }) : <p className="guide-published-paragraph">组委会已发布该提示，详细内容将持续更新。</p>}</section> : <section className="card guide-placeholder"><span>待</span><h2>待组委会更新</h2><p>{isClothing?"参赛服装、鞋履及现场着装要求将在组委会确认后更新。":"场馆交通路线、停车信息及周边住宿建议将在组委会确认后更新。"}</p></section>}</div>;
 }
 
 function eventUrl(eventId: string | null, tab: EventTab = "overview") {
@@ -201,7 +207,7 @@ export default function EventApp({ data }: { data: EventData }) {
   const [view, setView] = useState<MainView>("event");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<EventTab>("overview");
-  const [guideKind, setGuideKind] = useState<GuideKind>("clothing");
+  const [guideTarget, setGuideTarget] = useState<string>("clothing");
   const [scheduleRevision, setScheduleRevision] = useState(0);
   const [eventDetails, setEventDetails] = useState<Map<string, EventDetail>>(() => new Map([...eventDetailCache].map(([id, value]) => [id, value.data])));
   const baseStation = selectedId ? data.stations.find((item) => item.id === selectedId) ?? null : null;
@@ -209,6 +215,8 @@ export default function EventApp({ data }: { data: EventData }) {
   const station = detail?.station ?? baseStation;
   const contentState = detail?.contentState ?? undefined;
   const registration = detail?.registration ?? null;
+  const activeGuide = contentState?.guides.find((item) => item.id === guideTarget);
+  const fallbackGuideKind: GuideKind = guideTarget === "clothing" ? "clothing" : "transport";
   const requestedCompetitionTab = tab === "matches" || tab === "rankings" ? tab as PublicCompetitionTab : null;
   const activeCompetitionTab = requestedCompetitionTab && contentState ? requestedCompetitionTab : null;
 
@@ -241,7 +249,7 @@ export default function EventApp({ data }: { data: EventData }) {
     }
   };
   const title = view === "players" ? "球员数据" : view === "me" ? "个人中心" : station?.city || "赛事中心";
-  const openGuide = (kind: GuideKind) => { setGuideKind(kind); setTab("guide"); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const openGuide = (target: string) => { setGuideTarget(target); setTab("guide"); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const changeTab = (nextTab: EventTab) => {
     if (station) {
       const intent: CompetitionWarmIntent = nextTab === "matches" || nextTab === "rankings" ? nextTab : "entry";
@@ -303,7 +311,7 @@ export default function EventApp({ data }: { data: EventData }) {
         {view === "event" && station && <>
           <nav className="tabs public-five-tabs public-unified-tabs" aria-label="赛事内容">{([["overview", "概览"], ["rules", "竞赛规程"], ["schedule", "赛程"], ["matches", "对阵"], ["rankings", "排名"]] as [EventTab, string][]).map(([id, label]) => <button className={tab === id || (tab === "guide" && id === "overview") ? "active" : ""} onClick={() => changeTab(id)} key={id}>{label}</button>)}</nav>
           {tab === "overview" && <StationOverview station={station} contentState={contentState} registration={registration} openRules={() => changeTab("rules")} openSchedule={() => changeTab("schedule")} openGuide={openGuide} />}
-          {tab === "guide" && <ParticipantGuide station={station} kind={guideKind} onBack={() => changeTab("overview")} />}
+          {tab === "guide" && <ParticipantGuide station={station} kind={fallbackGuideKind} guide={activeGuide} onBack={() => changeTab("overview")} />}
           {tab === "rules" && (!contentState ? <PublicModuleEmpty icon="…" title="正在读取竞赛规程" description="赛事页面已经打开，详细规程正在后台补齐。" /> : contentState.publishedModules.includes("regulation") ? <CompetitionRules station={station} contentState={contentState} /> : <PublicModuleEmpty icon="规" title="本站竞赛规程正在完善中" description="待组委会确认后，将在这里发布正式规程、参赛要求和相关文件。" />)}
           {tab === "schedule" && <PublicMasterSchedule key={`${station.eventId}-${scheduleRevision}`} station={station} contentState={contentState} />}
           {requestedCompetitionTab && !contentState ? <PublicModuleEmpty icon="…" title="正在准备本站比赛数据" description="页面框架已打开，本站公开数据正在后台按优先级补齐。" /> : null}
