@@ -31,6 +31,29 @@ test("overview group cards restore age, main draw size and champion prize from d
   assert.match(publicData, /groupDetails: groupDetailsByEvent\.get\(row\.id\)/);
 });
 
+test("overview registration card is emphasized and open registration uses a button-like CTA", () => {
+  const app = source("app/event-app.tsx");
+  const css = source("app/public-ux-polish.css");
+  assert.match(app, /registration-public-card/);
+  assert.match(app, /<a href=\{registration\.url\}[^>]*>立即报名<\/a>/);
+  assert.match(css, /\.registration-public-card\{[^}]*background:/);
+  assert.match(css, /\.registration-public-card \.inline-actions a\{[^}]*min-height:42px/);
+  assert.match(css, /\.registration-public-card \.inline-actions a\{[^}]*display:inline-flex/);
+  assert.match(css, /\.registration-public-card \.inline-actions a\{[^}]*background:linear-gradient/);
+});
+
+test("qualifier playoffs stay in three or four columns and keep the game label in a reserved right-side lane", () => {
+  const live = source("app/public-competition-live-v2.tsx");
+  const css = source("app/public-ux-polish.css");
+  assert.match(live, /<b>附加赛<\/b>/);
+  assert.match(live, /className="public-prelim-grid"/);
+  assert.match(css, /\.public-prelim-grid\{grid-template-columns:repeat\(4,230px\)!important/);
+  assert.match(css, /@media\(max-width:900px\)[^]*\.public-prelim-grid\{grid-template-columns:repeat\(3,230px\)!important\}/);
+  assert.match(css, /\.public-prelim-grid \.stage-tree-match\{width:230px!important;padding-right:76px\}/);
+  assert.match(css, /\.public-prelim-grid \.stage-game-no\{left:auto!important;right:0!important/);
+  assert.doesNotMatch(css, /\.public-prelim-grid\{grid-template-columns:154px/);
+});
+
 test("regulation content remains snapshot-backed and handles empty rule standard", () => {
   const app = source("app/event-app.tsx");
   const content = source("db/public-content.ts");
