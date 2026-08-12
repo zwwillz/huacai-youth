@@ -22,13 +22,7 @@ export default async function PublicGuidePage({ params }: { params: Promise<{ gu
   const stationTitle = guide.city.endsWith("站") ? guide.city : `${guide.city}站`;
 
   return <main className="public-guide-page">
-    <header className="top public-guide-unified-top">
-      <Link className="public-guide-mobile-back" href={returnHref} aria-label="返回赛事概览">← 返回</Link>
-      <Link className="brand" href={returnHref} aria-label="返回赛事概览"><span>华</span><strong>华彩赛事</strong></Link>
-      <h3>{stationTitle}</h3>
-      <a className="admin" href="/admin" aria-label="后台管理"><span className="admin-full">后台管理</span><span className="admin-short" aria-hidden="true">管</span></a>
-      <span className="public-guide-mobile-spacer" aria-hidden="true" />
-    </header>
+    <header className="top public-guide-unified-top"><Link className="brand" href={returnHref} aria-label="返回赛事概览"><span>华</span><strong>华彩赛事</strong></Link><h3>{stationTitle}</h3><a className="admin" href="/admin" aria-label="后台管理"><span className="admin-full">后台管理</span><span className="admin-short" aria-hidden="true">管</span></a></header>
     <article className="public-guide-shell">
       <Link className="public-guide-return" href={returnHref}>← 返回赛事概览</Link>
       <section className="public-guide-hero"><small>参赛友好提示</small><h1>{guide.title}</h1><p>{guide.shortTitle} · {stationTitle}</p></section>
