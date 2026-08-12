@@ -12,7 +12,7 @@ test("site monitor is root-admin only and remains a single list page", () => {
   for (const column of ["时间", "类型", "用户 \/ 访客", "IP", "地区", "设备", "页面 \/ 模块", "赛事", "操作"]) {
     assert.ok(page.includes(column), `missing monitor column: ${column}`);
   }
-  assert.doesNotMatch(page, /详情|查看详情|pagination|下一页|上一页/);
+  assert.doesNotMatch(page, /详情|查看详情/);
 });
 
 test("admin login only restores the explicit site-monitor destination", () => {
@@ -41,6 +41,31 @@ test("site monitor runtime uses bounded ISO text ranges and partial-query isolat
   assert.match(reader, /attempted_at>=\$\{from\}/);
   assert.match(reader, /attempted_at<\$\{to\}/);
   assert.doesNotMatch(reader, /::timestamptz|\$\{to\}=''|to: ""/);
+});
+
+test("site monitor paginates server-side at 100 rows without a 500-row ceiling", () => {
+  const page = read("app/site-monitor/page.tsx");
+  const reader = read("db/site-monitor-runtime.ts");
+  assert.match(reader, /SITE_MONITOR_PAGE_SIZE = 100/);
+  assert.match(reader, /const offset = \(page - 1\) \* SITE_MONITOR_PAGE_SIZE/);
+  assert.match(reader, /const sourceLimit = offset \+ SITE_MONITOR_PAGE_SIZE \+ 1/);
+  assert.match(reader, /limit \$\{sourceLimit\}/);
+  assert.match(reader, /hasPrevious: page > 1/);
+  assert.match(reader, /hasNext: pageWindow\.length > SITE_MONITOR_PAGE_SIZE/);
+  assert.match(reader, /pageWindow\.slice\(0, SITE_MONITOR_PAGE_SIZE\)/);
+  assert.doesNotMatch(reader, /\.slice\(0, 500\)|limit 700/);
+  assert.match(page, /上一页/);
+  assert.match(page, /下一页/);
+  assert.match(page, /每页 \{pageSize\} 条/);
+  assert.match(page, /params\.set\("page", String\(page\)\)/);
+});
+
+test("site monitor search is applied before paginated source limits", () => {
+  const reader = read("db/site-monitor-runtime.ts");
+  assert.match(reader, /const searchPattern = query \? `%\$\{query\.toLowerCase\(\)\}%` : ""/);
+  assert.match(reader, /lower\(concat_ws\(' ',al\.target_id,al\.ip_address,evt\.short_title,al\.after_json\)\) like \$\{searchPattern\}/);
+  assert.match(reader, /actor\.display_name,actor\.username,al\.ip_address,evt\.short_title,al\.module_type,al\.action/);
+  assert.match(reader, /username_key,ip_address,user_agent/);
 });
 
 test("site monitor page renders a warning instead of crashing when data load fails", () => {
