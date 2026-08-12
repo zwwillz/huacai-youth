@@ -82,15 +82,36 @@ export async function POST(request: Request) {
         id,actor_user_id,event_id,module_type,target_type,target_id,action,reason,before_json,after_json,ip_address,created_at
       )
       select
-        ${randomUUID()},null,nullif(${eventId},''),'public_visit','page',${visitorId},'view',null,null,${afterJson},${ipAddress},${createdAt}
-      where not exists (
-        select 1
-        from public.audit_logs existing
-        where existing.module_type='public_visit'
-          and existing.target_id=${visitorId}
-          and coalesce(existing.after_json,'{}')::jsonb->>'path'=${path}
-          and existing.created_at::timestamptz>now()-interval '20 seconds'
-      )
+        ${randomUUID()},
+        null,
+        (select e.id from public.events e where e.id=nullif(${eventId},'') limit 1),
+        'public_visit',
+        'page',
+        ${visitorId},
+        'view',
+        null,
+        null,
+        ${afterJson},
+        ${ipAddress},
+        ${createdAt}
+      where (
+        select count(*)
+        from public.audit_logs recent
+        where recent.module_type='public_visit'
+          and recent.created_at::timestamptz>now()-interval '1 minute'
+          and (
+            (${ipAddress}::text is not null and recent.ip_address=${ipAddress})
+            or (${ipAddress}::text is null and recent.target_id=${visitorId})
+          )
+      ) < 120
+        and not exists (
+          select 1
+          from public.audit_logs existing
+          where existing.module_type='public_visit'
+            and existing.target_id=${visitorId}
+            and coalesce(existing.after_json,'{}')::jsonb->>'path'=${path}
+            and existing.created_at::timestamptz>now()-interval '20 seconds'
+        )
     `;
   } catch (error) {
     console.warn("public visit logging skipped", error instanceof Error ? error.message : "unknown error");
