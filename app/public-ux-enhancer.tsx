@@ -66,11 +66,6 @@ function syncMatchDay(preferUrl: boolean) {
   positionActiveDay(nav, buttons, active);
 }
 
-function clickStageControl(detail: HTMLElement, index: number) {
-  const controls = detail.querySelectorAll<HTMLButtonElement>(".board-controls button");
-  controls[index]?.click();
-}
-
 function createMobileStageTopbar(detail: HTMLElement) {
   const bar = document.createElement("div");
   bar.className = "public-mobile-stage-topbar";
@@ -87,23 +82,7 @@ function createMobileStageTopbar(detail: HTMLElement) {
   const title = document.createElement("strong");
   title.className = "public-mobile-stage-title";
 
-  const controls = document.createElement("div");
-  controls.className = "public-mobile-stage-controls";
-  const actions = [
-    { label: "−", title: "缩小", controlIndex: 0 },
-    { label: "+", title: "放大", controlIndex: 2 },
-    { label: "复位", title: "复位", controlIndex: 3 },
-  ];
-  for (const action of actions) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = action.label;
-    button.setAttribute("aria-label", action.title);
-    button.addEventListener("click", () => clickStageControl(detail, action.controlIndex));
-    controls.append(button);
-  }
-
-  bar.append(back, title, controls);
+  bar.append(back, title);
   detail.prepend(bar);
   return bar;
 }
