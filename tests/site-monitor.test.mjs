@@ -14,7 +14,7 @@ test("site monitor is root-admin only and remains a single list page", () => {
   assert.doesNotMatch(page, /详情|查看详情|pagination|下一页|上一页/);
 });
 
-test("public visit logging is asynchronous, deduplicated, and excludes private paths", () => {
+test("public visit logging is asynchronous, deduplicated, rate-limited, and excludes private paths", () => {
   const tracker = read("app/public-visit-tracker.tsx");
   const route = read("app/api/public/visit/route.ts");
   const layout = read("app/layout.tsx");
@@ -26,6 +26,9 @@ test("public visit logging is asynchronous, deduplicated, and excludes private p
   assert.match(tracker, /huacai:navigation/);
   assert.match(route, /'public_visit'/);
   assert.match(route, /interval '20 seconds'/);
+  assert.match(route, /interval '1 minute'/);
+  assert.match(route, /\) < 120/);
+  assert.match(route, /select e\.id from public\.events/);
   assert.match(route, /status: 204/);
   assert.match(route, /public visit logging skipped/);
 });
