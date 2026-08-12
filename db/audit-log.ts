@@ -138,7 +138,8 @@ export async function getAuditLogWorkspaceData(username: string, input: AuditLog
     left join public.event_groups target_group on al.target_type='event_group' and target_group.id=al.target_id
     left join public.registrations target_registration on al.target_type='registration' and target_registration.id=al.target_id
     left join public.players registration_player on registration_player.id=target_registration.player_id
-    where (${eventId}='' or al.event_id=${eventId})
+    where al.module_type<>'public_visit'
+      and (${eventId}='' or al.event_id=${eventId})
       and (${moduleType}='' or al.module_type=${moduleType})
       and (${actorUserId}='' or al.actor_user_id=${actorUserId})
       and (${action}='' or al.action=${action})
@@ -200,6 +201,7 @@ export async function getAuditLogWorkspaceData(username: string, input: AuditLog
     left join public.registrations target_registration on al.target_type='registration' and target_registration.id=al.target_id
     left join public.players registration_player on registration_player.id=target_registration.player_id
     where al.id=${detailId}
+      and al.module_type<>'public_visit'
     limit 1
   ` : Promise.resolve([] as DetailRow[]);
 
