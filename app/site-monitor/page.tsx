@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getAdminViewer } from "@/app/admin/admin-viewer";
-import { getSiteMonitorRows, type SiteMonitorRange, type SiteMonitorRow } from "@/db/site-monitor";
+import { getSiteMonitorData, SITE_MONITOR_PAGE_SIZE } from "@/db/site-monitor-runtime";
+import type { SiteMonitorRange, SiteMonitorRow } from "@/db/site-monitor";
 import styles from "./site-monitor.module.css";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,8 @@ const RANGE_OPTIONS: Array<{ id: SiteMonitorRange; label: string }> = [
   { id: "30d", label: "近30天" },
 ];
 
+const CHINA_OFFSET_MS = 8 * 60 * 60 * 1000;
+
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] || "" : value || "";
 }
@@ -32,18 +35,20 @@ function normalizeRange(value: string): SiteMonitorRange {
   return RANGE_OPTIONS.some((item) => item.id === value) ? value as SiteMonitorRange : "today";
 }
 
+function normalizePage(value: string) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 10_000) : 1;
+}
+
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
+
 function formatChinaTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(date).replace("/", "-").replace("/", "-");
+  const shifted = new Date(date.getTime() + CHINA_OFFSET_MS);
+  return `${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())} ${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}`;
 }
 
 function typeClass(row: SiteMonitorRow) {
@@ -52,9 +57,10 @@ function typeClass(row: SiteMonitorRow) {
   return styles.typeAdmin;
 }
 
-function hrefFor(range: SiteMonitorRange, query: string) {
+function hrefFor(range: SiteMonitorRange, query: string, page = 1) {
   const params = new URLSearchParams({ range });
   if (query) params.set("q", query);
+  if (page > 1) params.set("page", String(page));
   return `/site-monitor?${params.toString()}`;
 }
 
@@ -66,7 +72,26 @@ export default async function SiteMonitorPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const range = normalizeRange(first(params.range));
   const query = first(params.q).trim().slice(0, 80);
-  const rows = await getSiteMonitorRows(viewer.username, { range, query });
+  const requestedPage = normalizePage(first(params.page));
+
+  let rows: SiteMonitorRow[] = [];
+  let warnings: string[] = [];
+  let currentPage = requestedPage;
+  let pageSize = SITE_MONITOR_PAGE_SIZE;
+  let hasPrevious = requestedPage > 1;
+  let hasNext = false;
+  try {
+    const data = await getSiteMonitorData(viewer.username, { range, query, page: requestedPage });
+    rows = data.rows;
+    warnings = data.warnings;
+    currentPage = data.page;
+    pageSize = data.pageSize;
+    hasPrevious = data.hasPrevious;
+    hasNext = data.hasNext;
+  } catch (error) {
+    console.error("[site-monitor] page data load failed", error);
+    warnings = ["监测数据暂时读取失败，请稍后刷新重试"];
+  }
 
   return (
     <main className={styles.page}>
@@ -105,8 +130,14 @@ export default async function SiteMonitorPage({ searchParams }: PageProps) {
             <button type="submit">搜索</button>
           </form>
 
-          <span className={styles.count}>显示 {rows.length} 条 · 最多 500 条</span>
+          <span className={styles.count}>第 {currentPage} 页 · 本页 {rows.length} 条 · 每页 {pageSize} 条</span>
         </div>
+
+        {warnings.length > 0 && (
+          <div className={styles.warning} role="status">
+            部分监测数据暂未读取成功：{warnings.join("、")}。页面其他数据仍可正常查看。
+          </div>
+        )}
 
         <section className={styles.tableCard} aria-label="网站监测记录">
           {rows.length ? (
@@ -143,9 +174,23 @@ export default async function SiteMonitorPage({ searchParams }: PageProps) {
               </table>
             </div>
           ) : (
-            <div className={styles.empty}>当前筛选条件下还没有记录。</div>
+            <div className={styles.empty}>{warnings.length ? "监测数据暂未读取成功，请稍后刷新。" : "当前筛选条件下还没有记录。"}</div>
           )}
         </section>
+
+        <nav className={styles.pagination} aria-label="监测记录分页">
+          {hasPrevious ? (
+            <Link className={styles.pageButton} href={hrefFor(range, query, currentPage - 1)}>上一页</Link>
+          ) : (
+            <span className={styles.pageButtonDisabled}>上一页</span>
+          )}
+          <span className={styles.pageNumber}>第 {currentPage} 页</span>
+          {hasNext ? (
+            <Link className={styles.pageButton} href={hrefFor(range, query, currentPage + 1)}>下一页</Link>
+          ) : (
+            <span className={styles.pageButtonDisabled}>下一页</span>
+          )}
+        </nav>
       </div>
     </main>
   );
