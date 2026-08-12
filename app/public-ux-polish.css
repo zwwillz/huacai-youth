@@ -84,16 +84,24 @@
   .public-live-stage-detail{position:fixed!important;inset:0!important;z-index:120!important;width:100vw!important;height:100dvh!important;min-height:0!important;margin:0!important;padding:0!important;gap:0!important;overflow:hidden!important;border-radius:0!important;background:#151b3c!important}
   .public-live-stage-detail>.bracket-title{display:none!important}
   .public-live-stage-detail>.draw-shell{height:auto!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:#151b3c!important;display:flex!important;flex:1 1 auto!important;flex-direction:column!important;overflow:hidden!important}
-  .public-live-stage-detail .draw-toolbar{display:none!important}
+  .public-live-stage-detail .draw-toolbar{padding:13px 14px 12px!important;border-bottom:1px solid #ece7f1!important;background:#fff!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-areas:"title controls" "search search"!important;gap:10px 12px!important;align-items:end!important}
+  .public-live-stage-detail .draw-toolbar>div:first-child{grid-area:title;min-width:0}
+  .public-live-stage-detail .draw-toolbar>div:first-child small{display:block!important;color:#8978a4!important;font-size:9px!important;font-weight:800!important;letter-spacing:.1em!important}
+  .public-live-stage-detail .draw-toolbar>div:first-child h2{margin:5px 0 0!important;color:#171528!important;font-size:19px!important;line-height:1.25!important}
+  .public-live-stage-detail .draw-toolbar>div:first-child p{display:none!important}
+  .public-live-stage-detail .draw-toolbar>label{grid-area:search;width:100%!important;min-width:0!important;margin:0!important}
+  .public-live-stage-detail .draw-toolbar>label input{height:42px!important}
+  .public-live-stage-detail .draw-toolbar>.board-controls{grid-area:controls;display:flex!important;align-items:center!important;justify-content:flex-end!important;gap:5px!important;white-space:nowrap!important}
+  .public-live-stage-detail .draw-toolbar>.board-controls button{height:34px!important;min-width:34px!important;padding:0 8px!important;border:1px solid #dfd8ea!important;border-radius:9px!important;background:#fff!important;color:#30233f!important;font-size:11px!important;font-weight:900!important}
+  .public-live-stage-detail .draw-toolbar>.board-controls b{width:auto!important;min-width:38px!important;color:#655d70!important;font-size:9px!important;text-align:center!important}
+  .public-live-stage-detail .draw-toolbar>.board-controls .fullscreen-btn{display:none!important}
   .public-live-stage-detail .unified-viewport{height:auto!important;min-height:0!important;flex:1 1 auto!important;border-radius:0!important;box-shadow:none!important}
   .public-live-stage-detail .unified-canvas{padding:18px 16px 80px!important}
   .public-live-stage-detail .drag-tip{display:none!important}
-  .public-mobile-stage-topbar{height:58px;min-height:58px;padding:0 10px;border-bottom:1px solid #e8e4ee;background:#fff;color:#171528;display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:6px;align-items:center;position:relative;z-index:4}
+  .public-mobile-stage-topbar{height:58px;min-height:58px;padding:0 10px;border-bottom:1px solid #e8e4ee;background:#fff;color:#171528;display:grid;grid-template-columns:58px minmax(0,1fr) 58px;gap:6px;align-items:center;position:relative;z-index:4}
+  .public-mobile-stage-topbar:after{content:"";display:block;width:58px;height:1px}
   .public-mobile-stage-back{height:36px;padding:0 6px;border:0;border-radius:9px;color:#542aa0;background:#f2edf9;font-size:11px;font-weight:900;cursor:pointer}
   .public-mobile-stage-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:15px;font-weight:800}
-  .public-mobile-stage-controls{display:flex;align-items:center;justify-content:flex-end;gap:4px}
-  .public-mobile-stage-controls button{height:34px;min-width:32px;padding:0 8px;border:1px solid #dfd8ea;border-radius:9px;color:#3d2862;background:#fff;font-size:13px;font-weight:900;cursor:pointer}
-  .public-mobile-stage-controls button:last-child{min-width:42px;font-size:10px}
 }
 
 @media(max-width:680px){
@@ -114,6 +122,11 @@
   .public-fee-grid{grid-template-columns:1fr 1fr;gap:8px}
   .public-fee-grid article{padding:12px}
   .public-fee-grid strong,.public-fee-single strong{font-size:27px}
+  .public-live-stage-detail .draw-toolbar{grid-template-columns:minmax(0,1fr) auto!important;gap:9px 8px!important;padding:12px!important}
+  .public-live-stage-detail .draw-toolbar>div:first-child h2{font-size:17px!important}
+  .public-live-stage-detail .draw-toolbar>.board-controls{gap:4px!important}
+  .public-live-stage-detail .draw-toolbar>.board-controls button{height:32px!important;min-width:31px!important;padding:0 7px!important}
+  .public-live-stage-detail .draw-toolbar>.board-controls b{min-width:34px!important;font-size:8px!important}
 }
 
 @media(max-width:520px){
@@ -125,9 +138,11 @@
   .top h3{font-size:14px}
   main[data-huacai-view] .tabs.public-five-tabs button,
   main[data-huacai-view] .tabs.public-unified-tabs button{font-size:11px!important}
-  .public-mobile-stage-topbar{grid-template-columns:52px minmax(0,1fr) auto;padding:0 7px;gap:4px}
-  .public-mobile-stage-controls{gap:3px}
-  .public-mobile-stage-controls button{min-width:29px;padding:0 6px}
-  .public-mobile-stage-controls button:last-child{min-width:38px}
+  .public-mobile-stage-topbar{grid-template-columns:52px minmax(0,1fr) 52px;padding:0 7px;gap:4px}
+  .public-mobile-stage-topbar:after{width:52px}
   .public-mobile-stage-title{font-size:14px}
+  .public-live-stage-detail .draw-toolbar{grid-template-columns:minmax(0,1fr) auto!important;padding:10px!important;gap:8px 6px!important}
+  .public-live-stage-detail .draw-toolbar>div:first-child h2{font-size:16px!important}
+  .public-live-stage-detail .draw-toolbar>.board-controls button{min-width:29px!important;padding:0 6px!important}
+  .public-live-stage-detail .draw-toolbar>.board-controls b{min-width:31px!important}
 }
