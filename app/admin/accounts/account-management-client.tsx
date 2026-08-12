@@ -28,7 +28,7 @@ export default function AccountManagementClient({
   const [message, setMessage] = useState("");
   const { ask, dialog } = useAdminActionDialog();
   const secondaryAdminCount = accounts.filter((account) => account.role === "system_admin" && account.username !== "admin").length;
-  const secondaryAdminFull = secondaryAdminCount >= 2;
+  const secondaryAdminFull = secondaryAdminCount >= 3;
 
   const reload = async (showMessage = true) => {
     setWorking("refresh");
@@ -55,7 +55,7 @@ export default function AccountManagementClient({
   const create = async (event: FormEvent) => {
     event.preventDefault();
     if (draft.role === "system_admin" && (!canManageSystemAdmins || secondaryAdminFull)) {
-      setMessage(secondaryAdminFull ? "系统管理员账号最多只能增加2个，请先删除一个已有系统管理员账号后再创建。" : "只有根系统管理员 admin 可以增加系统管理员账号。");
+      setMessage(secondaryAdminFull ? "系统管理员账号最多只能增加3个，请先删除一个已有系统管理员账号后再创建。" : "只有根系统管理员 admin 可以增加系统管理员账号。");
       return;
     }
     const success = draft.role === "system_admin"
@@ -86,15 +86,15 @@ export default function AccountManagementClient({
     <section className="admin-system-head"><div><small>ACCOUNT & PERMISSION</small><h2>账号与权限</h2><p>这里管理系统级后台账号和角色。系统管理员拥有全局权限；组委会和裁判仍需在具体赛事的“后台成员”中分配赛事权限。</p></div><button type="button" disabled={working === "refresh"} onClick={() => reload()}>{working === "refresh" ? "刷新中…" : `刷新账号列表 · ${accounts.length}`}</button></section>
     {message && <div className="admin-system-message">{message}</div>}
     <section className="admin-system-grid">
-      <article className="admin-system-card"><header><h3>创建后台账号</h3><p>{canManageSystemAdmins ? `根账号 admin 可额外创建最多2个系统管理员；当前 ${secondaryAdminCount}/2。副系统管理员拥有完整业务权限，但看不到也不能管理 admin。` : "可继续创建组委会或裁判账号。根系统管理员账号不会出现在你的账号列表中。"}</p></header><form className="admin-account-form" onSubmit={create}>
+      <article className="admin-system-card"><header><h3>创建后台账号</h3><p>{canManageSystemAdmins ? `根账号 admin 可额外创建最多3个系统管理员；当前 ${secondaryAdminCount}/3。副系统管理员拥有完整业务权限，但看不到也不能管理 admin。` : "可继续创建组委会或裁判账号。根系统管理员账号不会出现在你的账号列表中。"}</p></header><form className="admin-account-form" onSubmit={create}>
         <label><span>用户名</span><input value={draft.username} onChange={(e) => setDraft((current) => ({ ...current, username: e.target.value }))} placeholder="例如 referee.li" required /></label>
         <label><span>显示名称</span><input value={draft.displayName} onChange={(e) => setDraft((current) => ({ ...current, displayName: e.target.value }))} placeholder="例如 李裁判" required /></label>
         <label><span>初始密码</span><input type="password" minLength={8} value={draft.password} onChange={(e) => setDraft((current) => ({ ...current, password: e.target.value }))} placeholder="至少8位" required /></label>
-        <label><span>系统角色</span><select value={draft.role} onChange={(e) => setDraft((current) => ({ ...current, role: e.target.value as AccountRole }))}><option value="committee">组委会</option><option value="referee">裁判</option>{canManageSystemAdmins && <option value="system_admin" disabled={secondaryAdminFull}>系统管理员{secondaryAdminFull ? "（已达2个上限）" : ""}</option>}</select><small>用户名创建后保持不变；显示名称、角色、状态和密码可按权限修改。</small></label>
+        <label><span>系统角色</span><select value={draft.role} onChange={(e) => setDraft((current) => ({ ...current, role: e.target.value as AccountRole }))}><option value="committee">组委会</option><option value="referee">裁判</option>{canManageSystemAdmins && <option value="system_admin" disabled={secondaryAdminFull}>系统管理员{secondaryAdminFull ? "（已达3个上限）" : ""}</option>}</select><small>用户名创建后保持不变；显示名称、角色、状态和密码可按权限修改。</small></label>
         <button disabled={working === "create" || (draft.role === "system_admin" && secondaryAdminFull)}>{working === "create" ? "正在创建…" : "创建账号"}</button>
       </form></article>
 
-      <article className="admin-system-card"><header><h3>已有后台账号 · {accounts.length}</h3><p>{canManageSystemAdmins ? `副系统管理员 ${secondaryAdminCount}/2。根账号 admin 受保护；其他系统管理员只能由 admin 修改、停用、重置密码、调整角色或删除。` : "角色决定系统功能范围；你可以管理普通后台账号，但系统管理员账号只能由根账号 admin 维护。"}</p></header><div className="admin-account-list">{accounts.map((account) => {
+      <article className="admin-system-card"><header><h3>已有后台账号 · {accounts.length}</h3><p>{canManageSystemAdmins ? `副系统管理员 ${secondaryAdminCount}/3。根账号 admin 受保护；其他系统管理员只能由 admin 修改、停用、重置密码、调整角色或删除。` : "角色决定系统功能范围；你可以管理普通后台账号，但系统管理员账号只能由根账号 admin 维护。"}</p></header><div className="admin-account-list">{accounts.map((account) => {
         const isRootAccount = account.role === "system_admin" && account.username === "admin";
         const isSecondaryAdmin = account.role === "system_admin" && !isRootAccount;
         const canOperate = !isRootAccount && (!isSecondaryAdmin || canManageSystemAdmins);
