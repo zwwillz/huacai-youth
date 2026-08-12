@@ -1,8 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getAdminViewer } from "@/app/admin/admin-viewer";
 import { getSiteMonitorRows, type SiteMonitorRange, type SiteMonitorRow } from "@/db/site-monitor";
 import styles from "./site-monitor.module.css";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "网站监测",
+  robots: { index: false, follow: false },
+};
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
