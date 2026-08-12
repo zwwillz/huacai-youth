@@ -6,6 +6,15 @@ type LoginMode = "login" | "setup";
 type SubmitPhase = "idle" | "submitting" | "redirecting";
 type ConfigState = "checking" | "ready" | "unconfigured" | "error";
 
+function loginDestination() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("next") === "/site-monitor" ? "/site-monitor" : "/admin";
+  } catch {
+    return "/admin";
+  }
+}
+
 export default function LoginForm() {
   const [mode, setMode] = useState<LoginMode>("login");
   const [configState, setConfigState] = useState<ConfigState>("checking");
@@ -58,7 +67,7 @@ export default function LoginForm() {
       // Authentication crosses the public/login and private admin-layout boundary.
       // Use a document-level navigation so the authenticated layout is rebuilt
       // from the new session instead of reusing a shellless login layout.
-      window.location.replace("/admin");
+      window.location.replace(loginDestination());
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "登录失败，请重试。");
       setPhase("idle");
@@ -67,7 +76,7 @@ export default function LoginForm() {
 
   const buttonText = setup
     ? phase === "submitting" ? "正在创建管理员…" : phase === "redirecting" ? "设置完成，正在进入工作台…" : "设置密码并进入后台"
-    : phase === "submitting" ? "正在验证账号…" : phase === "redirecting" ? "登录成功，正在进入工作台…" : "登录管理后台";
+    : phase === "submitting" ? "正在验证账号…" : phase === "redirecting" ? "登录成功，正在进入…" : "登录管理后台";
 
   return <form className="backend-login-form" onSubmit={submit}>
     {setup && <div className="backend-first-setup"><strong>首次管理员设置</strong><p>系统管理员用户名固定为 admin。请先设置密码，设置完成后该入口会自动关闭。</p></div>}
