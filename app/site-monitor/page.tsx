@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getAdminViewer } from "@/app/admin/admin-viewer";
-import { getSiteMonitorData } from "@/db/site-monitor-runtime";
+import { getSiteMonitorData, SITE_MONITOR_PAGE_SIZE } from "@/db/site-monitor-runtime";
 import type { SiteMonitorRange, SiteMonitorRow } from "@/db/site-monitor";
 import styles from "./site-monitor.module.css";
 
@@ -35,6 +35,11 @@ function normalizeRange(value: string): SiteMonitorRange {
   return RANGE_OPTIONS.some((item) => item.id === value) ? value as SiteMonitorRange : "today";
 }
 
+function normalizePage(value: string) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 10_000) : 1;
+}
+
 function pad(value: number) {
   return String(value).padStart(2, "0");
 }
@@ -52,9 +57,10 @@ function typeClass(row: SiteMonitorRow) {
   return styles.typeAdmin;
 }
 
-function hrefFor(range: SiteMonitorRange, query: string) {
+function hrefFor(range: SiteMonitorRange, query: string, page = 1) {
   const params = new URLSearchParams({ range });
   if (query) params.set("q", query);
+  if (page > 1) params.set("page", String(page));
   return `/site-monitor?${params.toString()}`;
 }
 
@@ -66,13 +72,22 @@ export default async function SiteMonitorPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const range = normalizeRange(first(params.range));
   const query = first(params.q).trim().slice(0, 80);
+  const requestedPage = normalizePage(first(params.page));
 
   let rows: SiteMonitorRow[] = [];
   let warnings: string[] = [];
+  let currentPage = requestedPage;
+  let pageSize = SITE_MONITOR_PAGE_SIZE;
+  let hasPrevious = requestedPage > 1;
+  let hasNext = false;
   try {
-    const data = await getSiteMonitorData(viewer.username, { range, query });
+    const data = await getSiteMonitorData(viewer.username, { range, query, page: requestedPage });
     rows = data.rows;
     warnings = data.warnings;
+    currentPage = data.page;
+    pageSize = data.pageSize;
+    hasPrevious = data.hasPrevious;
+    hasNext = data.hasNext;
   } catch (error) {
     console.error("[site-monitor] page data load failed", error);
     warnings = ["监测数据暂时读取失败，请稍后刷新重试"];
@@ -115,7 +130,7 @@ export default async function SiteMonitorPage({ searchParams }: PageProps) {
             <button type="submit">搜索</button>
           </form>
 
-          <span className={styles.count}>显示 {rows.length} 条 · 最多 500 条</span>
+          <span className={styles.count}>第 {currentPage} 页 · 本页 {rows.length} 条 · 每页 {pageSize} 条</span>
         </div>
 
         {warnings.length > 0 && (
@@ -162,6 +177,20 @@ export default async function SiteMonitorPage({ searchParams }: PageProps) {
             <div className={styles.empty}>{warnings.length ? "监测数据暂未读取成功，请稍后刷新。" : "当前筛选条件下还没有记录。"}</div>
           )}
         </section>
+
+        <nav className={styles.pagination} aria-label="监测记录分页">
+          {hasPrevious ? (
+            <Link className={styles.pageButton} href={hrefFor(range, query, currentPage - 1)}>上一页</Link>
+          ) : (
+            <span className={styles.pageButtonDisabled}>上一页</span>
+          )}
+          <span className={styles.pageNumber}>第 {currentPage} 页</span>
+          {hasNext ? (
+            <Link className={styles.pageButton} href={hrefFor(range, query, currentPage + 1)}>下一页</Link>
+          ) : (
+            <span className={styles.pageButtonDisabled}>下一页</span>
+          )}
+        </nav>
       </div>
     </main>
   );
