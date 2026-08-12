@@ -110,6 +110,8 @@ const ACTION_LABELS: Record<string, string> = {
   reset_password: "重置密码",
   change_role: "修改角色",
   delete_account: "删除账号",
+  delete_system_admin: "删除系统管理员",
+  update_account: "修改账号",
   create_player: "创建球员档案",
   update_player: "修改球员档案",
   delete_player: "删除球员档案",
@@ -165,14 +167,13 @@ function parseMeta(value: string | null): MonitorMeta {
   }
 }
 
-function chinaDayStart(offsetDays = 0) {
-  const now = new Date();
+function chinaDayStart(reference: Date, offsetDays = 0) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(now);
+  }).formatToParts(reference);
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   const base = new Date(`${value.year}-${value.month}-${value.day}T00:00:00+08:00`);
   base.setUTCDate(base.getUTCDate() + offsetDays);
@@ -181,10 +182,12 @@ function chinaDayStart(offsetDays = 0) {
 
 function rangeBounds(range: SiteMonitorRange) {
   const now = new Date();
-  if (range === "today") return { from: chinaDayStart(), to: "" };
-  if (range === "yesterday") return { from: chinaDayStart(-1), to: chinaDayStart() };
-  if (range === "30d") return { from: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(), to: "" };
-  return { from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), to: "" };
+  const nowIso = now.toISOString();
+  const todayStart = chinaDayStart(now);
+  if (range === "today") return { from: todayStart, to: nowIso };
+  if (range === "yesterday") return { from: chinaDayStart(now, -1), to: todayStart };
+  if (range === "30d") return { from: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(), to: nowIso };
+  return { from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), to: nowIso };
 }
 
 function moduleLabel(value: string) {
@@ -236,7 +239,7 @@ export async function getSiteMonitorRows(
     left join public.events evt on evt.id=al.event_id
     where al.module_type='public_visit'
       and al.created_at::timestamptz>=${from}::timestamptz
-      and (${to}='' or al.created_at::timestamptz<${to}::timestamptz)
+      and al.created_at::timestamptz<${to}::timestamptz
     order by al.created_at::timestamptz desc,al.id desc
     limit 700
   `;
@@ -267,7 +270,7 @@ export async function getSiteMonitorRows(
     ) session_device on true
     where al.module_type<>'public_visit'
       and al.created_at::timestamptz>=${from}::timestamptz
-      and (${to}='' or al.created_at::timestamptz<${to}::timestamptz)
+      and al.created_at::timestamptz<${to}::timestamptz
     order by al.created_at::timestamptz desc,al.id desc
     limit 700
   `;
@@ -282,7 +285,7 @@ export async function getSiteMonitorRows(
       success
     from public.admin_login_attempts
     where attempted_at::timestamptz>=${from}::timestamptz
-      and (${to}='' or attempted_at::timestamptz<${to}::timestamptz)
+      and attempted_at::timestamptz<${to}::timestamptz
     order by attempted_at::timestamptz desc,id desc
     limit 700
   `;
