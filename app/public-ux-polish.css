@@ -27,6 +27,14 @@
 .overview-group-card dl div{padding:10px 0}
 .overview-group-card dl dd{color:#4e288f}
 
+.guide-published-content{padding:26px;display:flex;flex-direction:column;gap:16px}
+.guide-published-paragraph,.guide-published-columns p{margin:0;white-space:pre-wrap;color:#554c5c;font-size:13px;line-height:1.9}
+.guide-published-content figure{margin:0}
+.guide-published-content figure img{display:block;width:100%;max-height:620px;border-radius:14px;object-fit:cover}
+.guide-published-content figcaption{margin-top:7px;color:#8d8493;font-size:9px;text-align:center}
+.guide-published-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.guide-published-columns p{padding:16px;border-radius:12px;background:#f7f4fb}
+
 .rule-standard{margin:0 0 18px;padding:16px;border:1px solid #e9e3f0;border-radius:14px;background:#fbf9fd}
 .rule-standard h3,.competition-format-block>h3{margin:0 0 9px;color:#4d287f;font-size:12px}
 .rule-standard p{margin:0;color:#62596a;font-size:12px;line-height:1.85;white-space:pre-wrap}
@@ -117,6 +125,9 @@
   .overview-group-card h2{font-size:16px}
   .overview-group-card .overview-group-age{min-height:44px;margin-top:8px;font-size:10px}
   .overview-group-card dl div{padding:9px 0;font-size:10px}
+  .guide-published-content{padding:18px}
+  .guide-published-columns{grid-template-columns:1fr}
+  .guide-published-paragraph,.guide-published-columns p{font-size:12px;line-height:1.85}
   .rule-standard{padding:13px}
   .rule-standard p{font-size:11px;line-height:1.8}
   .public-fee-grid{grid-template-columns:1fr 1fr;gap:8px}
