@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   PlayerEventStats,
-  SnookerCalendarEvent,
   SnookerDashboardSnapshot,
   SnookerEvent,
   SnookerMatch,
@@ -195,11 +194,12 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
   }, []);
 
   useEffect(() => {
-    void refresh();
+    const initialTimer = window.setTimeout(() => void refresh(), 0);
     const timer = window.setInterval(() => void refresh(), 15_000);
     const onVisibility = () => { if (!document.hidden) void refresh(); };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      window.clearTimeout(initialTimer);
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
