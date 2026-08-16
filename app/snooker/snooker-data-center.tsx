@@ -6,6 +6,7 @@ import type { PlayerEventStats, SnookerDashboardSnapshot, SnookerEvent, SnookerM
 import styles from "./snooker-data-center.module.css";
 
 type View = "home" | "matches" | "players" | "data";
+type RootView = "home" | "matches" | "data";
 type Theme = "green" | "red";
 type PlayerFilter = "event" | "china" | "top16";
 
@@ -127,10 +128,10 @@ function ScoreRows({ match, players }: { match: SnookerMatch; players: Map<strin
   );
 }
 
-export default function SnookerDataCenter({ initialSnapshot, buildMark }: { initialSnapshot: SnookerDashboardSnapshot; buildMark: string }) {
+export default function SnookerDataCenter({ initialSnapshot, buildMark, initialView = "home" }: { initialSnapshot: SnookerDashboardSnapshot; buildMark: string; initialView?: RootView }) {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState(initialSnapshot);
-  const [activeView, setActiveView] = useState<View>("home");
+  const [activeView, setActiveView] = useState<View>(initialView);
   const [theme, setTheme] = useState<Theme>("green");
   const [sourceHealth, setSourceHealth] = useState<SourceHealth | null>(null);
   const [selectedRoundKey, setSelectedRoundKey] = useState("final");
@@ -138,17 +139,6 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
   const [playerFilter, setPlayerFilter] = useState<PlayerFilter>("event");
   const [playerQuery, setPlayerQuery] = useState("");
   const [selectedPlayerId, setSelectedPlayerId] = useState("p-zhao-xintong");
-
-  useEffect(() => {
-    try {
-      const requested = new URLSearchParams(window.location.search).get("view");
-      if (requested === "matches" || requested === "data" || requested === "home") setActiveView(requested);
-      const savedTheme = window.localStorage.getItem("snooker-data-theme");
-      if (savedTheme === "green" || savedTheme === "red") setTheme(savedTheme);
-    } catch {
-      // URL/theme hydration is optional.
-    }
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -211,15 +201,6 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const chooseTheme = (nextTheme: Theme) => {
-    setTheme(nextTheme);
-    try {
-      window.localStorage.setItem("snooker-data-theme", nextTheme);
-    } catch {
-      // Theme persistence is optional.
-    }
-  };
-
   const chooseRound = (key: string) => {
     const round = event.rounds.find((item) => item.key === key);
     setSelectedRoundKey(key);
@@ -240,8 +221,8 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
           <div className={styles.headerRight}>
             <span className={styles.versionBadge}>DATA v0.3</span>
             <div className={styles.themeSwitch}>
-              <button className={theme === "green" ? styles.themeActive : ""} onClick={() => chooseTheme("green")}>绿</button>
-              <button className={theme === "red" ? styles.themeActive : ""} onClick={() => chooseTheme("red")}>红</button>
+              <button className={theme === "green" ? styles.themeActive : ""} onClick={() => setTheme("green")}>绿</button>
+              <button className={theme === "red" ? styles.themeActive : ""} onClick={() => setTheme("red")}>红</button>
             </div>
           </div>
         </header>
