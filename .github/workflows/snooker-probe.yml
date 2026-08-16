@@ -38,6 +38,7 @@ jobs:
         run: |
           node <<'NODE'
           const api = await fetch('http://127.0.0.1:3000/api/snooker/v1/dashboard?probe=1', { cache: 'no-store' }).then(r => r.json());
+          console.log('SOURCE_HEALTH=' + JSON.stringify(api.sourceHealth));
           if (!api.ok) throw new Error('dashboard API not ok');
           if (api.sourceHealth?.source !== 'WST') throw new Error(`wrong source ${api.sourceHealth?.source}`);
           if (!api.sourceHealth?.accepted) throw new Error(`WST source not accepted: ${api.sourceHealth?.message}`);
