@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 const headers = {
-  "user-agent": "Mozilla/5.0 (compatible; WorldSnookerDataCenterProbe/2.1)",
+  "user-agent": "Mozilla/5.0 (compatible; WorldSnookerDataCenterProbe/2.2)",
   accept: "application/json,text/plain,*/*",
   "cache-control": "no-cache, no-store, max-age=0",
   pragma: "no-cache",
@@ -59,13 +59,7 @@ for (const row of matches) {
 }
 console.log(`PAIR_MAPPED=${mapped}`);
 console.log(`PAIR_UNMATCHED=${JSON.stringify(unmatched)}`);
-
-for (const row of matches) {
-  const a = row?.attributes ?? row;
-  if (/final/i.test(a?.round ?? "") || /Selby|Saengkham/i.test(a?.name ?? "")) {
-    console.log(`CANDIDATE ${row?.id ?? a?.matchID ?? "?"} | ${a?.name} | ${a?.homePlayerScore}:${a?.awayPlayerScore} | ${a?.status} | ${a?.statusMeta} | ${a?.round} | ${a?.startDateTime}`);
-  }
-}
+if (matches.length < 30 || mapped < 30) throw new Error(`WST match mapping unsafe: ${mapped}/${matches.length}`);
 
 const finalRow = matches.find((row) => {
   const a = row?.attributes ?? row;
@@ -119,4 +113,16 @@ const graph = JSON.parse(graphText);
 if (graph.errors?.length) throw new Error(`GraphQL errors: ${JSON.stringify(graph.errors)}`);
 const status = graph?.data?.matchStatus;
 if (!status) throw new Error("GraphQL returned no matchStatus");
-console.log(`VERIFIED_LIVE=${status.homePlayerFrames}:${status.awayPlayerFrames} STATUS=${status.status} META=${status.statusMeta} FRAMES=${status.matchHistory?.frames?.length ?? 0}`);
+const frames = status.matchHistory?.frames ?? [];
+const completedFrameCount = Number(status.homePlayerFrames ?? 0) + Number(status.awayPlayerFrames ?? 0);
+const latestFrame = frames.at(-1);
+console.log(`VERIFIED_LIVE=${status.homePlayerFrames}:${status.awayPlayerFrames} STATUS=${status.status} META=${status.statusMeta} FRAMES=${frames.length}`);
+if (latestFrame) {
+  console.log(`LATEST_FRAME=局${latestFrame.frameNumber} ${latestFrame.homePlayerPoints}:${latestFrame.awayPlayerPoints} BREAKS=${latestFrame.homePlayerFiftyPlusBreaks}:${latestFrame.awayPlayerFiftyPlusBreaks}`);
+}
+if (String(status.status).toLowerCase() === "live" && String(status.statusMeta).toUpperCase() === "IN_PLAY") {
+  if (frames.length <= completedFrameCount) {
+    throw new Error(`WST says IN_PLAY but active frame is missing: frames=${frames.length}, completed=${completedFrameCount}`);
+  }
+  console.log(`ACTIVE_FRAME_VERIFIED=局${latestFrame?.frameNumber ?? "?"} is included before completion`);
+}
