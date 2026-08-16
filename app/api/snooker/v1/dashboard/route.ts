@@ -33,14 +33,14 @@ export async function GET(request: NextRequest) {
     liveScore: null,
     appliedFinalScore: "",
     matchId: liveMatches[0]?.id ?? null,
-    message: database.databaseOnline ? "用户端从独立 snooker-data-center 数据库读取；WST 上游由中央任务同步。" : "独立数据库读取失败，已切回本地已验证快照。",
+    message: database.databaseOnline ? "用户端从独立斯诺克数据库读取；官方数据源由中央任务统一同步。" : "独立数据库读取失败，已切回本地已验证快照。",
   };
 
   return NextResponse.json({
     ok: true,
     product: "世界斯诺克数据中心",
-    version: "0.7.0-prizes-match-insights",
-    buildMark: `${SNOOKER_BUILD_MARK}-DB07`,
+    version: "0.8.0-ui-performance",
+    buildMark: `${SNOOKER_BUILD_MARK}-DB08`,
     repositoryMode: repository.mode,
     dataMode: database.databaseOnline ? "snooker-database" : "verified-snapshot-fallback",
     snapshot: database.snapshot,
