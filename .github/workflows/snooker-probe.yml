@@ -1,0 +1,17 @@
+name: Snooker Probe
+
+on:
+  push:
+    branches: ["agent/snooker-live-sync-v3"]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe WST data source
+        run: node scripts/snooker-live-source-probe.mjs
