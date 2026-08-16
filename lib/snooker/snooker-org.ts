@@ -1,4 +1,4 @@
-import { getCanonicalEnglishName, getChinesePlayerName } from "./player-master";
+import { findPlayerByEnglishName } from "./data/players";
 
 export type SnookerSourcePlayer = {
   nameEn: string;
@@ -56,13 +56,18 @@ export function snookerOrgText(html: string) {
   ).replace(/\s+/g, " ").trim();
 }
 
-function cleanName(value: string) {
-  return getCanonicalEnglishName(value.replace(/^[\d|.\s]+/, "").replace(/\s+/g, " ").trim());
+function rawName(value: string) {
+  return value.replace(/^[\d|.\s]+/, "").replace(/\s+/g, " ").trim();
 }
 
 function player(name: string, rank?: string): SnookerSourcePlayer {
-  const nameEn = cleanName(name);
-  return { nameEn, nameZh: getChinesePlayerName(nameEn), sourceRank: rank ? Number(rank) : null };
+  const sourceName = rawName(name);
+  const master = findPlayerByEnglishName(sourceName);
+  return {
+    nameEn: master?.nameEn ?? sourceName,
+    nameZh: master?.nameZh ?? sourceName,
+    sourceRank: rank ? Number(rank) : null,
+  };
 }
 
 function frames(segment: string, expected: number) {
@@ -77,21 +82,42 @@ function parseRound(text: string, key: string, labelZh: string, bestOf: number):
   const scored = /([A-Z][A-Za-zÀ-ž.'’\-\s]+?)\s+(?:\[(\d+)\]|\(a\))\s+(\d+)\s*-\s*(\d+)\s+([A-Z][A-Za-zÀ-ž.'’\-\s]+?)\s+(?:\[(\d+)\]|\(a\))/g;
   const walkover = /([A-Z][A-Za-zÀ-ž.'’\-\s]+?)\s+(?:\[(\d+)\]|\(a\))\s+w\/o\s+([A-Z][A-Za-zÀ-ž.'’\-\s]+?)\s+(?:\[(\d+)\]|\(a\))/gi;
   const raw: Array<{
-    index: number; end: number; p1: string; r1?: string; p2: string; r2?: string;
-    s1: number | null; s2: number | null; walkover: boolean;
+    index: number;
+    end: number;
+    p1: string;
+    r1?: string;
+    p2: string;
+    r2?: string;
+    s1: number | null;
+    s2: number | null;
+    walkover: boolean;
   }> = [];
 
-  let match: RegExpExecArray | null;
-  while ((match = scored.exec(text))) {
+  let found: RegExpExecArray | null;
+  while ((found = scored.exec(text))) {
     raw.push({
-      index: match.index, end: scored.lastIndex, p1: match[1], r1: match[2],
-      s1: Number(match[3]), s2: Number(match[4]), p2: match[5], r2: match[6], walkover: false,
+      index: found.index,
+      end: scored.lastIndex,
+      p1: found[1],
+      r1: found[2],
+      s1: Number(found[3]),
+      s2: Number(found[4]),
+      p2: found[5],
+      r2: found[6],
+      walkover: false,
     });
   }
-  while ((match = walkover.exec(text))) {
+  while ((found = walkover.exec(text))) {
     raw.push({
-      index: match.index, end: walkover.lastIndex, p1: match[1], r1: match[2],
-      s1: null, s2: null, p2: match[3], r2: match[4], walkover: true,
+      index: found.index,
+      end: walkover.lastIndex,
+      p1: found[1],
+      r1: found[2],
+      s1: null,
+      s2: null,
+      p2: found[3],
+      r2: found[4],
+      walkover: true,
     });
   }
   raw.sort((a, b) => a.index - b.index);
@@ -101,7 +127,10 @@ function parseRound(text: string, key: string, labelZh: string, bestOf: number):
     const expected = item.walkover ? 0 : (item.s1 ?? 0) + (item.s2 ?? 0);
     const status: SnookerSourceMatch["status"] = item.walkover
       ? "walkover"
-      : (item.s1 ?? 0) >= target || (item.s2 ?? 0) >= target ? "completed" : "live";
+      : (item.s1 ?? 0) >= target || (item.s2 ?? 0) >= target
+        ? "completed"
+        : "live";
+
     return {
       id: `${key}-${index + 1}`,
       roundKey: key,
