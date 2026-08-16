@@ -1,53 +1,24 @@
 import { NextResponse } from "next/server";
+import { parseSnookerOrgEvent } from "@/lib/snooker/snooker-org";
 
 const SOURCE_URL = "https://www.snooker.org/res/index.asp?event=2755";
 
 export const revalidate = 30;
 
-function decodeEntities(value: string) {
-  return value
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&ndash;|&#8211;/gi, "–")
-    .replace(/&mdash;|&#8212;/gi, "—")
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)));
-}
-
-function htmlToText(html: string) {
-  return decodeEntities(
-    html
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<br\s*\/?\s*>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-  ).replace(/\s+/g, " ").trim();
-}
-
-function parseChinaOpenFinal(text: string) {
-  const exact = text.match(/Mark\s+Selby\s*\[9\]\s*(\d+)\s*-\s*(\d+)\s*Noppon\s+Saengkham\s*\[46\]/i);
-  const relaxed = text.match(/Mark\s+Selby[\s\S]{0,90}?(\d+)\s*-\s*(\d+)[\s\S]{0,90}?Noppon\s+Saengkham/i);
-  const score = exact ?? relaxed;
-  if (!score) return null;
-
-  const frameBlock = text.match(/Session\s*1:\s*([\s\S]{0,420}?)\s*Watch\s+on/i)?.[1] ?? "";
-  const frames = frameBlock
-    .split(",")
-    .map((frame) => frame.trim())
-    .filter(Boolean)
-    .slice(0, 12);
-
+function livePayload(match: ReturnType<typeof parseSnookerOrgEvent>["liveMatch"], sourceText: string) {
+  if (!match) return null;
   return {
-    player1En: "Mark Selby",
-    player1Zh: "马克·塞尔比",
-    player1Rank: 9,
-    player1Score: Number(score[1]),
-    player2En: "Noppon Saengkham",
-    player2Zh: "诺鹏·桑坎姆",
-    player2Rank: 46,
-    player2Score: Number(score[2]),
-    frames,
+    player1En: match.player1.nameEn,
+    player1Zh: match.player1.nameZh,
+    player1Rank: match.player1.sourceRank ?? 0,
+    player1Score: match.score1 ?? 0,
+    player2En: match.player2.nameEn,
+    player2Zh: match.player2.nameZh,
+    player2Rank: match.player2.sourceRank ?? 0,
+    player2Score: match.score2 ?? 0,
+    frames: match.frames,
+    round: `${match.roundLabelZh} · ${match.bestOf}局${Math.floor(match.bestOf / 2) + 1}胜`,
+    status: /Match will resume later/i.test(sourceText) ? "第一阶段结束" : "进行中",
   };
 }
 
@@ -57,7 +28,7 @@ export async function GET() {
   try {
     const response = await fetch(SOURCE_URL, {
       headers: {
-        "user-agent": "Mozilla/5.0 (compatible; SnookerDataCenterPOC/0.1; +https://snooker.org)",
+        "user-agent": "Mozilla/5.0 (compatible; SnookerDataCenterPOC/0.2)",
         accept: "text/html,application/xhtml+xml",
       },
       next: { revalidate: 30 },
@@ -75,8 +46,8 @@ export async function GET() {
     }
 
     const html = await response.text();
-    const text = htmlToText(html);
-    const liveMatch = parseChinaOpenFinal(text);
+    const parsed = parseSnookerOrgEvent(html);
+    const sourceText = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
     return NextResponse.json({
       ok: true,
@@ -86,8 +57,15 @@ export async function GET() {
       fetchedAt: new Date().toISOString(),
       latencyMs: Date.now() - startedAt,
       bytes: html.length,
-      eventDetected: /China\s+Open/i.test(text),
-      liveMatch,
+      eventDetected: parsed.eventDetected,
+      summary: {
+        roundCount: parsed.rounds.length,
+        matchCount: parsed.matches.length,
+        completedCount: parsed.matches.filter((match) => match.status === "completed" || match.status === "walkover").length,
+        liveCount: parsed.matches.filter((match) => match.status === "live").length,
+      },
+      rounds: parsed.rounds,
+      liveMatch: livePayload(parsed.liveMatch, sourceText),
     });
   } catch (error) {
     return NextResponse.json({
