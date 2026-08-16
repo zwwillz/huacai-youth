@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { eventSummary, SNOOKER_BUILD_MARK, SNOOKER_FOUNDATION_VERSION } from "@/lib/snooker/foundation";
-import { getDashboardWithLiveOverlay } from "@/lib/snooker/live-overlay";
+import { getCachedDashboardWithLiveOverlay } from "@/lib/snooker/live-dashboard-cache";
 import { getSnookerRepository } from "@/lib/snooker/repository";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const revalidate = 0;
 
 export async function GET() {
   const repository = getSnookerRepository();
-  const { snapshot, sourceHealth } = await getDashboardWithLiveOverlay();
+  const { snapshot, sourceHealth } = await getCachedDashboardWithLiveOverlay();
   return NextResponse.json({
     ok: true,
     product: "世界斯诺克数据中心",
