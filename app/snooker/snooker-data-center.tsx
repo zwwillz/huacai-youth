@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type {
   PlayerEventStats,
   SnookerCalendarEvent,
@@ -220,15 +221,18 @@ export default function SnookerDataCenter({
   initialDatabaseEvents,
   initialSourceHealth,
   buildMark,
+  initialView = "home",
 }: {
   initialSnapshot: SnookerDashboardSnapshot;
   initialDatabaseEvents: SnookerEvent[];
   initialSourceHealth?: SourceHealth | null;
   buildMark: string;
+  initialView?: "home" | "matches" | "data";
 }) {
+  const router = useRouter();
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [databaseEvents, setDatabaseEvents] = useState(initialDatabaseEvents);
-  const [activeView, setActiveView] = useState<MainView>("home");
+  const [activeView, setActiveView] = useState<MainView>(initialView);
   const [detail, setDetail] = useState<DetailState | null>(null);
   const [theme, setTheme] = useState<Theme>("green");
   const [sourceHealth, setSourceHealth] = useState<SourceHealth | null>(initialSourceHealth ?? null);
@@ -334,8 +338,14 @@ export default function SnookerDataCenter({
 
   const openEvent = (slug: string, tab: EventTab = "overview") => { setDetail({ type: "event", slug, tab }); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const openMatch = (matchId: string, eventSlug = event.slug) => { setDetail({ type: "match", matchId, eventSlug }); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const openPlayer = (playerIdValue: string) => { setDetail({ type: "player", playerId: playerIdValue }); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const changeView = (view: MainView) => { setDetail(null); setActiveView(view); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const openPlayer = (playerIdValue: string) => { const target = players.get(playerIdValue); router.push(target?.slug ? `/snooker/players/${target.slug}` : "/snooker/players"); };
+  const changeView = (view: MainView) => {
+    if (view === "players") { router.push("/snooker/players"); return; }
+    setDetail(null);
+    setActiveView(view);
+    try { window.history.replaceState(null, "", view === "home" ? "/snooker" : `/snooker?view=${view}`); } catch {}
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const updatedTime = new Date(lastUpdatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Shanghai" });
   const sourceLabel = sourceHealth?.source === "Snooker DB"
