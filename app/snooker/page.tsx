@@ -1,9 +1,17 @@
 import SnookerDataCenter from "./snooker-data-center";
 import { SNOOKER_BUILD_MARK } from "@/lib/snooker/foundation";
-import { getSnookerRepository } from "@/lib/snooker/repository";
+import { getDashboardWithLiveOverlay } from "@/lib/snooker/live-overlay";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function SnookerPage() {
-  const repository = getSnookerRepository();
-  const snapshot = await repository.getDashboard();
-  return <SnookerDataCenter initialSnapshot={snapshot} buildMark={SNOOKER_BUILD_MARK} />;
+  const { snapshot, sourceHealth } = await getDashboardWithLiveOverlay();
+  return (
+    <SnookerDataCenter
+      initialSnapshot={snapshot}
+      initialSourceHealth={sourceHealth}
+      buildMark={SNOOKER_BUILD_MARK}
+    />
+  );
 }
