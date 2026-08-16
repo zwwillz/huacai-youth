@@ -1,0 +1,143 @@
+.eventNameHeader strong{
+  min-width:0;
+  max-width:72%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  text-align:center;
+  font-size:13px;
+  letter-spacing:-.02em;
+}
+
+.horizontalMatchRow{
+  padding:13px 14px 11px;
+}
+
+.matchVersusRow{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  gap:10px;
+  align-items:center;
+  min-height:40px;
+}
+
+.matchVersusRow>span{
+  min-width:0;
+  font-size:11px;
+  font-weight:780;
+  line-height:1.35;
+}
+
+.matchVersusRow>b{
+  min-width:56px;
+  text-align:center;
+  font-size:19px;
+  letter-spacing:-.04em;
+  white-space:nowrap;
+}
+
+.matchPlayerLeft{
+  text-align:left;
+}
+
+.matchPlayerRight{
+  text-align:right;
+}
+
+.matchPlayerRight em{
+  margin-left:0!important;
+  margin-right:6px;
+}
+
+.eventModeTabs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:4px;
+  padding:4px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:#eef1ef;
+}
+
+.eventModeTabs button{
+  height:40px;
+  border:0;
+  border-radius:10px;
+  background:transparent;
+  color:#7d8480;
+  font-size:10px;
+  font-weight:850;
+  cursor:pointer;
+}
+
+.eventModeTabs .eventModeActive{
+  background:#fff;
+  color:var(--accent-strong);
+  box-shadow:0 3px 12px rgba(25,35,31,.08);
+}
+
+.calendarStaticList{
+  display:flex;
+  flex-direction:column;
+  margin-top:2px;
+}
+
+.calendarStaticCard{
+  width:100%;
+  padding:14px 0;
+  border-top:1px solid var(--line);
+  display:grid;
+  grid-template-columns:50px minmax(0,1fr);
+  gap:11px;
+  align-items:center;
+  text-align:left;
+}
+
+.calendarStaticCard:first-child{
+  border-top:0;
+}
+
+.calendarStaticCard>div:nth-child(2){
+  min-width:0;
+}
+
+.calendarStaticCard>div:nth-child(2)>span{
+  display:block;
+  margin-bottom:6px;
+}
+
+.calendarStaticCard strong{
+  display:block;
+  font-size:12px;
+}
+
+.calendarStaticCard small{
+  display:block;
+  margin-top:3px;
+  color:#969b98;
+  font-size:8px;
+}
+
+.calendarStaticCard p{
+  margin:6px 0 0;
+  color:var(--muted);
+  font-size:8px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.calendarStaticCurrent{
+  margin:6px 0;
+  padding:14px 10px;
+  border:1px solid color-mix(in srgb,var(--accent) 22%,var(--line));
+  border-radius:14px;
+  background:var(--accent-faint);
+}
+
+@media (max-width:420px){
+  .eventNameHeader strong{max-width:68%;font-size:12px}
+  .matchVersusRow{gap:7px}
+  .matchVersusRow>span{font-size:10px}
+  .matchVersusRow>b{min-width:48px;font-size:17px}
+}
