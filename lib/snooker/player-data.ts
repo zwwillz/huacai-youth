@@ -197,6 +197,22 @@ function mapPlayer(row: PlayerRow): SnookerPlayerListItem {
   };
 }
 
+function isDirectoryPlayerRow(row: PlayerRow) {
+  const slug = row.slug.trim().toLowerCase();
+  const nameEn = row.name_en.trim();
+  const nameZh = row.name_zh.trim();
+
+  const isPlaceholder =
+    /^china-wildcard-\d+(?:-|$)/i.test(slug) ||
+    /(?:^|-)winner-(?:of-)?match-\d+(?:-|$)/i.test(slug) ||
+    /^China Wildcard #?\d+$/i.test(nameEn) ||
+    /^Winner of Match \d+$/i.test(nameEn) ||
+    /^中国外卡\d+号$/.test(nameZh) ||
+    /^第\d+场胜者$/.test(nameZh);
+
+  return !isPlaceholder;
+}
+
 const PLAYER_SELECT = [
   "id",
   "slug",
@@ -220,7 +236,7 @@ export async function getSnookerPlayerDirectory(): Promise<SnookerPlayerListItem
     order: "current_rank.asc.nullslast,name_en.asc",
   });
   const rows = await rest<PlayerRow[]>("snooker_players", params, 300);
-  return rows.map(mapPlayer);
+  return rows.filter(isDirectoryPlayerRow).map(mapPlayer);
 }
 
 export async function getSnookerPlayerDetail(slug: string): Promise<SnookerPlayerDetail | null> {

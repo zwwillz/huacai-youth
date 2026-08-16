@@ -20,7 +20,7 @@ function initials(name: string) {
 }
 
 function points(value: number | null) {
-  return value === null ? "—" : value.toLocaleString("en-GB");
+  return value === null ? "—" : `€${value.toLocaleString("en-GB")}`;
 }
 
 export default function PlayerDirectory({ players }: { players: SnookerPlayerListItem[] }) {
