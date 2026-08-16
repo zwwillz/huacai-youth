@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   PlayerEventStats,
   SnookerCalendarEvent,
@@ -33,7 +33,11 @@ type SourceHealth = {
   parsedRoundCount: number;
   parsedMatchCount: number;
   overlayCount: number;
+  changedCount?: number;
   pollingSeconds: number;
+  liveScore?: string | null;
+  appliedFinalScore?: string;
+  matchId?: string | null;
   message: string;
 };
 
@@ -82,6 +86,25 @@ function playerMap(snapshot: SnookerDashboardSnapshot) {
 
 function allMatches(event: SnookerEvent) {
   return event.rounds.flatMap((round) => round.matches);
+}
+
+function realtimeSignature(snapshot: SnookerDashboardSnapshot) {
+  return JSON.stringify(
+    snapshot.event.rounds.flatMap((round) => round.matches.map((match) => ({
+      id: match.id,
+      score1: match.score1,
+      score2: match.score2,
+      status: match.status,
+      winnerId: match.winnerId ?? null,
+      frames: (match.frames ?? []).map((frame) => [
+        frame.frameNo,
+        frame.score1,
+        frame.score2,
+        frame.break1 ?? null,
+        frame.break2 ?? null,
+      ]),
+    }))),
+  );
 }
 
 function currentEventStats(playerId: string, event: SnookerEvent): PlayerEventStats | null {
@@ -190,16 +213,26 @@ function CalendarCard({ item, onOpen, interactive = true }: { item: SnookerCalen
   return <button className={item.current ? styles.calendarCurrent : ""} onClick={onOpen}>{content}</button>;
 }
 
-export default function SnookerDataCenter({ initialSnapshot, buildMark }: { initialSnapshot: SnookerDashboardSnapshot; buildMark: string }) {
+export default function SnookerDataCenter({
+  initialSnapshot,
+  initialSourceHealth,
+  buildMark,
+}: {
+  initialSnapshot: SnookerDashboardSnapshot;
+  initialSourceHealth?: SourceHealth | null;
+  buildMark: string;
+}) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [activeView, setActiveView] = useState<MainView>("home");
   const [detail, setDetail] = useState<DetailState | null>(null);
   const [theme, setTheme] = useState<Theme>("green");
-  const [sourceHealth, setSourceHealth] = useState<SourceHealth | null>(null);
+  const [sourceHealth, setSourceHealth] = useState<SourceHealth | null>(initialSourceHealth ?? null);
   const [refreshing, setRefreshing] = useState(false);
   const [eventListMode, setEventListMode] = useState<EventListMode>("recent");
   const [playerFilter, setPlayerFilter] = useState<PlayerFilter>("全部");
   const [playerQuery, setPlayerQuery] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(initialSnapshot.event.snapshotAt);
+  const realtimeSignatureRef = useRef(realtimeSignature(initialSnapshot));
 
   const refresh = useCallback(async () => {
     if (typeof document !== "undefined" && document.hidden) return;
@@ -210,7 +243,14 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
         headers: { "cache-control": "no-cache" },
       });
       const data = await response.json() as DashboardResponse;
-      if (response.ok && data.ok && data.snapshot) setSnapshot(data.snapshot);
+      if (response.ok && data.ok && data.snapshot) {
+        const nextSignature = realtimeSignature(data.snapshot);
+        if (nextSignature !== realtimeSignatureRef.current) {
+          realtimeSignatureRef.current = nextSignature;
+          setLastUpdatedAt(data.sourceHealth?.fetchedAt ?? new Date().toISOString());
+        }
+        setSnapshot(data.snapshot);
+      }
       if (data.sourceHealth) setSourceHealth(data.sourceHealth);
     } catch {
       setSourceHealth(null);
@@ -285,15 +325,19 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const checkTimestamp = sourceHealth?.fetchedAt ?? event.snapshotAt;
-  const updatedTime = new Date(checkTimestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Shanghai" });
+  const updatedTime = new Date(lastUpdatedAt).toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "Asia/Shanghai",
+  });
   const sourceLabel = sourceHealth?.accepted
-    ? `自动同步 · ${sourceHealth.liveAccepted ? "实时比分已覆盖" : "赛事数据已更新"}`
+    ? `WST官方数据 · ${sourceHealth.liveAccepted ? "实时比分已同步" : "赛事比分已同步"}`
     : sourceHealth?.online
-      ? "数据源在线 · 暂无可覆盖的新比分"
+      ? "WST数据在线 · 等待安全覆盖"
       : sourceHealth === null
-        ? "正在检查实时数据"
-        : "实时源暂不可用 · 使用已验证快照";
+        ? "正在连接WST实时数据"
+        : "WST实时源暂不可用 · 使用已验证快照";
 
   if (detail?.type === "match") {
     const match = eventMatches.find((item) => item.id === detail.matchId) ?? finalMatch;
@@ -307,7 +351,7 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
           <header className={styles.detailHeader}>
             <button onClick={() => setDetail({ type: "event", slug: detail.eventSlug, tab: "schedule" })}>‹</button>
             <strong>比赛详情</strong>
-            <span>DATA v0.4.1</span>
+            <span>DATA v0.5</span>
           </header>
 
           <section className={styles.matchHero}>
@@ -335,7 +379,7 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
           </section>
 
           <section className={styles.frameSection}>
-            <div className={styles.frameHead}><span>单杆<br />(50+)</span><span>分数</span><b>#</b><span>分数</span><span>单杆<br />(50+)</span></div>
+            <div className={styles.frameHead}><span>单杆<br />(50+)</span><span>分数</span><b>局</b><span>分数</span><span>单杆<br />(50+)</span></div>
             {match.frames?.length ? match.frames.map((frame) => (
               <div className={styles.frameRow} key={frame.frameNo}>
                 <span>{frame.break1 ?? "-"}</span><strong>{frame.score1}</strong><b>{frame.frameNo}</b><strong>{frame.score2}</strong><span>{frame.break2 ?? "-"}</span>
@@ -353,7 +397,7 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
           <div className={styles.liveFooter}>
             <i className={sourceHealth?.accepted ? styles.liveOk : styles.liveWait} />
             <span>{sourceLabel}</span>
-            <small>最近检查 {updatedTime} · 15秒自动刷新</small>
+            <small>最近更新 {updatedTime} · 15秒自动同步</small>
           </div>
         </div>
       </main>
@@ -488,7 +532,7 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
         <header className={styles.header}>
           <button className={styles.brand} onClick={() => changeView("home")}><span>S</span><div><strong>世界斯诺克数据中心</strong><small>WORLD SNOOKER DATA</small></div></button>
           <div className={styles.headerRight}>
-            <span className={styles.versionBadge}>DATA v0.4.1</span>
+            <span className={styles.versionBadge}>DATA v0.5</span>
             <div className={styles.themeSwitch}><button className={theme === "green" ? styles.themeActive : ""} onClick={() => setTheme("green")}>绿</button><button className={theme === "red" ? styles.themeActive : ""} onClick={() => setTheme("red")}>红</button></div>
           </div>
         </header>
@@ -510,7 +554,7 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
                 <button onClick={() => openPlayer(finalMatch.player2Id)}><PlayerAvatar player={players.get(finalMatch.player2Id)!} size="lg" /><span>{players.get(finalMatch.player2Id)!.shortNameZh}</span></button>
               </div>
               <button className={styles.fullButton} onClick={() => openMatch(finalMatch.id)}>查看完整比分与逐局数据</button>
-              <div className={styles.sourceLine}><i className={sourceHealth?.accepted ? styles.liveOk : styles.liveWait} /><b>{sourceLabel}</b><small>{refreshing ? "刷新中…" : `最近检查 ${updatedTime}`}</small></div>
+              <div className={styles.sourceLine}><i className={sourceHealth?.accepted ? styles.liveOk : styles.liveWait} /><b>{sourceLabel}</b><small>{refreshing ? "同步中…" : `最近更新 ${updatedTime}`}</small></div>
             </section>
 
             {nextEventCard ? <section className={styles.card}><SectionHeader eyebrow="NEXT EVENT" title="下一站" action={nextEventCard.statusLabelZh} /><button className={styles.nextEvent} onClick={() => openEvent(nextEventCard.slug)}><span>武</span><div><strong>{nextEventCard.nameZh}</strong><small>{nextEventCard.nameEn}</small><p>{formatDateRange(nextEventCard.startDate, nextEventCard.endDate)} · {nextEventCard.cityZh}</p></div><em>›</em></button></section> : null}
