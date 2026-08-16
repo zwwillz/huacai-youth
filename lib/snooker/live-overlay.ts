@@ -164,7 +164,6 @@ function overlayWstTournament(snapshot: SnookerDashboardSnapshot, sourceMatches:
     const before = matchSignature(target);
     const score = scoreByOrientation(homeMapsToPlayer1, attributes.homePlayerScore, attributes.awayPlayerScore);
 
-    // Keep the curated walkover semantics when WST represents it as a 0-0 completed fixture.
     const preserveWalkover = target.status === "walkover" && score.score1 === 0 && score.score2 === 0;
     if (!preserveWalkover) {
       target.score1 = score.score1;
@@ -230,6 +229,10 @@ function finalScore(snapshot: SnookerDashboardSnapshot) {
   return final ? `${final.score1 ?? "-"}:${final.score2 ?? "-"}` : "-:-";
 }
 
+function isActiveMatch(match: SnookerMatch) {
+  return match.status === "live" || match.status === "session-break";
+}
+
 export async function getDashboardWithLiveOverlay(): Promise<{ snapshot: SnookerDashboardSnapshot; sourceHealth: SnookerSourceHealth }> {
   const startedAt = Date.now();
   const fetchedAt = new Date().toISOString();
@@ -253,17 +256,31 @@ export async function getDashboardWithLiveOverlay(): Promise<{ snapshot: Snooker
     changedCount += result.changed;
     eventAccepted = tournament.matches.length >= 30 && result.matched >= 30;
 
-    const final = snapshot.event.rounds.find((round) => round.key === "final")?.matches[0];
-    const finalLink = final ? result.linked.get(final.id) : undefined;
-    if (finalLink) {
-      matchId = finalLink.row.id;
-      try {
-        const graph = await fetchWstMatchStatus(matchId);
+    // Match Centre is needed for the unfinished current frame. During early rounds
+    // several tables may be live at once, so fetch every active match rather than
+    // hard-coding the final. The tournament REST feed still remains the safety gate.
+    if (eventAccepted) {
+      const activeLinks = [...result.linked.values()].filter((link) => isActiveMatch(link.target));
+      const graphResults = await Promise.allSettled(
+        activeLinks.map(async (link) => ({
+          link,
+          graph: await fetchWstMatchStatus(link.row.id),
+        })),
+      );
+
+      for (const resultItem of graphResults) {
+        if (resultItem.status === "rejected") {
+          const reason = resultItem.reason;
+          errors.push(reason instanceof Error ? `Match Centre ${reason.message}` : "Match Centre 读取失败");
+          continue;
+        }
+        const { link, graph } = resultItem.value;
         liveAccepted = true;
-        changedCount += overlayGraphStatus(finalLink, graph);
-        liveScore = `${graph.homePlayerFrames}:${graph.awayPlayerFrames}`;
-      } catch (error) {
-        errors.push(error instanceof Error ? `Match Centre ${error.message}` : "Match Centre 读取失败");
+        changedCount += overlayGraphStatus(link, graph);
+        if (!matchId) {
+          matchId = link.row.id;
+          liveScore = `${graph.homePlayerFrames}:${graph.awayPlayerFrames}`;
+        }
       }
     }
   } catch (error) {
@@ -276,6 +293,7 @@ export async function getDashboardWithLiveOverlay(): Promise<{ snapshot: Snooker
     snapshot.builtAt = fetchedAt;
   }
   const appliedFinalScore = finalScore(snapshot);
+  const activeCount = allEventMatches(snapshot.event).filter(isActiveMatch).length;
 
   return {
     snapshot,
@@ -296,9 +314,9 @@ export async function getDashboardWithLiveOverlay(): Promise<{ snapshot: Snooker
       appliedFinalScore,
       matchId,
       message: liveAccepted
-        ? `WST实时数据已同步，当前决赛 ${appliedFinalScore}。`
+        ? `WST实时数据已同步，${activeCount}场进行中比赛已接入逐局数据。`
         : eventAccepted
-          ? `WST赛事比分已同步，Match Centre 暂未返回逐局数据。${errors.length ? ` ${errors.join("；")}` : ""}`
+          ? `WST赛事比分已同步。${activeCount ? "进行中比赛的 Match Centre 暂未返回逐局数据。" : "当前没有进行中比赛。"}${errors.length ? ` ${errors.join("；")}` : ""}`
           : online
             ? `WST数据可访问，但完整性校验未通过。${errors.length ? ` ${errors.join("；")}` : ""}`
             : `WST实时数据暂不可用，继续使用已验证快照。${errors.length ? ` ${errors.join("；")}` : ""}`,
