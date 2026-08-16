@@ -96,7 +96,7 @@ export default function SnookerSiteMonitor({ initialSnapshot, initialSourceHealt
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => void refresh(), 15_000);
+    const timer = window.setInterval(() => void refresh(), 120_000);
     const onVisibility = () => { if (!document.hidden) void refresh(); };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
@@ -177,7 +177,7 @@ export default function SnookerSiteMonitor({ initialSnapshot, initialSourceHealt
         </header>
 
         <div className={styles.syncLine}>
-          <span><i className={styles.pulse} />每 15 秒自动检测</span>
+          <span><i className={styles.pulse} />每 2 分钟自动检测 · 仅页面可见时运行</span>
           <span>页面检查时间：{formatChinaTime(checkedAt)}</span>
           <span>数据快照：{formatChinaTime(snapshot.event.snapshotAt)}</span>
         </div>
@@ -253,7 +253,7 @@ export default function SnookerSiteMonitor({ initialSnapshot, initialSourceHealt
               </table>
             </div>
           ) : (
-            <div className={styles.empty}>当前没有正在进行的比赛。赛事数据源仍会继续按 15 秒周期检查。</div>
+            <div className={styles.empty}>当前没有正在进行的比赛。已结束比赛不再进入实时同步队列；需要检查数据源时可点击“立即刷新”。</div>
           )}
         </section>
 
@@ -276,12 +276,12 @@ export default function SnookerSiteMonitor({ initialSnapshot, initialSourceHealt
             <div>
               <span><StatusDot level={activeMatches.length === 0 ? "ok" : booleanLevel(sourceHealth.liveAccepted, true)} />Match Centre 逐局数据</span>
               <b>{activeMatches.length === 0 ? "当前无需逐局源" : sourceHealth.liveAccepted ? "实时同步正常" : "暂未接入"}</b>
-              <small>用于当前未结束局比分与 50+ 单杆</small>
+              <small>仅用于进行中比赛的当前局比分与 50+ 单杆；已结束比赛停止请求</small>
             </div>
             <div>
               <span><StatusDot level="ok" />页面实时接口</span>
               <b>/api/snooker/v1/dashboard</b>
-              <small>15 秒轮询 · no-store</small>
+              <small>比赛中前端约30秒读取一次；无进行中比赛时自动降频或停止</small>
             </div>
           </div>
           <div className={styles.sourceMessage}>
