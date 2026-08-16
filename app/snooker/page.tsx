@@ -5,8 +5,11 @@ import { loadSnookerDatabaseView } from "@/lib/snooker/database-public";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function SnookerPage() {
-  const database = await loadSnookerDatabaseView();
+type SnookerRootView = "home" | "matches" | "data";
+
+export default async function SnookerPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const [database, query] = await Promise.all([loadSnookerDatabaseView(), searchParams]);
+  const initialView: SnookerRootView = query.view === "matches" || query.view === "data" ? query.view : "home";
   const sourceHealth = {
     online: database.databaseOnline,
     accepted: database.databaseOnline,
@@ -34,6 +37,7 @@ export default async function SnookerPage() {
       initialDatabaseEvents={database.eventDetails}
       initialSourceHealth={sourceHealth}
       buildMark={`${SNOOKER_BUILD_MARK}-DB`}
+      initialView={initialView}
     />
   );
 }
