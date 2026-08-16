@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type {
   PlayerEventStats,
   SnookerCalendarEvent,
@@ -153,6 +154,7 @@ export default function SnookerDataCenterV2({ initialSnapshot, initialDatabaseEv
   buildMark: string;
   initialView?: "home" | "matches" | "data";
 }) {
+  const router = useRouter();
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [databaseEvents, setDatabaseEvents] = useState(initialDatabaseEvents);
   const [activeView, setActiveView] = useState<MainView>(initialView);
@@ -226,8 +228,19 @@ export default function SnookerDataCenterV2({ initialSnapshot, initialDatabaseEv
 
   const openEvent = (slug: string, tab: EventTab = "overview") => { setDetail({ type: "event", slug, tab }); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const openMatch = (matchId: string, eventSlug: string) => { setDetail({ type: "match", matchId, eventSlug }); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const openPlayer = (playerId: string) => { setDetail({ type: "player", playerId }); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const changeView = (view: MainView) => { setDetail(null); setActiveView(view); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const openPlayer = (playerId: string) => {
+    const target = players.get(playerId);
+    router.push(target?.slug ? `/snooker/players/${target.slug}` : "/snooker/players");
+  };
+  const changeView = (view: MainView) => {
+    if (view === "players") {
+      router.push("/snooker/players");
+      return;
+    }
+    setDetail(null);
+    setActiveView(view);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   if (detail?.type === "match") {
     const selectedEvent = eventBySlug.get(detail.eventSlug) ?? snapshot.event;
