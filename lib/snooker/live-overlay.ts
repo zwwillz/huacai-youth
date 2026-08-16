@@ -50,14 +50,19 @@ function pairKey(a: string, b: string) {
 }
 
 function sourceNames(attributes: WstMatchAttributes) {
-  let home = wstPlayerName(attributes.homePlayer);
-  let away = wstPlayerName(attributes.awayPlayer);
-  if ((!home || !away) && attributes.name) {
+  if (attributes.name) {
     const parts = attributes.name.split(/\s+vs\s+/i);
-    home ||= parts[0]?.trim() ?? "";
-    away ||= parts[1]?.trim() ?? "";
+    if (parts.length >= 2) {
+      return {
+        home: parts[0].trim(),
+        away: parts[1].trim(),
+      };
+    }
   }
-  return { home, away };
+  return {
+    home: wstPlayerName(attributes.homePlayer),
+    away: wstPlayerName(attributes.awayPlayer),
+  };
 }
 
 function matchSignature(match: SnookerMatch) {
