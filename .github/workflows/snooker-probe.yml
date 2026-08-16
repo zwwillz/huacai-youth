@@ -10,8 +10,48 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: Probe WST data source
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.17.0
+          cache: npm
+      - run: npm ci
+      - name: Verify raw WST source
         run: node scripts/snooker-live-source-probe.mjs
+      - name: Build application
+        run: npm run build
+        env:
+          GITHUB_ACTIONS: "true"
+      - name: Start application
+        run: |
+          npm run start -- -p 3000 > /tmp/snooker-next.log 2>&1 &
+          echo $! > /tmp/snooker-next.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/snooker >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/snooker-next.log
+          exit 1
+      - name: Verify our realtime API and SSR page
+        run: |
+          node <<'NODE'
+          const api = await fetch('http://127.0.0.1:3000/api/snooker/v1/dashboard?probe=1', { cache: 'no-store' }).then(r => r.json());
+          if (!api.ok) throw new Error('dashboard API not ok');
+          if (api.sourceHealth?.source !== 'WST') throw new Error(`wrong source ${api.sourceHealth?.source}`);
+          if (!api.sourceHealth?.accepted) throw new Error(`WST source not accepted: ${api.sourceHealth?.message}`);
+          if ((api.sourceHealth?.overlayCount ?? 0) < 30) throw new Error(`only ${api.sourceHealth?.overlayCount} matches mapped`);
+          const final = api.snapshot?.event?.rounds?.find(r => r.key === 'final')?.matches?.[0];
+          if (!final) throw new Error('final missing');
+          if (final.score1 === 4 && final.score2 === 4) throw new Error('final is still stale 4:4');
+          if (!Array.isArray(final.frames) || final.frames.length < 9) throw new Error(`frame history too short: ${final.frames?.length}`);
+          const scoreText = `${final.score1} : ${final.score2}`;
+          const html = await fetch('http://127.0.0.1:3000/snooker?probe=1', { cache: 'no-store' }).then(r => r.text());
+          if (!html.includes(scoreText)) throw new Error(`SSR page does not contain current score ${scoreText}`);
+          console.log(`OUR_API_SOURCE=${api.sourceHealth.source}`);
+          console.log(`OUR_API_OVERLAY=${api.sourceHealth.overlayCount}`);
+          console.log(`OUR_API_FINAL=${final.score1}:${final.score2}`);
+          console.log(`OUR_API_FRAMES=${final.frames.length}`);
+          console.log(`SSR_CURRENT_SCORE=${scoreText}`);
+          NODE
