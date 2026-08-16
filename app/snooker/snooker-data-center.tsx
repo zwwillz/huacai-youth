@@ -17,6 +17,7 @@ type Theme = "green" | "red";
 type PlayerFilter = "全部" | "中国" | "TOP16";
 type EventTab = "overview" | "schedule" | "data";
 type EventListMode = "recent" | "calendar";
+type PollingMode = "live" | "upcoming" | "frozen";
 type DetailState =
   | { type: "event"; slug: string; tab: EventTab }
   | { type: "match"; matchId: string; eventSlug: string }
@@ -251,6 +252,13 @@ export default function SnookerDataCenter({
   const realtimeSignatureRef = useRef(realtimeSignature(initialSnapshot));
   const matchSignaturesRef = useRef(matchSignatureMap(initialSnapshot));
 
+  const pollingMode = useMemo<PollingMode>(() => {
+    const matches = allMatches(snapshot.event);
+    if (matches.some((match) => match.status === "live" || match.status === "session-break")) return "live";
+    if (matches.some((match) => match.status === "upcoming")) return "upcoming";
+    return "frozen";
+  }, [snapshot.event]);
+
   const refresh = useCallback(async () => {
     if (typeof document !== "undefined" && document.hidden) return;
     setRefreshing(true);
@@ -293,16 +301,17 @@ export default function SnookerDataCenter({
   }, []);
 
   useEffect(() => {
-    const initialTimer = window.setTimeout(() => void refresh(), 0);
-    const timer = window.setInterval(() => void refresh(), 15_000);
+    const intervalMs = pollingMode === "live" ? 30_000 : pollingMode === "upcoming" ? 5 * 60_000 : null;
+    if (intervalMs === null) return;
+
+    const timer = window.setInterval(() => void refresh(), intervalMs);
     const onVisibility = () => { if (!document.hidden) void refresh(); };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      window.clearTimeout(initialTimer);
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [refresh]);
+  }, [pollingMode, refresh]);
 
   const players = useMemo(() => playerMap(snapshot), [snapshot]);
   const event = snapshot.event;
@@ -439,7 +448,7 @@ export default function SnookerDataCenter({
             <div className={styles.liveFooter}>
               <i className={sourceHealth?.accepted ? styles.liveOk : styles.liveWait} />
               <span>{sourceLabel}</span>
-              <small>15秒自动同步</small>
+              <small>30秒自动同步</small>
             </div>
           ) : null}
         </div>
@@ -620,7 +629,7 @@ export default function SnookerDataCenter({
 
             {eventListMode === "recent" ? <>
               <section className={styles.currentEventBanner} onClick={() => openEvent(currentEventCard.slug, "schedule")}>
-                <div><StatusPill status="live" label="当前赛事" /><small>{currentEventCard.typeZh}</small></div>
+                <div><StatusPill status={currentEventCard.status} label="当前赛事" /><small>{currentEventCard.typeZh}</small></div>
                 <h2>{currentEventCard.nameZh}</h2><p>{formatDateRange(currentEventCard.startDate, currentEventCard.endDate)} · {currentEventCard.cityZh}</p><span>查看赛事 ›</span>
               </section>
               <section className={styles.card}>
