@@ -40,8 +40,10 @@ test("snooker monitor switches between visitor and data source views", async () 
   assert.match(visitorClient, /近30天/);
   assert.match(visitorClient, /搜索访客、IP、页面、赛事/);
   assert.match(visitorClient, /\/api\/snooker\/v1\/visits/);
-  assert.match(visitorClient, /60_000/);
+  assert.match(visitorClient, /120_000/);
+  assert.match(visitorClient, /document\.hidden/);
   assert.match(visitorClient, /visibilitychange/);
+  assert.match(visitorClient, /每 2 分钟刷新一次/);
   assert.match(visitorClient, /每页 \{pageSize\} 条/);
   assert.match(visitorClient, /前台访问/);
   assert.match(visitorClient, /POC 公开监测页仅展示脱敏 IP/);
@@ -60,14 +62,17 @@ test("snooker monitor switches between visitor and data source views", async () 
 
   assert.match(dataClient, /斯诺克数据监测/);
   assert.match(dataClient, /\/api\/snooker\/v1\/dashboard\?monitor=/);
-  assert.match(dataClient, /15_000/);
+  assert.match(dataClient, /120_000/);
+  assert.match(dataClient, /document\.hidden/);
   assert.match(dataClient, /visibilitychange/);
+  assert.match(dataClient, /每 2 分钟自动检测/);
   assert.match(dataClient, /立即刷新/);
   assert.match(dataClient, /WST 数据源/);
   assert.match(dataClient, /赛事映射/);
   assert.match(dataClient, /正在进行的比赛/);
   assert.match(dataClient, /当前局比分/);
   assert.match(dataClient, /Match Centre 逐局数据/);
+  assert.match(dataClient, /已结束比赛不再进入实时同步队列/);
   assert.match(dataClient, /sourceHealth\.latencyMs/);
   assert.match(dataClient, /sourceHealth\.message/);
 });

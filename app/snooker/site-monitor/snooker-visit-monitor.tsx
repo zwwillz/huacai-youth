@@ -86,7 +86,7 @@ export default function SnookerVisitMonitor() {
 
   useEffect(() => {
     const initialTimer = window.setTimeout(() => void refresh(), 0);
-    const timer = window.setInterval(() => void refresh(), 60_000);
+    const timer = window.setInterval(() => void refresh(), 120_000);
     const onVisibility = () => { if (!document.hidden) void refresh(); };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
@@ -141,7 +141,7 @@ export default function SnookerVisitMonitor() {
         </div>
 
         <div className={styles.refreshMeta}>
-          <span>每 60 秒刷新一次，仅在监测页打开且可见时运行</span>
+          <span>每 2 分钟刷新一次，仅在监测页打开且可见时运行</span>
           <span>最近检查：{formatChinaTime(checkedAt)}</span>
           <span>POC 公开监测页仅展示脱敏 IP</span>
         </div>

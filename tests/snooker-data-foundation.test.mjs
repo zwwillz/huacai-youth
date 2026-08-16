@@ -6,19 +6,26 @@ const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 
 test("snooker snapshot contains complete 2026 China Open main stage", async () => {
-  const eventSource = await read("lib/snooker/data/china-open-2026.ts");
+  const [eventSource, foundationSource] = await Promise.all([
+    read("lib/snooker/data/china-open-2026.ts"),
+    read("lib/snooker/foundation.ts"),
+  ]);
   assert.equal((eventSource.match(/match\(\{/g) ?? []).length, 33);
   for (const round of ["final", "semifinals", "quarterfinals", "round-2", "round-1", "wild-card"]) {
     assert.match(eventSource, new RegExp(`key: "${round}"`));
   }
-  assert.match(eventSource, /score1: 4, score2: 4/);
   assert.match(eventSource, /sessionTimesZh/);
   assert.match(eventSource, /frame\(7, 70, 68, 53, 57\)/);
   assert.match(eventSource, /sourceEventId: "2755"/);
+  assert.match(foundationSource, /chinaOpenFinal\.score1 = 10/);
+  assert.match(foundationSource, /chinaOpenFinal\.score2 = 6/);
+  assert.match(foundationSource, /chinaOpenFinal\.status = "completed"/);
+  assert.match(foundationSource, /frameNo: 16, score1: 79, score2: 27, break1: 57/);
 });
 
 test("2026-27 snooker calendar includes completed current and upcoming event types", async () => {
   const calendarSource = await read("lib/snooker/data/calendar.ts");
+  const foundationSource = await read("lib/snooker/foundation.ts");
   assert.match(calendarSource, /2026斯诺克上海大师赛/);
   assert.match(calendarSource, /2026斯诺克中国公开赛/);
   assert.match(calendarSource, /2026斯诺克武汉公开赛/);
@@ -26,6 +33,8 @@ test("2026-27 snooker calendar includes completed current and upcoming event typ
   assert.match(calendarSource, /typeZh: "排名赛"/);
   assert.match(calendarSource, /typeZh: "资格赛"/);
   assert.match(calendarSource, /current: true/);
+  assert.match(foundationSource, /status: "completed" as const/);
+  assert.match(foundationSource, /winnerZh: "马克·塞尔比"/);
 });
 
 test("snooker player master covers every China Open participant", async () => {
@@ -51,7 +60,7 @@ test("snooker public snapshot keeps avatar metadata but serves lightweight lette
   assert.match(uiSource, /initials\(player\.nameEn\)/);
 });
 
-test("snooker mobile IA is event list to event detail to match centre", async () => {
+test("snooker mobile IA uses adaptive polling instead of global high-frequency polling", async () => {
   const [pageSource, cacheSource, uiSource, priorityCss] = await Promise.all([
     read("app/snooker/page.tsx"),
     read("lib/snooker/live-dashboard-cache.ts"),
@@ -61,11 +70,17 @@ test("snooker mobile IA is event list to event detail to match centre", async ()
   assert.match(pageSource, /getCachedDashboardWithLiveOverlay/);
   assert.match(cacheSource, /getDashboardWithLiveOverlay/);
   assert.match(cacheSource, /inflight/);
-  assert.match(cacheSource, /DEFAULT_TTL_MS = 10_000/);
-  assert.match(cacheSource, /IDLE_TTL_MS = 30_000/);
+  assert.match(cacheSource, /DEFAULT_TTL_MS = 30_000/);
+  assert.match(cacheSource, /IDLE_TTL_MS = 30 \* 60_000/);
   assert.match(cacheSource, /hasActiveMatch/);
   assert.match(pageSource, /initialSourceHealth=\{sourceHealth\}/);
   assert.match(pageSource, /dynamic = "force-dynamic"/);
+  assert.match(uiSource, /type PollingMode = "live" \| "upcoming" \| "frozen"/);
+  assert.match(uiSource, /pollingMode === "live" \? 30_000/);
+  assert.match(uiSource, /pollingMode === "upcoming" \? 5 \* 60_000/);
+  assert.match(uiSource, /if \(intervalMs === null\) return/);
+  assert.match(uiSource, /30秒自动同步/);
+  assert.match(uiSource, /visibilitychange/);
   assert.match(uiSource, /label: "赛事"/);
   assert.match(uiSource, /近期赛事/);
   assert.match(uiSource, /赛季赛历/);
@@ -79,8 +94,6 @@ test("snooker mobile IA is event list to event detail to match centre", async ()
   assert.match(uiSource, /查看完整比分与逐局数据/);
   assert.match(uiSource, /单杆<br \/>\(50\+\)/);
   assert.match(uiSource, /<b>局<\/b>/);
-  assert.match(uiSource, /15_000/);
-  assert.match(uiSource, /visibilitychange/);
   assert.match(uiSource, /最近更新/);
   assert.match(uiSource, /matchRealtimeSignature/);
   assert.match(uiSource, /matchSignatureMap/);
@@ -105,7 +118,7 @@ test("player main view stays a directory and detail opens on click", async () =>
   assert.doesNotMatch(uiSource, /useState\("p-zhao-xintong"\)/);
 });
 
-test("snooker realtime overlay uses WST official REST and GraphQL data", async () => {
+test("snooker realtime overlay only requests Match Centre for active matches", async () => {
   const [overlaySource, wstSource, dashboardSource, cacheSource] = await Promise.all([
     read("lib/snooker/live-overlay.ts"),
     read("lib/snooker/wst-source.ts"),
@@ -126,6 +139,8 @@ test("snooker realtime overlay uses WST official REST and GraphQL data", async (
   assert.match(overlaySource, /const activeLinks = \[\.\.\.result\.linked\.values\(\)\]\.filter/);
   assert.match(overlaySource, /Promise\.allSettled/);
   assert.match(overlaySource, /activeLinks\.map/);
+  assert.match(overlaySource, /pollingSeconds: 30/);
+  assert.match(overlaySource, /Completed matches are never fetched from Match Centre/);
   assert.match(overlaySource, /overlayGraphStatus/);
   assert.match(overlaySource, /const rows = status\.matchHistory\?\.frames \?\? \[\]/);
   assert.match(overlaySource, /if \(frames\.length\) match\.frames = frames/);
@@ -139,10 +154,22 @@ test("snooker realtime overlay uses WST official REST and GraphQL data", async (
   assert.match(dashboardSource, /Cache-Control/);
 });
 
-test("snooker independent database schema stays separate from Huacai tables", async () => {
-  const schema = await read("lib/snooker/schema.sql");
+test("snooker dedicated database migration includes localization breaks overrides and adaptive policies", async () => {
+  const [schema, foundationMigration, policyMigration] = await Promise.all([
+    read("lib/snooker/schema.sql"),
+    read("lib/snooker/migrations/20260816_extend_snooker_data_foundation.sql"),
+    read("lib/snooker/migrations/20260816_adaptive_sync_policy.sql"),
+  ]);
   for (const table of ["snooker_players", "snooker_events", "snooker_rounds", "snooker_matches", "snooker_frames", "snooker_ranking_snapshots", "snooker_source_entity_map", "snooker_sync_runs"]) {
     assert.match(schema, new RegExp(`create table if not exists ${table}`));
   }
+  for (const table of ["snooker_player_names", "snooker_breaks", "snooker_manual_overrides"]) {
+    assert.match(foundationMigration, new RegExp(`create table if not exists public\\.${table}`));
+  }
+  assert.match(policyMigration, /create table if not exists public\.snooker_sync_policies/);
+  assert.match(policyMigration, /'live_match_status',true,30/);
+  assert.match(policyMigration, /'rankings',true,86400/);
+  assert.match(policyMigration, /'site_monitor',true,120/);
+  assert.match(policyMigration, /realtime_finalized_at/);
   assert.doesNotMatch(schema, /event_registrations|admin_users|event_groups/);
 });

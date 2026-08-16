@@ -258,7 +258,7 @@ export async function getDashboardWithLiveOverlay(): Promise<{ snapshot: Snooker
 
     // Match Centre is needed for the unfinished current frame. During early rounds
     // several tables may be live at once, so fetch every active match rather than
-    // hard-coding the final. The tournament REST feed still remains the safety gate.
+    // hard-coding the final. Completed matches are never fetched from Match Centre.
     if (eventAccepted) {
       const activeLinks = [...result.linked.values()].filter((link) => isActiveMatch(link.target));
       const graphResults = await Promise.allSettled(
@@ -309,14 +309,14 @@ export async function getDashboardWithLiveOverlay(): Promise<{ snapshot: Snooker
       parsedMatchCount,
       overlayCount,
       changedCount,
-      pollingSeconds: 15,
+      pollingSeconds: 30,
       liveScore,
       appliedFinalScore,
       matchId,
       message: liveAccepted
         ? `WST实时数据已同步，${activeCount}场进行中比赛已接入逐局数据。`
         : eventAccepted
-          ? `WST赛事比分已同步。${activeCount ? "进行中比赛的 Match Centre 暂未返回逐局数据。" : "当前没有进行中比赛。"}${errors.length ? ` ${errors.join("；")}` : ""}`
+          ? `WST赛事比分已同步。${activeCount ? "进行中比赛的 Match Centre 暂未返回逐局数据。" : "当前没有进行中比赛，逐局实时请求已停止。"}${errors.length ? ` ${errors.join("；")}` : ""}`
           : online
             ? `WST数据可访问，但完整性校验未通过。${errors.length ? ` ${errors.join("；")}` : ""}`
             : `WST实时数据暂不可用，继续使用已验证快照。${errors.length ? ` ${errors.join("；")}` : ""}`,
