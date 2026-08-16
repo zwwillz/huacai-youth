@@ -56,6 +56,7 @@ type DbPlayer = {
   slug: string;
   name_en: string;
   name_zh: string;
+  short_name_en: string | null;
   short_name_zh: string | null;
   nationality_zh: string | null;
   country_code: string | null;
@@ -63,6 +64,7 @@ type DbPlayer = {
   turned_pro: number | null;
   current_rank: number | null;
   ranking_points: number | null;
+  avatar_url: string | null;
   profile_source: string | null;
 };
 
@@ -174,13 +176,13 @@ function chinaTimeLabel(value: string | null) {
   return `${Number(part("month"))}月${Number(part("day"))}日 ${part("hour")}:${part("minute")}`;
 }
 
-async function rest<T>(path: string): Promise<T> {
+async function rest<T>(path: string, revalidate = 30): Promise<T> {
   const response = await fetch(`${REST_URL}/${path}`, {
-    cache: "no-store",
     headers: {
       apikey: SUPABASE_KEY,
       Accept: "application/json",
     },
+    next: { revalidate },
   });
   if (!response.ok) throw new Error(`SNOOKER_DB_HTTP_${response.status}`);
   return response.json() as Promise<T>;
@@ -201,12 +203,14 @@ function mapPlayers(rows: DbPlayer[]) {
       nameEn: row.name_en,
       nameZh: row.name_zh,
       shortNameZh: row.short_name_zh || row.name_zh,
+      ...(row.short_name_en ? { shortNameEn: row.short_name_en } : {}),
       nationalityZh: row.nationality_zh || "未知",
       countryCode: row.country_code || "",
       currentRank: row.current_rank,
       rankingPoints: row.ranking_points,
       ...(row.date_of_birth ? { dateOfBirth: row.date_of_birth } : {}),
       ...(row.turned_pro ? { turnedPro: row.turned_pro } : {}),
+      ...(row.avatar_url ? { avatarUrl: row.avatar_url } : {}),
       profileSource: row.profile_source === "WST" || row.profile_source === "snooker.org" ? row.profile_source : "curated",
     };
   });
@@ -339,7 +343,7 @@ export async function loadSnookerDatabaseView(): Promise<SnookerDatabaseView> {
   try {
     const [eventRows, playerRows, rankingRows] = await Promise.all([
       rest<DbEvent[]>("snooker_events?select=id,slug,season,name_en,name_zh,sponsor_name,type_zh,status,start_date,end_date,country_zh,city_zh,venue_zh,venue_en,winner_prize,runner_up_prize,currency,source_name,source_event_id,source_url,source_updated_at,referee_zh,data_ready&season=eq.2026%2F27&order=start_date.asc"),
-      rest<DbPlayer[]>("snooker_players?select=id,slug,name_en,name_zh,short_name_zh,nationality_zh,country_code,date_of_birth,turned_pro,current_rank,ranking_points,profile_source&order=current_rank.asc.nullslast,name_en.asc"),
+      rest<DbPlayer[]>("snooker_players?select=id,slug,name_en,name_zh,short_name_en,short_name_zh,nationality_zh,country_code,date_of_birth,turned_pro,current_rank,ranking_points,avatar_url,profile_source&order=current_rank.asc.nullslast,name_en.asc"),
       rest<DbRanking[]>("snooker_ranking_snapshots?select=captured_at,player_id,rank,points&season=eq.2026%2F27&order=captured_at.desc,rank.asc&limit=200"),
     ]);
 
@@ -406,7 +410,7 @@ export async function loadSnookerDatabaseView(): Promise<SnookerDatabaseView> {
     return {
       snapshot: {
         ...dashboardSnapshot,
-        version: "0.6.0-database-calendar",
+        version: "0.8.0-ui-performance",
         builtAt: loadedAt,
         event: primaryEvent,
         calendar,

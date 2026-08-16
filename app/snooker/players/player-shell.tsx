@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import styles from "./player.module.css";
 
 type Theme = "green" | "red";
@@ -18,11 +18,18 @@ export default function PlayerShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [theme, setTheme] = useState<Theme>("green");
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      for (const item of navItems) router.prefetch(item.href);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [router]);
+
   return (
     <main className={styles.appRoot} data-theme={theme}>
       <div className={styles.shell}>
         <header className={styles.header}>
-          <Link className={styles.brand} href="/snooker" aria-label="返回世界斯诺克数据中心首页">
+          <Link className={styles.brand} href="/snooker" prefetch aria-label="返回世界斯诺克数据中心首页">
             <span>S</span>
             <div><strong>世界斯诺克数据中心</strong><small>WORLD SNOOKER DATA</small></div>
           </Link>
@@ -41,6 +48,7 @@ export default function PlayerShell({ children }: { children: ReactNode }) {
           {navItems.map((item) => (
             <button
               className={item.label === "球员" ? styles.navActive : ""}
+              onPointerDown={() => router.prefetch(item.href)}
               onClick={() => router.push(item.href)}
               key={item.label}
             >
