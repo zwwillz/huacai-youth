@@ -5,7 +5,7 @@ import type { VisitorGeoPayload } from "@/lib/site-monitor";
 
 const VISITOR_KEY = "huacai_public_visitor_v1";
 const GEO_KEY = "huacai_public_geo_v1";
-const EXCLUDED_PREFIXES = ["/admin", "/site-monitor", "/api", "/snooker"];
+const EXCLUDED_PREFIXES = ["/admin", "/site-monitor", "/api", "/snooker/site-monitor"];
 const WECHAT_VERIFY_PATH = "/dd8ad1096190a17bbcd86e01faa9c979.txt";
 
 const TAB_LABELS: Record<string, string> = {
@@ -68,8 +68,47 @@ async function loadGeo(): Promise<GeoResponse> {
   }
 }
 
+function text(element: Element | null) {
+  return element?.textContent?.trim() || "";
+}
+
+function snookerPageContext(pathname: string) {
+  const main = document.querySelector("main");
+  const headerStrong = text(main?.querySelector("header strong") ?? null);
+  const h1Values = Array.from(main?.querySelectorAll("h1") ?? []).map((item) => text(item)).filter(Boolean);
+  const directoryHeading = h1Values.find((value) => value === "赛事" || value === "球员" || value === "数据");
+  let pageLabel = "世界斯诺克数据中心 · 首页";
+  let eventLabel = "";
+
+  if (headerStrong === "比赛详情") {
+    eventLabel = h1Values[0] || "";
+    pageLabel = "世界斯诺克数据中心 · 比赛详情";
+  } else if (headerStrong === "球员详情") {
+    const playerName = h1Values[0] || "";
+    pageLabel = `世界斯诺克数据中心 · 球员详情${playerName ? ` · ${playerName}` : ""}`;
+  } else if (headerStrong && headerStrong !== "世界斯诺克数据中心") {
+    eventLabel = headerStrong;
+    pageLabel = `世界斯诺克数据中心 · 赛事 · ${headerStrong}`;
+  } else if (directoryHeading) {
+    pageLabel = `世界斯诺克数据中心 · ${directoryHeading}`;
+  } else {
+    const currentEvent = h1Values.find((value) => value !== "世界斯诺克数据中心") || "";
+    eventLabel = currentEvent;
+  }
+
+  return {
+    path: `${pathname}${window.location.search}`,
+    pageLabel,
+    eventId: "",
+    eventLabel,
+    key: `snooker|${pageLabel}|${eventLabel}`,
+  };
+}
+
 function currentPageContext() {
   const pathname = window.location.pathname;
+  if (pathname.startsWith("/snooker")) return snookerPageContext(pathname);
+
   const params = new URLSearchParams(window.location.search);
   const requestedEventId = params.get("event") || "";
   const root = document.querySelector<HTMLElement>("main[data-huacai-view]");
@@ -115,6 +154,7 @@ export default function PublicVisitTracker() {
     let lastKey = "";
     let lastTrackedAt = 0;
     let timer = 0;
+    let observedSnookerKey = "";
 
     const track = () => {
       if (excludedPath(window.location.pathname)) return;
@@ -148,10 +188,24 @@ export default function PublicVisitTracker() {
     const onPopState = () => track();
     window.addEventListener("huacai:navigation", onNavigation as EventListener);
     window.addEventListener("popstate", onPopState);
+
+    let snookerObserver: MutationObserver | null = null;
+    if (window.location.pathname.startsWith("/snooker")) {
+      observedSnookerKey = currentPageContext().key;
+      snookerObserver = new MutationObserver(() => {
+        const nextKey = currentPageContext().key;
+        if (nextKey === observedSnookerKey) return;
+        observedSnookerKey = nextKey;
+        track();
+      });
+      snookerObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
+
     timer = window.setTimeout(track, 500);
 
     return () => {
       window.clearTimeout(timer);
+      snookerObserver?.disconnect();
       window.removeEventListener("huacai:navigation", onNavigation as EventListener);
       window.removeEventListener("popstate", onPopState);
     };
