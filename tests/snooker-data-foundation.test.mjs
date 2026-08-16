@@ -41,13 +41,19 @@ test("snooker player master covers every China Open participant", async () => {
   assert.match(playersSource, /Mark_Selby\.JPG/);
 });
 
-test("snooker mobile IA is calendar to event centre to match centre", async () => {
-  const [pageSource, uiSource] = await Promise.all([
+test("snooker mobile IA is event list to event detail to match centre", async () => {
+  const [pageSource, uiSource, priorityCss] = await Promise.all([
     read("app/snooker/page.tsx"),
     read("app/snooker/snooker-data-center.tsx"),
+    read("app/snooker/snooker-priority.module.css"),
   ]);
   assert.match(pageSource, /initialSnapshot=\{snapshot\}/);
-  assert.match(uiSource, /比赛 · 赛历/);
+  assert.match(uiSource, /label: "赛事"/);
+  assert.match(uiSource, /近期赛事/);
+  assert.match(uiSource, /赛季赛历/);
+  assert.match(uiSource, /查看赛事/);
+  assert.doesNotMatch(uiSource, /进入赛事中心/);
+  assert.match(uiSource, /calendarEvent\.nameZh/);
   assert.match(uiSource, /赛事介绍/);
   assert.match(uiSource, />赛程</);
   assert.match(uiSource, /赛事数据/);
@@ -57,6 +63,8 @@ test("snooker mobile IA is calendar to event centre to match centre", async () =
   assert.match(uiSource, /15_000/);
   assert.match(uiSource, /visibilitychange/);
   assert.match(uiSource, /中国球员/);
+  assert.match(priorityCss, /matchVersusRow/);
+  assert.match(priorityCss, /grid-template-columns:minmax\(0,1fr\) auto minmax\(0,1fr\)/);
 });
 
 test("player main view stays a directory and detail opens on click", async () => {
@@ -68,15 +76,20 @@ test("player main view stays a directory and detail opens on click", async () =>
   assert.doesNotMatch(uiSource, /useState\("p-zhao-xintong"\)/);
 });
 
-test("snooker live overlay bypasses cache and protects the verified snapshot", async () => {
+test("snooker live overlay uses a unique upstream URL and only reports matched overlays", async () => {
   const [overlaySource, dashboardSource] = await Promise.all([
     read("lib/snooker/live-overlay.ts"),
     read("app/api/snooker/v1/dashboard/route.ts"),
   ]);
   assert.match(overlaySource, /template=21/);
+  assert.match(overlaySource, /searchParams\.set\("_ts"/);
+  assert.match(overlaySource, /Math\.random/);
   assert.match(overlaySource, /cache: "no-store"/);
+  assert.match(overlaySource, /pragma: "no-cache"/);
   assert.match(overlaySource, /parsed\.rounds\.length >= 6/);
   assert.match(overlaySource, /parsed\.matches\.length >= 30/);
+  assert.match(overlaySource, /liveAccepted = count > 0/);
+  assert.match(overlaySource, /const accepted = overlayCount > 0/);
   assert.match(overlaySource, /structuredClone\(dashboardSnapshot\)/);
   assert.match(dashboardSource, /dynamic = "force-dynamic"/);
   assert.match(dashboardSource, /revalidate = 0/);
