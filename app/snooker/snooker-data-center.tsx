@@ -345,6 +345,7 @@ export default function SnookerDataCenter({
     const p2 = players.get(match.player2Id)!;
     const target = Math.floor(match.bestOf / 2) + 1;
     const statusLabel = match.status === "completed" || match.status === "walkover" ? "已结束" : match.status === "upcoming" ? "待开始" : "进行中";
+    const isRealtimeMatch = match.status === "live" || match.status === "session-break";
     return (
       <main className={styles.appRoot} data-theme={theme}>
         <div className={styles.detailShell}>
@@ -369,6 +370,7 @@ export default function SnookerDataCenter({
                 <strong>{match.status === "walkover" ? "W - O" : `${match.score1 ?? "-"} - ${match.score2 ?? "-"}`}</strong>
                 <StatusPill status={match.status} label={statusLabel} />
                 <small>{bestOfLabel(match.bestOf)}</small>
+                {isRealtimeMatch ? <small>{refreshing ? "正在同步…" : `最近更新 ${updatedTime}`}</small> : null}
               </div>
               <div className={styles.versusPlayer}>
                 <div className={styles.avatarWrap}><PlayerAvatar player={p2} size="xl" />{match.winnerId === p2.id ? <em>胜</em> : null}</div>
@@ -394,11 +396,13 @@ export default function SnookerDataCenter({
             {match.note ? <p>{match.note}</p> : null}
           </section>
 
-          <div className={styles.liveFooter}>
-            <i className={sourceHealth?.accepted ? styles.liveOk : styles.liveWait} />
-            <span>{sourceLabel}</span>
-            <small>最近更新 {updatedTime} · 15秒自动同步</small>
-          </div>
+          {isRealtimeMatch ? (
+            <div className={styles.liveFooter}>
+              <i className={sourceHealth?.accepted ? styles.liveOk : styles.liveWait} />
+              <span>{sourceLabel}</span>
+              <small>15秒自动同步</small>
+            </div>
+          ) : null}
         </div>
       </main>
     );
