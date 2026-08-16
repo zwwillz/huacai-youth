@@ -1,5 +1,7 @@
+import { readFile } from "node:fs/promises";
+
 const headers = {
-  "user-agent": "Mozilla/5.0 (compatible; WorldSnookerDataCenterProbe/2.0)",
+  "user-agent": "Mozilla/5.0 (compatible; WorldSnookerDataCenterProbe/2.1)",
   accept: "application/json,text/plain,*/*",
   "cache-control": "no-cache, no-store, max-age=0",
   pragma: "no-cache",
@@ -13,17 +15,50 @@ async function fetchJson(url) {
   return JSON.parse(text);
 }
 
+function normalize(value) {
+  return value.normalize("NFKC").replace(/[’‘']/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+function pairKey(a, b) {
+  return [normalize(a), normalize(b)].sort().join("|");
+}
+
+const [playersSource, eventSource] = await Promise.all([
+  readFile("lib/snooker/data/players.ts", "utf8"),
+  readFile("lib/snooker/data/china-open-2026.ts", "utf8"),
+]);
+const slugToName = new Map();
+for (const m of playersSource.matchAll(/\{\s*id:\s*"[^"]+",\s*slug:\s*"([^"]+)",\s*nameEn:\s*"([^"]+)"/g)) {
+  slugToName.set(m[1], m[2]);
+}
+const curatedPairs = new Map();
+for (const m of eventSource.matchAll(/match\(\{[\s\S]*?p1:\s*"([^"]+)"[\s\S]*?p2:\s*"([^"]+)"[\s\S]*?\}\),/g)) {
+  const a = slugToName.get(m[1]);
+  const b = slugToName.get(m[2]);
+  if (a && b) curatedPairs.set(pairKey(a, b), `${a} vs ${b}`);
+}
+console.log(`CURATED_PAIRS=${curatedPairs.size}`);
+
 const tournamentId = "5b3b0c5c-991c-444b-845d-70a1edbbdf39";
 const tournamentUrl = `https://tournaments.snooker.web.gc.wstservices.co.uk/v2/${tournamentId}`;
 const tournament = await fetchJson(tournamentUrl);
 const attrs = tournament?.data?.attributes ?? tournament?.attributes ?? {};
-console.log(`TOURNAMENT=${attrs.name ?? "?"}`);
-console.log(`TOURNAMENT_KEYS=${Object.keys(attrs).join(",")}`);
-
 let matches = [];
 if (Array.isArray(attrs.matches)) matches = attrs.matches;
 else if (Array.isArray(tournament?.included)) matches = tournament.included.filter((row) => row?.type === "match");
+console.log(`TOURNAMENT=${attrs.name ?? "?"}`);
 console.log(`TOURNAMENT_MATCHES=${matches.length}`);
+
+let mapped = 0;
+const unmatched = [];
+for (const row of matches) {
+  const a = row?.attributes ?? row;
+  const [home = "", away = ""] = String(a?.name ?? "").split(/\s+vs\s+/i).map((v) => v.trim());
+  const key = pairKey(home, away);
+  if (curatedPairs.has(key)) mapped += 1;
+  else unmatched.push(`${a?.name} | ${a?.round} | ${a?.homePlayerScore}:${a?.awayPlayerScore}`);
+}
+console.log(`PAIR_MAPPED=${mapped}`);
+console.log(`PAIR_UNMATCHED=${JSON.stringify(unmatched)}`);
 
 for (const row of matches) {
   const a = row?.attributes ?? row;
@@ -79,7 +114,6 @@ const graphResponse = await fetch("https://snooker.graph.gc.wstservices.co.uk/gr
 });
 const graphText = await graphResponse.text();
 console.log(`GRAPHQL -> ${graphResponse.status} ${graphResponse.headers.get("content-type")}`);
-console.log(`GRAPHQL_BODY=${graphText.slice(0,12000)}`);
 if (!graphResponse.ok) throw new Error(`GraphQL HTTP ${graphResponse.status}`);
 const graph = JSON.parse(graphText);
 if (graph.errors?.length) throw new Error(`GraphQL errors: ${JSON.stringify(graph.errors)}`);
