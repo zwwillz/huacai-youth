@@ -88,22 +88,37 @@ function allMatches(event: SnookerEvent) {
   return event.rounds.flatMap((round) => round.matches);
 }
 
+function matchRealtimeSignature(match: SnookerMatch) {
+  return JSON.stringify({
+    score1: match.score1,
+    score2: match.score2,
+    status: match.status,
+    winnerId: match.winnerId ?? null,
+    frames: (match.frames ?? []).map((frame) => [
+      frame.frameNo,
+      frame.score1,
+      frame.score2,
+      frame.break1 ?? null,
+      frame.break2 ?? null,
+    ]),
+  });
+}
+
 function realtimeSignature(snapshot: SnookerDashboardSnapshot) {
   return JSON.stringify(
-    snapshot.event.rounds.flatMap((round) => round.matches.map((match) => ({
-      id: match.id,
-      score1: match.score1,
-      score2: match.score2,
-      status: match.status,
-      winnerId: match.winnerId ?? null,
-      frames: (match.frames ?? []).map((frame) => [
-        frame.frameNo,
-        frame.score1,
-        frame.score2,
-        frame.break1 ?? null,
-        frame.break2 ?? null,
-      ]),
-    }))),
+    allMatches(snapshot.event).map((match) => [match.id, matchRealtimeSignature(match)]),
+  );
+}
+
+function matchSignatureMap(snapshot: SnookerDashboardSnapshot) {
+  return new Map(allMatches(snapshot.event).map((match) => [match.id, matchRealtimeSignature(match)]));
+}
+
+function initialMatchUpdateTimes(snapshot: SnookerDashboardSnapshot) {
+  return Object.fromEntries(
+    allMatches(snapshot.event)
+      .filter((match) => match.status === "live" || match.status === "session-break")
+      .map((match) => [match.id, snapshot.event.snapshotAt]),
   );
 }
 
@@ -232,7 +247,9 @@ export default function SnookerDataCenter({
   const [playerFilter, setPlayerFilter] = useState<PlayerFilter>("全部");
   const [playerQuery, setPlayerQuery] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState(initialSnapshot.event.snapshotAt);
+  const [matchUpdatedAt, setMatchUpdatedAt] = useState<Record<string, string>>(() => initialMatchUpdateTimes(initialSnapshot));
   const realtimeSignatureRef = useRef(realtimeSignature(initialSnapshot));
+  const matchSignaturesRef = useRef(matchSignatureMap(initialSnapshot));
 
   const refresh = useCallback(async () => {
     if (typeof document !== "undefined" && document.hidden) return;
@@ -244,11 +261,27 @@ export default function SnookerDataCenter({
       });
       const data = await response.json() as DashboardResponse;
       if (response.ok && data.ok && data.snapshot) {
+        const changedAt = data.sourceHealth?.fetchedAt ?? new Date().toISOString();
         const nextSignature = realtimeSignature(data.snapshot);
         if (nextSignature !== realtimeSignatureRef.current) {
           realtimeSignatureRef.current = nextSignature;
-          setLastUpdatedAt(data.sourceHealth?.fetchedAt ?? new Date().toISOString());
+          setLastUpdatedAt(changedAt);
         }
+
+        const nextMatchSignatures = matchSignatureMap(data.snapshot);
+        const changedMatchIds: string[] = [];
+        for (const [matchId, signature] of nextMatchSignatures) {
+          if (matchSignaturesRef.current.get(matchId) !== signature) changedMatchIds.push(matchId);
+        }
+        matchSignaturesRef.current = nextMatchSignatures;
+        if (changedMatchIds.length) {
+          setMatchUpdatedAt((current) => {
+            const next = { ...current };
+            for (const matchId of changedMatchIds) next[matchId] = changedAt;
+            return next;
+          });
+        }
+
         setSnapshot(data.snapshot);
       }
       if (data.sourceHealth) setSourceHealth(data.sourceHealth);
@@ -346,6 +379,12 @@ export default function SnookerDataCenter({
     const target = Math.floor(match.bestOf / 2) + 1;
     const statusLabel = match.status === "completed" || match.status === "walkover" ? "已结束" : match.status === "upcoming" ? "待开始" : "进行中";
     const isRealtimeMatch = match.status === "live" || match.status === "session-break";
+    const matchUpdateTime = new Date(matchUpdatedAt[match.id] ?? snapshot.event.snapshotAt).toLocaleTimeString("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZone: "Asia/Shanghai",
+    });
     return (
       <main className={styles.appRoot} data-theme={theme}>
         <div className={styles.detailShell}>
@@ -370,7 +409,7 @@ export default function SnookerDataCenter({
                 <strong>{match.status === "walkover" ? "W - O" : `${match.score1 ?? "-"} - ${match.score2 ?? "-"}`}</strong>
                 <StatusPill status={match.status} label={statusLabel} />
                 <small>{bestOfLabel(match.bestOf)}</small>
-                {isRealtimeMatch ? <small>{refreshing ? "正在同步…" : `最近更新 ${updatedTime}`}</small> : null}
+                {isRealtimeMatch ? <small>{refreshing ? "正在同步…" : `最近更新 ${matchUpdateTime}`}</small> : null}
               </div>
               <div className={styles.versusPlayer}>
                 <div className={styles.avatarWrap}><PlayerAvatar player={p2} size="xl" />{match.winnerId === p2.id ? <em>胜</em> : null}</div>
