@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { PlayerEventStats, SnookerDashboardSnapshot, SnookerEvent, SnookerMatch, SnookerPlayer } from "@/lib/snooker/domain";
 import styles from "./snooker-data-center.module.css";
 
@@ -127,6 +128,7 @@ function ScoreRows({ match, players }: { match: SnookerMatch; players: Map<strin
 }
 
 export default function SnookerDataCenter({ initialSnapshot, buildMark }: { initialSnapshot: SnookerDashboardSnapshot; buildMark: string }) {
+  const router = useRouter();
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [activeView, setActiveView] = useState<View>("home");
   const [theme, setTheme] = useState<Theme>("green");
@@ -136,6 +138,17 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
   const [playerFilter, setPlayerFilter] = useState<PlayerFilter>("event");
   const [playerQuery, setPlayerQuery] = useState("");
   const [selectedPlayerId, setSelectedPlayerId] = useState("p-zhao-xintong");
+
+  useEffect(() => {
+    try {
+      const requested = new URLSearchParams(window.location.search).get("view");
+      if (requested === "matches" || requested === "data" || requested === "home") setActiveView(requested);
+      const savedTheme = window.localStorage.getItem("snooker-data-theme");
+      if (savedTheme === "green" || savedTheme === "red") setTheme(savedTheme);
+    } catch {
+      // URL/theme hydration is optional.
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,8 +198,26 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
   const chinaStats = useMemo(() => chinaEventPlayers.map((player) => ({ player, stats: currentEventStats(player.id, event)! })).sort((a, b) => event.rounds.findIndex((r) => r.key === a.stats.bestRoundKey) - event.rounds.findIndex((r) => r.key === b.stats.bestRoundKey)), [chinaEventPlayers, event]);
 
   const changeView = (view: View) => {
+    if (view === "players") {
+      router.push("/snooker/players");
+      return;
+    }
     setActiveView(view);
+    try {
+      window.history.replaceState(null, "", view === "home" ? "/snooker" : `/snooker?view=${view}`);
+    } catch {
+      // URL state is optional.
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const chooseTheme = (nextTheme: Theme) => {
+    setTheme(nextTheme);
+    try {
+      window.localStorage.setItem("snooker-data-theme", nextTheme);
+    } catch {
+      // Theme persistence is optional.
+    }
   };
 
   const chooseRound = (key: string) => {
@@ -209,8 +240,8 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
           <div className={styles.headerRight}>
             <span className={styles.versionBadge}>DATA v0.3</span>
             <div className={styles.themeSwitch}>
-              <button className={theme === "green" ? styles.themeActive : ""} onClick={() => setTheme("green")}>绿</button>
-              <button className={theme === "red" ? styles.themeActive : ""} onClick={() => setTheme("red")}>红</button>
+              <button className={theme === "green" ? styles.themeActive : ""} onClick={() => chooseTheme("green")}>绿</button>
+              <button className={theme === "red" ? styles.themeActive : ""} onClick={() => chooseTheme("red")}>红</button>
             </div>
           </div>
         </header>
@@ -262,7 +293,7 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
                 <SectionHeader eyebrow="WORLD RANKING" title="世界排名" action="TOP 6" />
                 <div className={styles.rankingList}>
                   {rankingRows.slice(0, 6).map(({ rank, points: total, player }) => (
-                    <button key={rank} onClick={() => { setSelectedPlayerId(player.id); changeView("players"); }}>
+                    <button key={rank} onClick={() => router.push(`/snooker/players/${player.slug}`)}>
                       <strong>{rank}</strong><PlayerAvatar player={player} size="sm" /><span><b>{player.nameZh}</b><small>{player.nameEn}</small></span><em>{points(total)}</em>
                     </button>
                   ))}
@@ -376,21 +407,21 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
               <section className={styles.card}>
                 <SectionHeader eyebrow="WORLD RANKING" title="世界排名 TOP 16" action="当前快照" />
                 <div className={styles.rankingList}>
-                  {rankingRows.map(({ rank, points: total, player }) => <button key={rank} onClick={() => { setSelectedPlayerId(player.id); changeView("players"); }}><strong>{rank}</strong><PlayerAvatar player={player} size="sm" /><span><b>{player.nameZh}</b><small>{player.nameEn} · {player.nationalityZh}</small></span><em>{points(total)}</em></button>)}
+                  {rankingRows.map(({ rank, points: total, player }) => <button key={rank} onClick={() => router.push(`/snooker/players/${player.slug}`)}><strong>{rank}</strong><PlayerAvatar player={player} size="sm" /><span><b>{player.nameZh}</b><small>{player.nameEn} · {player.nationalityZh}</small></span><em>{points(total)}</em></button>)}
                 </div>
               </section>
 
               <section className={styles.card}>
                 <SectionHeader eyebrow="CHINA WATCH" title="中国军团 · 本届成绩" action={`${chinaStats.length} 人`} />
                 <div className={styles.chinaStats}>
-                  {chinaStats.map(({ player, stats }) => <button key={player.id} onClick={() => { setSelectedPlayerId(player.id); changeView("players"); }}><PlayerAvatar player={player} size="sm" /><span><b>{player.nameZh}</b><small>世界第 {player.currentRank ?? "—"}</small></span><em>{stats.bestRoundLabelZh}</em><strong>{stats.wins}胜{stats.losses}负</strong></button>)}
+                  {chinaStats.map(({ player, stats }) => <button key={player.id} onClick={() => router.push(`/snooker/players/${player.slug}`)}><PlayerAvatar player={player} size="sm" /><span><b>{player.nameZh}</b><small>世界第 {player.currentRank ?? "—"}</small></span><em>{stats.bestRoundLabelZh}</em><strong>{stats.wins}胜{stats.losses}负</strong></button>)}
                 </div>
               </section>
 
               <section className={styles.foundationCard}>
                 <div><small>DATA FOUNDATION</small><h2>数据底座状态</h2></div>
-                <dl><div><dt>版本</dt><dd>{buildMark}</dd></div><div><dt>主数据</dt><dd>34 名球员 / 33 场比赛</dd></div><div><dt>实时覆盖</dt><dd>{sourceHealth?.accepted ? `${sourceHealth.overlayCount} 场已校验` : "快照安全兜底"}</dd></div><div><dt>数据库</dt><dd>独立 Supabase Schema 已准备，尚未写入华彩库</dd></div></dl>
-                <p>{sourceHealth?.message ?? "页面当前由已验证赛事快照直接提供数据，后台同时检查实时数据源。"}</p>
+                <dl><div><dt>版本</dt><dd>{buildMark}</dd></div><div><dt>赛事主数据</dt><dd>34 名球员 / 33 场比赛</dd></div><div><dt>球员数据库</dt><dd>129 名球员 · 独立 Supabase</dd></div><div><dt>实时覆盖</dt><dd>{sourceHealth?.accepted ? `${sourceHealth.overlayCount} 场已校验` : "快照安全兜底"}</dd></div></dl>
+                <p>{sourceHealth?.message ?? "页面当前由已验证赛事快照直接提供数据，球员模块由独立 Supabase 数据中心提供。"}</p>
               </section>
             </>
           ) : null}
