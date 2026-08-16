@@ -10,7 +10,7 @@ import {
   type VisitorGeoPayload,
 } from "@/lib/site-monitor";
 
-const BLOCKED_PATH_PREFIXES = ["/admin", "/site-monitor", "/api"];
+const BLOCKED_PATH_PREFIXES = ["/admin", "/site-monitor", "/api", "/snooker/site-monitor"];
 const WECHAT_VERIFY_PATH = "/dd8ad1096190a17bbcd86e01faa9c979.txt";
 
 type VisitBody = {
@@ -110,6 +110,7 @@ export async function POST(request: Request) {
           where existing.module_type='public_visit'
             and existing.target_id=${visitorId}
             and coalesce(existing.after_json,'{}')::jsonb->>'path'=${path}
+            and coalesce(existing.after_json,'{}')::jsonb->>'pageLabel'=${pageLabel}
             and existing.created_at::timestamptz>now()-interval '20 seconds'
         )
     `;

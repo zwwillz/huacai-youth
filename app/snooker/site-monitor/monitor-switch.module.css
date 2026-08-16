@@ -1,0 +1,71 @@
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: min(1500px, calc(100% - 56px));
+  margin: 0 auto;
+  padding: 24px 0 0;
+  color: #2b2432;
+}
+
+.bar > div strong,
+.bar > div small {
+  display: block;
+}
+
+.bar > div strong {
+  font-size: 14px;
+}
+
+.bar > div small {
+  margin-top: 3px;
+  color: #958c9a;
+  font-size: 11px;
+}
+
+.bar nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #e5deea;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.bar a {
+  border-radius: 9px;
+  padding: 8px 12px;
+  color: #726878;
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.bar a:hover {
+  background: #f8f5fb;
+}
+
+.bar a.active {
+  background: #7143aa;
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .bar {
+    align-items: flex-end;
+    width: calc(100% - 24px);
+    padding-top: 14px;
+  }
+
+  .bar > div small {
+    display: none;
+  }
+
+  .bar a {
+    padding: 7px 9px;
+    font-size: 11px;
+  }
+}
