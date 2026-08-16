@@ -1,0 +1,55 @@
+name: Patch Snooker Player Redeploy
+
+on:
+  push:
+    branches: ["agent/snooker-player-redeploy-fix"]
+    paths:
+      - ".github/workflows/patch-snooker-player-redeploy.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/snooker-player-redeploy-fix
+      - name: Patch player directory details
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          data_path = Path("lib/snooker/player-data.ts")
+          text = data_path.read_text()
+
+          marker = '''const PLAYER_SELECT = [\n'''
+          helper = '''function isDirectoryPlayerRow(row: PlayerRow) {\n  const slug = row.slug.trim().toLowerCase();\n  const nameEn = row.name_en.trim();\n  const nameZh = row.name_zh.trim();\n\n  const isPlaceholder =\n    /^china-wildcard-\\d+(?:-|$)/i.test(slug) ||\n    /(?:^|-)winner-(?:of-)?match-\\d+(?:-|$)/i.test(slug) ||\n    /^China Wildcard #?\\d+$/i.test(nameEn) ||\n    /^Winner of Match \\d+$/i.test(nameEn) ||\n    /^中国外卡\\d+号$/.test(nameZh) ||\n    /^第\\d+场胜者$/.test(nameZh);\n\n  return !isPlaceholder;\n}\n\nconst PLAYER_SELECT = [\n'''
+          if text.count(marker) != 1:
+              raise SystemExit("PLAYER_SELECT marker mismatch")
+          text = text.replace(marker, helper, 1)
+
+          old_return = '''  return rows.map(mapPlayer);\n'''
+          new_return = '''  return rows.filter(isDirectoryPlayerRow).map(mapPlayer);\n'''
+          if text.count(old_return) != 1:
+              raise SystemExit("directory return marker mismatch")
+          text = text.replace(old_return, new_return, 1)
+          data_path.write_text(text)
+
+          directory_path = Path("app/snooker/players/player-directory.tsx")
+          text = directory_path.read_text()
+          old_points = '''function points(value: number | null) {\n  return value === null ? "—" : value.toLocaleString("en-GB");\n}\n'''
+          new_points = '''function points(value: number | null) {\n  return value === null ? "—" : `€${value.toLocaleString("en-GB")}`;\n}\n'''
+          if text.count(old_points) != 1:
+              raise SystemExit("points formatter marker mismatch")
+          text = text.replace(old_points, new_points, 1)
+          directory_path.write_text(text)
+          PY
+      - name: Commit player fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/snooker/player-data.ts app/snooker/players/player-directory.tsx
+          git commit -m "fix: exclude bracket placeholders from player directory"
+          git push origin HEAD:agent/snooker-player-redeploy-fix
