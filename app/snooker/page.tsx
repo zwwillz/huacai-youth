@@ -15,7 +15,7 @@ export default async function SnookerPage({ searchParams }: { searchParams: Prom
     accepted: database.databaseOnline,
     fetchedAt: database.loadedAt,
     message: database.databaseOnline
-      ? "前端已从独立 snooker-data-center 数据库读取；WST 由中央任务同步。"
+      ? "前端读取独立斯诺克数据库；官方数据由中央同步任务统一写入。"
       : "独立数据库暂不可用，当前使用本地已验证快照兜底。",
   };
 
@@ -24,7 +24,7 @@ export default async function SnookerPage({ searchParams }: { searchParams: Prom
       initialSnapshot={database.snapshot}
       initialDatabaseEvents={database.eventDetails}
       initialSourceHealth={sourceHealth}
-      buildMark={`${SNOOKER_BUILD_MARK}-DB07`}
+      buildMark={`${SNOOKER_BUILD_MARK}-DB08`}
       initialView={initialView}
     />
   );
