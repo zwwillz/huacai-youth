@@ -63,17 +63,27 @@ function parseFrame(value: string, frameNo: number, p1Name: string, p2Name: stri
 }
 
 async function fetchHtml(url: string) {
-  const response = await fetch(url, {
-    headers: {
-      "user-agent": "Mozilla/5.0 (compatible; WorldSnookerDataCenterPOC/0.4)",
-      accept: "text/html,application/xhtml+xml",
-      "cache-control": "no-cache",
-    },
-    cache: "no-store",
-    signal: AbortSignal.timeout(6500),
-  });
-  if (!response.ok) throw new Error(`HTTP_${response.status}`);
-  return response.text();
+  const target = new URL(url);
+  target.searchParams.set("_ts", `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6500);
+
+  try {
+    const response = await fetch(target.toString(), {
+      headers: {
+        "user-agent": "Mozilla/5.0 (compatible; WorldSnookerDataCenterPOC/0.4.1)",
+        accept: "text/html,application/xhtml+xml",
+        "cache-control": "no-cache, no-store, max-age=0",
+        pragma: "no-cache",
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`HTTP_${response.status}`);
+    return response.text();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function overlayMatches(snapshot: SnookerDashboardSnapshot, sourceMatches: SnookerSourceMatch[], sourceText: string) {
@@ -88,6 +98,7 @@ function overlayMatches(snapshot: SnookerDashboardSnapshot, sourceMatches: Snook
   for (const sourceMatch of sourceMatches) {
     const target = bundled.get(key(sourceMatch.roundKey, sourceMatch.player1.nameEn, sourceMatch.player2.nameEn));
     if (!target) continue;
+
     target.score1 = sourceMatch.score1;
     target.score2 = sourceMatch.score2;
 
@@ -139,23 +150,31 @@ export async function getDashboardWithLiveOverlay(): Promise<{ snapshot: Snooker
     const parsed = parseSnookerOrgEvent(html);
     parsedRoundCount = parsed.rounds.length;
     parsedMatchCount = parsed.matches.length;
-    eventAccepted = parsed.eventDetected && parsed.rounds.length >= 6 && parsed.matches.length >= 30;
-    if (eventAccepted) overlayCount += overlayMatches(snapshot, parsed.matches, snookerOrgText(html));
+    const eventValid = parsed.eventDetected && parsed.rounds.length >= 6 && parsed.matches.length >= 30;
+    if (eventValid) {
+      const count = overlayMatches(snapshot, parsed.matches, snookerOrgText(html));
+      overlayCount += count;
+      eventAccepted = count > 0;
+    }
   } catch (error) {
-    errors.push(error instanceof Error ? `赛事页 ${error.message}` : "赛事页读取失败");
+    errors.push(error instanceof Error ? `赛事页 ${error.name === "AbortError" ? "TIMEOUT" : error.message}` : "赛事页读取失败");
   }
 
   try {
     const liveHtml = await fetchHtml(LIVE_SCORE_SOURCE);
     online = true;
     const liveParsed = parseSnookerOrgEvent(liveHtml);
-    liveAccepted = liveParsed.eventDetected && liveParsed.matches.length > 0;
-    if (liveAccepted) overlayCount += overlayMatches(snapshot, liveParsed.matches, snookerOrgText(liveHtml));
+    const liveValid = liveParsed.eventDetected && liveParsed.matches.length > 0;
+    if (liveValid) {
+      const count = overlayMatches(snapshot, liveParsed.matches, snookerOrgText(liveHtml));
+      overlayCount += count;
+      liveAccepted = count > 0;
+    }
   } catch (error) {
-    errors.push(error instanceof Error ? `实时页 ${error.message}` : "实时页读取失败");
+    errors.push(error instanceof Error ? `实时页 ${error.name === "AbortError" ? "TIMEOUT" : error.message}` : "实时页读取失败");
   }
 
-  const accepted = eventAccepted || liveAccepted;
+  const accepted = overlayCount > 0;
   if (accepted) {
     snapshot.event.snapshotAt = fetchedAt;
     snapshot.builtAt = fetchedAt;
@@ -176,8 +195,10 @@ export async function getDashboardWithLiveOverlay(): Promise<{ snapshot: Snooker
       overlayCount,
       pollingSeconds: 15,
       message: accepted
-        ? `已自动同步${liveAccepted ? "实时比分" : "赛事数据"}，页面每15秒检查一次。`
-        : `实时源暂未通过校验，继续使用已验证快照。${errors.length ? ` ${errors.join("；")}` : ""}`,
+        ? `已匹配并覆盖 ${overlayCount} 场数据${liveAccepted ? "，包含实时比分" : ""}，页面每15秒检查一次。`
+        : online
+          ? `数据源可访问，但本轮没有匹配到可安全覆盖的比赛。${errors.length ? ` ${errors.join("；")}` : ""}`
+          : `实时源暂不可用，继续使用已验证快照。${errors.length ? ` ${errors.join("；")}` : ""}`,
     },
   };
 }
