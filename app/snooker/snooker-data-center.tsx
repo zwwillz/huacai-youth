@@ -8,7 +8,6 @@ import styles from "./snooker-data-center.module.css";
 type View = "home" | "matches" | "players" | "data";
 type RootView = "home" | "matches" | "data";
 type Theme = "green" | "red";
-type PlayerFilter = "event" | "china" | "top16";
 
 type SourceHealth = {
   online: boolean;
@@ -136,9 +135,6 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark, initialV
   const [sourceHealth, setSourceHealth] = useState<SourceHealth | null>(null);
   const [selectedRoundKey, setSelectedRoundKey] = useState("final");
   const [selectedMatchId, setSelectedMatchId] = useState("co26-final-1");
-  const [playerFilter, setPlayerFilter] = useState<PlayerFilter>("event");
-  const [playerQuery, setPlayerQuery] = useState("");
-  const [selectedPlayerId, setSelectedPlayerId] = useState("p-zhao-xintong");
 
   useEffect(() => {
     let cancelled = false;
@@ -171,18 +167,6 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark, initialV
   const finalMatch = event.rounds.find((round) => round.key === "final")!.matches[0];
   const selectedRound = event.rounds.find((round) => round.key === selectedRoundKey) ?? event.rounds[0];
   const selectedMatch = eventMatches.find((match) => match.id === selectedMatchId) ?? selectedRound.matches[0];
-  const selectedPlayer = players.get(selectedPlayerId) ?? eventPlayers[0];
-  const selectedPlayerStats = selectedPlayer ? currentEventStats(selectedPlayer.id, event) : null;
-
-  const filteredPlayers = useMemo(() => {
-    const needle = playerQuery.trim().toLowerCase();
-    return eventPlayers.filter((player) => {
-      if (playerFilter === "china" && player.countryCode !== "CHN") return false;
-      if (playerFilter === "top16" && (player.currentRank === null || player.currentRank > 16)) return false;
-      if (!needle) return true;
-      return `${player.nameZh} ${player.shortNameZh} ${player.nameEn} ${player.nationalityZh}`.toLowerCase().includes(needle);
-    });
-  }, [eventPlayers, playerFilter, playerQuery]);
 
   const rankingRows = useMemo(() => snapshot.rankings.map((row) => ({ ...row, player: players.get(row.playerId)! })).filter((row) => row.player), [snapshot.rankings, players]);
   const chinaStats = useMemo(() => chinaEventPlayers.map((player) => ({ player, stats: currentEventStats(player.id, event)! })).sort((a, b) => event.rounds.findIndex((r) => r.key === a.stats.bestRoundKey) - event.rounds.findIndex((r) => r.key === b.stats.bestRoundKey)), [chinaEventPlayers, event]);
@@ -329,47 +313,6 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark, initialV
                   </div>
                 ) : <p className={styles.emptyDetail}>当前数据源提供总比分；逐局数据会在可用时自动补充。</p>}
                 {selectedMatch.note ? <p className={styles.matchNote}>{selectedMatch.note}</p> : null}
-              </section>
-            </>
-          ) : null}
-
-          {activeView === "players" ? (
-            <>
-              <section className={styles.pageIntro}><small>PLAYER DATABASE</small><h1>球员</h1><p>本届赛事 34 名球员已进入统一主数据；中文名、英文名、排名与赛事战绩都按同一 player_id 对应。</p></section>
-
-              {selectedPlayer ? (
-                <section className={styles.playerProfile}>
-                  <div className={styles.profileTop}><PlayerAvatar player={selectedPlayer} size="lg" /><div><span>{selectedPlayer.countryCode === "CHN" ? "🇨🇳 中国球员" : selectedPlayer.nationalityZh}</span><h2>{selectedPlayer.nameZh}</h2><p>{selectedPlayer.nameEn}</p></div><b>{selectedPlayer.currentRank ? `#${selectedPlayer.currentRank}` : "WC"}</b></div>
-                  <div className={styles.profileMetrics}>
-                    <span><small>世界排名</small><b>{selectedPlayer.currentRank ?? "—"}</b></span>
-                    <span><small>本届最佳</small><b>{selectedPlayerStats?.bestRoundLabelZh ?? "—"}</b></span>
-                    <span><small>本届胜负</small><b>{selectedPlayerStats ? `${selectedPlayerStats.wins}-${selectedPlayerStats.losses}` : "—"}</b></span>
-                    <span><small>局分</small><b>{selectedPlayerStats ? `${selectedPlayerStats.frameWins}-${selectedPlayerStats.frameLosses}` : "—"}</b></span>
-                  </div>
-                  {selectedPlayerStats ? (
-                    <div className={styles.profileMatches}>{selectedPlayerStats.matches.map((match) => {
-                      const opponentId = match.player1Id === selectedPlayer.id ? match.player2Id : match.player1Id;
-                      const opponent = players.get(opponentId)!;
-                      const selfScore = match.player1Id === selectedPlayer.id ? match.score1 : match.score2;
-                      const opponentScore = match.player1Id === selectedPlayer.id ? match.score2 : match.score1;
-                      return <div key={match.id}><small>{match.roundLabelZh}</small><span>vs {opponent.nameZh}</span><b>{match.status === "walkover" ? match.statusLabelZh : `${selfScore ?? "-"}:${opponentScore ?? "-"}`}</b></div>;
-                    })}</div>
-                  ) : null}
-                  {selectedPlayer.avatar ? <a className={styles.photoCredit} href={selectedPlayer.avatar.sourcePage} target="_blank" rel="noreferrer">头像：{selectedPlayer.avatar.credit} · {selectedPlayer.avatar.license} · Wikimedia Commons</a> : <small className={styles.photoPending}>暂未接入可确认授权的头像，使用字母头像。</small>}
-                </section>
-              ) : null}
-
-              <section className={styles.card}>
-                <div className={styles.playerToolbar}>
-                  <label><span>⌕</span><input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="搜索中文名 / 英文名" /></label>
-                  <div>{([['event','本站 34'],['china',`中国 ${chinaEventPlayers.length}`],['top16','TOP 16']] as Array<[PlayerFilter,string]>).map(([id,label]) => <button className={playerFilter === id ? styles.filterActive : ""} onClick={() => setPlayerFilter(id)} key={id}>{label}</button>)}</div>
-                </div>
-                <div className={styles.playerDirectory}>
-                  {filteredPlayers.map((player) => {
-                    const stats = currentEventStats(player.id, event);
-                    return <button className={selectedPlayer?.id === player.id ? styles.playerSelected : ""} key={player.id} onClick={() => { setSelectedPlayerId(player.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}><PlayerAvatar player={player} /><span><b>{player.nameZh}</b><small>{player.nameEn} · {player.nationalityZh}</small><em>{stats ? `${stats.bestRoundLabelZh} · ${stats.wins}胜${stats.losses}负` : ""}</em></span><strong>{player.currentRank ? `#${player.currentRank}` : "WC"}</strong></button>;
-                  })}
-                </div>
               </section>
             </>
           ) : null}
