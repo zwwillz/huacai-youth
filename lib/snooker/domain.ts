@@ -40,6 +40,8 @@ export type SnookerFrame = {
   frameNo: number;
   score1: number;
   score2: number;
+  break1?: number;
+  break2?: number;
   note?: string;
 };
 
@@ -56,7 +58,10 @@ export type SnookerMatch = {
   status: SnookerMatchStatus;
   statusLabelZh: string;
   scheduledAt?: string;
+  timeLabelZh?: string;
+  sessionTimesZh?: string[];
   sessionLabelZh?: string;
+  tableLabelZh?: string;
   frames?: SnookerFrame[];
   note?: string;
   winnerId?: string;
@@ -99,6 +104,25 @@ export type SnookerEvent = {
   rounds: SnookerRound[];
 };
 
+export type SnookerCalendarEvent = {
+  id: string;
+  slug: string;
+  nameZh: string;
+  nameEn: string;
+  season: string;
+  typeZh: "排名赛" | "非排名赛" | "资格赛";
+  status: "upcoming" | "live" | "completed";
+  statusLabelZh: string;
+  startDate: string;
+  endDate: string;
+  cityZh: string;
+  countryZh: string;
+  venueZh?: string;
+  winnerZh?: string;
+  current?: boolean;
+  dataReady?: boolean;
+};
+
 export type SnookerRankingRow = {
   rank: number;
   playerId: string;
@@ -124,6 +148,7 @@ export type SnookerDashboardSnapshot = {
   version: string;
   builtAt: string;
   event: SnookerEvent;
+  calendar: SnookerCalendarEvent[];
   players: SnookerPlayer[];
   rankings: SnookerRankingRow[];
 };

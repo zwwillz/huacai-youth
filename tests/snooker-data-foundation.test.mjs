@@ -12,7 +12,20 @@ test("snooker snapshot contains complete 2026 China Open main stage", async () =
     assert.match(eventSource, new RegExp(`key: "${round}"`));
   }
   assert.match(eventSource, /score1: 4, score2: 4/);
+  assert.match(eventSource, /sessionTimesZh/);
+  assert.match(eventSource, /frame\(7, 70, 68, 53, 57\)/);
   assert.match(eventSource, /sourceEventId: "2755"/);
+});
+
+test("2026-27 snooker calendar includes completed current and upcoming event types", async () => {
+  const calendarSource = await read("lib/snooker/data/calendar.ts");
+  assert.match(calendarSource, /2026斯诺克上海大师赛/);
+  assert.match(calendarSource, /2026斯诺克中国公开赛/);
+  assert.match(calendarSource, /2026斯诺克武汉公开赛/);
+  assert.match(calendarSource, /typeZh: "非排名赛"/);
+  assert.match(calendarSource, /typeZh: "排名赛"/);
+  assert.match(calendarSource, /typeZh: "资格赛"/);
+  assert.match(calendarSource, /current: true/);
 });
 
 test("snooker player master covers every China Open participant", async () => {
@@ -25,30 +38,49 @@ test("snooker player master covers every China Open participant", async () => {
   assert.equal(referenced.size, 34);
   assert.deepEqual([...referenced].filter((slug) => !available.has(slug)), []);
   assert.match(playersSource, /Zhao_Xintong_at_the_World_Snooker_Green_Carpet_Ceremony_2026/);
-  assert.match(playersSource, /Noppon_Saengkham_2025/);
+  assert.match(playersSource, /Mark_Selby\.JPG/);
 });
 
-test("snooker UI renders complete event from initial snapshot", async () => {
+test("snooker mobile IA is calendar to event centre to match centre", async () => {
   const [pageSource, uiSource] = await Promise.all([
     read("app/snooker/page.tsx"),
     read("app/snooker/snooker-data-center.tsx"),
   ]);
   assert.match(pageSource, /initialSnapshot=\{snapshot\}/);
-  assert.match(uiSource, /中国公开赛完整数据已接入/);
-  assert.match(uiSource, /title="完整主赛"/);
-  assert.match(uiSource, /event\.rounds\.map/);
-  assert.match(uiSource, /本站 34/);
+  assert.match(uiSource, /比赛 · 赛历/);
+  assert.match(uiSource, /赛事介绍/);
+  assert.match(uiSource, />赛程</);
+  assert.match(uiSource, /赛事数据/);
+  assert.match(uiSource, /比赛详情/);
+  assert.match(uiSource, /查看完整比分与逐局数据/);
+  assert.match(uiSource, /单杆<br \/>\(50\+\)/);
+  assert.match(uiSource, /15_000/);
+  assert.match(uiSource, /visibilitychange/);
+  assert.match(uiSource, /中国球员/);
 });
 
-test("snooker live overlay validates source completeness before replacing snapshot", async () => {
+test("player main view stays a directory and detail opens on click", async () => {
+  const uiSource = await read("app/snooker/snooker-data-center.tsx");
+  assert.match(uiSource, /球员页只保留目录与搜索/);
+  assert.match(uiSource, /搜索中文名 \/ 英文名/);
+  assert.match(uiSource, /openPlayer\(player\.id\)/);
+  assert.match(uiSource, /球员详情/);
+  assert.doesNotMatch(uiSource, /useState\("p-zhao-xintong"\)/);
+});
+
+test("snooker live overlay bypasses cache and protects the verified snapshot", async () => {
   const [overlaySource, dashboardSource] = await Promise.all([
     read("lib/snooker/live-overlay.ts"),
     read("app/api/snooker/v1/dashboard/route.ts"),
   ]);
+  assert.match(overlaySource, /template=21/);
+  assert.match(overlaySource, /cache: "no-store"/);
   assert.match(overlaySource, /parsed\.rounds\.length >= 6/);
   assert.match(overlaySource, /parsed\.matches\.length >= 30/);
-  assert.match(overlaySource, /snapshot: dashboardSnapshot/);
-  assert.match(dashboardSource, /verified-snapshot \+ live-overlay/);
+  assert.match(overlaySource, /structuredClone\(dashboardSnapshot\)/);
+  assert.match(dashboardSource, /dynamic = "force-dynamic"/);
+  assert.match(dashboardSource, /revalidate = 0/);
+  assert.match(dashboardSource, /Cache-Control/);
 });
 
 test("snooker independent database schema stays separate from Huacai tables", async () => {

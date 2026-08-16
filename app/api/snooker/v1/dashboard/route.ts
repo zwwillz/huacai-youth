@@ -3,7 +3,8 @@ import { eventSummary, SNOOKER_BUILD_MARK, SNOOKER_FOUNDATION_VERSION } from "@/
 import { getDashboardWithLiveOverlay } from "@/lib/snooker/live-overlay";
 import { getSnookerRepository } from "@/lib/snooker/repository";
 
-export const revalidate = 20;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   const repository = getSnookerRepository();
@@ -18,5 +19,11 @@ export async function GET() {
     snapshot,
     summary: eventSummary(snapshot.event),
     sourceHealth,
+  }, {
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
   });
 }

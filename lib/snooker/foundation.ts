@@ -1,14 +1,16 @@
 import type { PlayerEventStats, SnookerDashboardSnapshot, SnookerEvent, SnookerMatch, SnookerPlayer } from "./domain";
+import { snookerCalendar2026 } from "./data/calendar";
 import { chinaOpen2026 } from "./data/china-open-2026";
 import { playerById, snookerPlayers, top16Rankings } from "./data/players";
 
-export const SNOOKER_FOUNDATION_VERSION = "0.3.0-data-foundation";
-export const SNOOKER_BUILD_MARK = "2026-08-16-BIG-02";
+export const SNOOKER_FOUNDATION_VERSION = "0.4.0-product-ux";
+export const SNOOKER_BUILD_MARK = "2026-08-16-UX-01";
 
 export const dashboardSnapshot: SnookerDashboardSnapshot = {
   version: SNOOKER_FOUNDATION_VERSION,
-  builtAt: "2026-08-16T19:05:00+08:00",
+  builtAt: "2026-08-16T20:05:00+08:00",
   event: chinaOpen2026,
+  calendar: snookerCalendar2026,
   players: snookerPlayers,
   rankings: top16Rankings,
 };

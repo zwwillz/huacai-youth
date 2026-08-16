@@ -1,22 +1,38 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { PlayerEventStats, SnookerDashboardSnapshot, SnookerEvent, SnookerMatch, SnookerPlayer } from "@/lib/snooker/domain";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type {
+  PlayerEventStats,
+  SnookerCalendarEvent,
+  SnookerDashboardSnapshot,
+  SnookerEvent,
+  SnookerMatch,
+  SnookerPlayer,
+} from "@/lib/snooker/domain";
 import styles from "./snooker-data-center.module.css";
 
-type View = "home" | "matches" | "players" | "data";
+type MainView = "home" | "matches" | "players" | "data";
 type Theme = "green" | "red";
-type PlayerFilter = "event" | "china" | "top16";
+type EventFilter = "全部" | "排名赛" | "非排名赛" | "资格赛";
+type PlayerFilter = "全部" | "中国" | "TOP16";
+type EventTab = "overview" | "schedule" | "data";
+type DetailState =
+  | { type: "event"; slug: string; tab: EventTab }
+  | { type: "match"; matchId: string; eventSlug: string }
+  | { type: "player"; playerId: string };
 
 type SourceHealth = {
   online: boolean;
   accepted: boolean;
+  eventAccepted: boolean;
+  liveAccepted: boolean;
   source: string;
   fetchedAt: string;
   latencyMs: number;
   parsedRoundCount: number;
   parsedMatchCount: number;
   overlayCount: number;
+  pollingSeconds: number;
   message: string;
 };
 
@@ -26,30 +42,38 @@ type DashboardResponse = {
   sourceHealth?: SourceHealth;
 };
 
-const navItems: Array<{ id: View; label: string; icon: string }> = [
+const navItems: Array<{ id: MainView; label: string; icon: string }> = [
   { id: "home", label: "首页", icon: "⌂" },
   { id: "matches", label: "比赛", icon: "◫" },
   { id: "players", label: "球员", icon: "◎" },
   { id: "data", label: "数据", icon: "▥" },
 ];
 
-const nextEvent = {
-  nameZh: "2026武汉公开赛",
-  nameEn: "Wuhan Open 2026",
-  dates: "8月23日开始",
-  city: "武汉",
-};
-
-function money(value: number) {
-  return `£${value.toLocaleString("en-GB")}`;
-}
-
-function points(value: number | null) {
-  return value === null ? "—" : value.toLocaleString("en-GB");
-}
+const eventFilters: EventFilter[] = ["全部", "排名赛", "非排名赛", "资格赛"];
+const playerFilters: PlayerFilter[] = ["全部", "中国", "TOP16"];
 
 function initials(name: string) {
   return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function formatDateRange(start: string, end: string) {
+  const s = new Date(`${start}T00:00:00+08:00`);
+  const e = new Date(`${end}T00:00:00+08:00`);
+  const sm = s.getMonth() + 1;
+  const sd = s.getDate();
+  const em = e.getMonth() + 1;
+  const ed = e.getDate();
+  return sm === em ? `${sm}月${sd}日—${ed}日` : `${sm}月${sd}日—${em}月${ed}日`;
+}
+
+function formatBirthday(value?: string) {
+  if (!value) return "—";
+  const date = new Date(`${value}T00:00:00Z`);
+  return `${date.getUTCFullYear()}年${date.getUTCMonth() + 1}月${date.getUTCDate()}日`;
+}
+
+function bestOfLabel(bestOf: number) {
+  return `${bestOf}局${Math.floor(bestOf / 2) + 1}胜`;
 }
 
 function playerMap(snapshot: SnookerDashboardSnapshot) {
@@ -78,7 +102,6 @@ function currentEventStats(playerId: string, event: SnookerEvent): PlayerEventSt
   }
   const roundOrder = event.rounds.map((round) => round.key);
   const bestMatch = [...matches].sort((a, b) => roundOrder.indexOf(a.roundKey) - roundOrder.indexOf(b.roundKey))[0];
-  const isActive = matches.some((match) => match.status === "live" || match.status === "session-break" || match.status === "upcoming");
   return {
     playerId,
     eventId: event.id,
@@ -89,21 +112,9 @@ function currentEventStats(playerId: string, event: SnookerEvent): PlayerEventSt
     frameLosses,
     bestRoundKey: bestMatch.roundKey,
     bestRoundLabelZh: bestMatch.roundLabelZh,
-    isActive,
+    isActive: matches.some((match) => match.status === "live" || match.status === "session-break" || match.status === "upcoming"),
     matches,
   };
-}
-
-function PlayerAvatar({ player, size = "md" }: { player: SnookerPlayer; size?: "sm" | "md" | "lg" }) {
-  return (
-    <span
-      className={`${styles.avatar} ${styles[`avatar_${size}`]} ${player.avatar ? styles.avatarPhoto : ""}`}
-      style={player.avatar ? { backgroundImage: `url("${player.avatar.url}")` } : undefined}
-      aria-label={player.nameZh}
-    >
-      {!player.avatar ? initials(player.nameEn) : null}
-    </span>
-  );
 }
 
 function SectionHeader({ eyebrow, title, action }: { eyebrow?: string; title: string; action?: string }) {
@@ -115,99 +126,378 @@ function SectionHeader({ eyebrow, title, action }: { eyebrow?: string; title: st
   );
 }
 
-function ScoreRows({ match, players }: { match: SnookerMatch; players: Map<string, SnookerPlayer> }) {
+function PlayerAvatar({ player, size = "md" }: { player: SnookerPlayer; size?: "sm" | "md" | "lg" | "xl" }) {
+  return (
+    <span
+      className={`${styles.avatar} ${styles[`avatar_${size}`]} ${player.avatar ? styles.avatarPhoto : ""}`}
+      style={player.avatar ? { backgroundImage: `url("${player.avatar.url}")` } : undefined}
+      aria-label={player.nameZh}
+    >
+      {!player.avatar ? initials(player.nameEn) : null}
+    </span>
+  );
+}
+
+function StatusPill({ status, label }: { status: string; label: string }) {
+  return <span className={`${styles.statusPill} ${styles[`status_${status}`] ?? ""}`}>{label}</span>;
+}
+
+function MatchListRow({ match, players, onOpen }: { match: SnookerMatch; players: Map<string, SnookerPlayer>; onOpen: () => void }) {
   const p1 = players.get(match.player1Id)!;
   const p2 = players.get(match.player2Id)!;
   return (
-    <div className={styles.scoreRows}>
-      <div><PlayerAvatar player={p1} /><span><b>{p1.nameZh}</b><small>{p1.nameEn} · {p1.currentRank ? `#${p1.currentRank}` : "外卡"}</small></span><strong>{match.status === "walkover" ? "W" : match.score1 ?? "-"}</strong></div>
-      <div><PlayerAvatar player={p2} /><span><b>{p2.nameZh}</b><small>{p2.nameEn} · {p2.currentRank ? `#${p2.currentRank}` : "外卡"}</small></span><strong>{match.status === "walkover" ? "O" : match.score2 ?? "-"}</strong></div>
-    </div>
+    <button className={styles.matchRow} onClick={onOpen}>
+      <div className={styles.matchRowMeta}>
+        <span>{match.timeLabelZh ?? match.roundLabelZh}</span>
+        <span>{bestOfLabel(match.bestOf)}</span>
+        <StatusPill status={match.status} label={match.status === "session-break" ? "进行中" : match.statusLabelZh} />
+      </div>
+      <div className={styles.matchLine}>
+        <span className={match.winnerId === p1.id ? styles.winnerName : ""}>{p1.nameZh}{match.winnerId === p1.id ? <em>胜</em> : null}</span>
+        <b>{match.status === "walkover" ? "W" : match.score1 ?? "-"}</b>
+      </div>
+      <div className={styles.matchLine}>
+        <span className={match.winnerId === p2.id ? styles.winnerName : ""}>{p2.nameZh}{match.winnerId === p2.id ? <em>胜</em> : null}</span>
+        <b>{match.status === "walkover" ? "O" : match.score2 ?? "-"}</b>
+      </div>
+      <small className={styles.tapHint}>查看完整比分 ›</small>
+    </button>
   );
 }
 
 export default function SnookerDataCenter({ initialSnapshot, buildMark }: { initialSnapshot: SnookerDashboardSnapshot; buildMark: string }) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
-  const [activeView, setActiveView] = useState<View>("home");
+  const [activeView, setActiveView] = useState<MainView>("home");
+  const [detail, setDetail] = useState<DetailState | null>(null);
   const [theme, setTheme] = useState<Theme>("green");
   const [sourceHealth, setSourceHealth] = useState<SourceHealth | null>(null);
-  const [selectedRoundKey, setSelectedRoundKey] = useState("final");
-  const [selectedMatchId, setSelectedMatchId] = useState("co26-final-1");
-  const [playerFilter, setPlayerFilter] = useState<PlayerFilter>("event");
+  const [refreshing, setRefreshing] = useState(false);
+  const [eventFilter, setEventFilter] = useState<EventFilter>("全部");
+  const [playerFilter, setPlayerFilter] = useState<PlayerFilter>("全部");
   const [playerQuery, setPlayerQuery] = useState("");
-  const [selectedPlayerId, setSelectedPlayerId] = useState("p-zhao-xintong");
+
+  const refresh = useCallback(async () => {
+    if (typeof document !== "undefined" && document.hidden) return;
+    setRefreshing(true);
+    try {
+      const response = await fetch(`/api/snooker/v1/dashboard?ts=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "cache-control": "no-cache" },
+      });
+      const data = await response.json() as DashboardResponse;
+      if (response.ok && data.ok && data.snapshot) setSnapshot(data.snapshot);
+      if (data.sourceHealth) setSourceHealth(data.sourceHealth);
+    } catch {
+      setSourceHealth(null);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const refresh = async () => {
-      try {
-        const response = await fetch("/api/snooker/v1/dashboard", { cache: "no-store" });
-        const data = await response.json() as DashboardResponse;
-        if (cancelled) return;
-        if (response.ok && data.ok && data.snapshot) setSnapshot(data.snapshot);
-        if (data.sourceHealth) setSourceHealth(data.sourceHealth);
-      } catch {
-        if (!cancelled) setSourceHealth(null);
-      }
-    };
     void refresh();
-    const timer = window.setInterval(refresh, 30_000);
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    const onVisibility = () => { if (!document.hidden) void refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      cancelled = true;
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, []);
+  }, [refresh]);
 
   const players = useMemo(() => playerMap(snapshot), [snapshot]);
   const event = snapshot.event;
   const eventMatches = useMemo(() => allMatches(event), [event]);
-  const eventPlayerIds = useMemo(() => Array.from(new Set(eventMatches.flatMap((match) => [match.player1Id, match.player2Id]))), [eventMatches]);
-  const eventPlayers = useMemo(() => eventPlayerIds.map((id) => players.get(id)!).filter(Boolean).sort((a, b) => (a.currentRank ?? 999) - (b.currentRank ?? 999)), [eventPlayerIds, players]);
-  const chinaEventPlayers = useMemo(() => eventPlayers.filter((player) => player.countryCode === "CHN"), [eventPlayers]);
-  const completedCount = eventMatches.filter((match) => match.status === "completed" || match.status === "walkover").length;
   const finalMatch = event.rounds.find((round) => round.key === "final")!.matches[0];
-  const selectedRound = event.rounds.find((round) => round.key === selectedRoundKey) ?? event.rounds[0];
-  const selectedMatch = eventMatches.find((match) => match.id === selectedMatchId) ?? selectedRound.matches[0];
-  const selectedPlayer = players.get(selectedPlayerId) ?? eventPlayers[0];
-  const selectedPlayerStats = selectedPlayer ? currentEventStats(selectedPlayer.id, event) : null;
+  const currentEventCard = snapshot.calendar.find((item) => item.current) ?? snapshot.calendar.find((item) => item.slug === event.slug)!;
+  const nextEventCard = snapshot.calendar.find((item) => item.status === "upcoming" && item.typeZh !== "资格赛");
+
+  const rankingRows = useMemo(
+    () => snapshot.rankings.map((row) => ({ ...row, player: players.get(row.playerId)! })).filter((row) => row.player),
+    [snapshot.rankings, players],
+  );
+  const chinaTop16 = rankingRows.filter((row) => row.player.countryCode === "CHN");
+
+  const filteredCalendar = useMemo(
+    () => snapshot.calendar.filter((item) => item.season === "2026/27" && (eventFilter === "全部" || item.typeZh === eventFilter)),
+    [snapshot.calendar, eventFilter],
+  );
 
   const filteredPlayers = useMemo(() => {
     const needle = playerQuery.trim().toLowerCase();
-    return eventPlayers.filter((player) => {
-      if (playerFilter === "china" && player.countryCode !== "CHN") return false;
-      if (playerFilter === "top16" && (player.currentRank === null || player.currentRank > 16)) return false;
-      if (!needle) return true;
-      return `${player.nameZh} ${player.shortNameZh} ${player.nameEn} ${player.nationalityZh}`.toLowerCase().includes(needle);
-    });
-  }, [eventPlayers, playerFilter, playerQuery]);
+    return [...snapshot.players]
+      .sort((a, b) => (a.currentRank ?? 999) - (b.currentRank ?? 999) || a.nameEn.localeCompare(b.nameEn))
+      .filter((player) => {
+        if (playerFilter === "中国" && player.countryCode !== "CHN") return false;
+        if (playerFilter === "TOP16" && (player.currentRank === null || player.currentRank > 16)) return false;
+        if (!needle) return true;
+        return `${player.nameZh} ${player.shortNameZh} ${player.nameEn} ${player.nationalityZh}`.toLowerCase().includes(needle);
+      });
+  }, [snapshot.players, playerFilter, playerQuery]);
 
-  const rankingRows = useMemo(() => snapshot.rankings.map((row) => ({ ...row, player: players.get(row.playerId)! })).filter((row) => row.player), [snapshot.rankings, players]);
-  const chinaStats = useMemo(() => chinaEventPlayers.map((player) => ({ player, stats: currentEventStats(player.id, event)! })).sort((a, b) => event.rounds.findIndex((r) => r.key === a.stats.bestRoundKey) - event.rounds.findIndex((r) => r.key === b.stats.bestRoundKey)), [chinaEventPlayers, event]);
-
-  const changeView = (view: View) => {
+  const openEvent = (slug: string, tab: EventTab = "overview") => {
+    setDetail({ type: "event", slug, tab });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const openMatch = (matchId: string, eventSlug = event.slug) => {
+    setDetail({ type: "match", matchId, eventSlug });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const openPlayer = (playerId: string) => {
+    setDetail({ type: "player", playerId });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const changeView = (view: MainView) => {
+    setDetail(null);
     setActiveView(view);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const chooseRound = (key: string) => {
-    const round = event.rounds.find((item) => item.key === key);
-    setSelectedRoundKey(key);
-    if (round?.matches[0]) setSelectedMatchId(round.matches[0].id);
-  };
+  const updatedTime = new Date(event.snapshotAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "Asia/Shanghai" });
+  const sourceLabel = sourceHealth?.accepted
+    ? `自动同步 · ${sourceHealth.liveAccepted ? "实时比分源在线" : "赛事源在线"}`
+    : sourceHealth?.online
+      ? "数据源在线 · 使用已验证快照"
+      : sourceHealth === null
+        ? "正在检查实时数据"
+        : "实时源暂不可用 · 使用已验证快照";
 
-  const sourceLabel = sourceHealth?.accepted ? "实时源已覆盖" : sourceHealth?.online ? "实时源校验中" : sourceHealth === null ? "已验证快照" : "已验证快照 · 实时源暂离线";
-  const updatedTime = new Date(event.snapshotAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" });
+  if (detail?.type === "match") {
+    const match = eventMatches.find((item) => item.id === detail.matchId) ?? finalMatch;
+    const p1 = players.get(match.player1Id)!;
+    const p2 = players.get(match.player2Id)!;
+    const target = Math.floor(match.bestOf / 2) + 1;
+    const statusLabel = match.status === "completed" || match.status === "walkover" ? "已结束" : match.status === "upcoming" ? "待开始" : "进行中";
+    return (
+      <main className={styles.appRoot} data-theme={theme}>
+        <div className={styles.detailShell}>
+          <header className={styles.detailHeader}>
+            <button onClick={() => setDetail({ type: "event", slug: detail.eventSlug, tab: "schedule" })}>‹</button>
+            <strong>比赛详情</strong>
+            <span>DATA v0.4</span>
+          </header>
+
+          <section className={styles.matchHero}>
+            <div className={styles.matchHeroMeta}>
+              <span>{match.roundLabelZh} · {match.timeLabelZh ?? "比赛时间待同步"}</span>
+              <b>{match.bestOf}局{target}胜</b>
+            </div>
+            <h1>{event.nameZh}</h1>
+            <div className={styles.versusGrid}>
+              <div className={styles.versusPlayer}>
+                <div className={styles.avatarWrap}>
+                  <PlayerAvatar player={p1} size="xl" />
+                  {match.winnerId === p1.id ? <em>胜</em> : null}
+                </div>
+                <strong>{p1.nameZh}</strong>
+                <small>{p1.nameEn}</small>
+              </div>
+              <div className={styles.bigScore}>
+                <strong>{match.status === "walkover" ? "W - O" : `${match.score1 ?? "-"} - ${match.score2 ?? "-"}`}</strong>
+                <StatusPill status={match.status} label={statusLabel} />
+                <small>{bestOfLabel(match.bestOf)}</small>
+              </div>
+              <div className={styles.versusPlayer}>
+                <div className={styles.avatarWrap}>
+                  <PlayerAvatar player={p2} size="xl" />
+                  {match.winnerId === p2.id ? <em>胜</em> : null}
+                </div>
+                <strong>{p2.nameZh}</strong>
+                <small>{p2.nameEn}</small>
+              </div>
+            </div>
+            {match.sessionTimesZh?.length ? (
+              <div className={styles.sessionTimes}>{match.sessionTimesZh.map((item) => <span key={item}>{item}</span>)}</div>
+            ) : null}
+          </section>
+
+          <section className={styles.frameSection}>
+            <div className={styles.frameHead}>
+              <span>单杆<br />(50+)</span><span>分数</span><b>#</b><span>分数</span><span>单杆<br />(50+)</span>
+            </div>
+            {match.frames?.length ? match.frames.map((frame) => (
+              <div className={styles.frameRow} key={frame.frameNo}>
+                <span>{frame.break1 ?? "-"}</span>
+                <strong>{frame.score1}</strong>
+                <b>{frame.frameNo}</b>
+                <strong>{frame.score2}</strong>
+                <span>{frame.break2 ?? "-"}</span>
+              </div>
+            )) : <div className={styles.emptyFrames}>该场逐局数据正在接入，当前先展示总比分。</div>}
+          </section>
+
+          <section className={styles.detailInfoCard}>
+            <div><span>比赛时间</span><b>{match.timeLabelZh ?? "待同步"}</b></div>
+            <div><span>赛制</span><b>{bestOfLabel(match.bestOf)}</b></div>
+            <div><span>状态</span><b>{statusLabel}</b></div>
+            {match.note ? <p>{match.note}</p> : null}
+          </section>
+
+          <div className={styles.liveFooter}>
+            <i className={sourceHealth?.accepted ? styles.liveOk : styles.liveWait} />
+            <span>{sourceLabel}</span>
+            <small>最近检查 {updatedTime} · 15秒自动刷新</small>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (detail?.type === "player") {
+    const player = players.get(detail.playerId) ?? snapshot.players[0];
+    const stats = currentEventStats(player.id, event);
+    return (
+      <main className={styles.appRoot} data-theme={theme}>
+        <div className={styles.detailShell}>
+          <header className={styles.detailHeader}>
+            <button onClick={() => setDetail(null)}>‹</button>
+            <strong>球员详情</strong>
+            <span>PLAYER</span>
+          </header>
+          <section className={styles.playerHero}>
+            <PlayerAvatar player={player} size="xl" />
+            <div><small>{player.nationalityZh}</small><h1>{player.nameZh}</h1><p>{player.nameEn}</p></div>
+            <div className={styles.rankBubble}><small>世界排名</small><b>{player.currentRank ? `#${player.currentRank}` : "—"}</b></div>
+          </section>
+          <section className={styles.profileFacts}>
+            <article><span>出生日期</span><b>{formatBirthday(player.dateOfBirth)}</b></article>
+            <article><span>转职业</span><b>{player.turnedPro ?? "—"}</b></article>
+            <article><span>排名积分</span><b>{player.rankingPoints?.toLocaleString("en-GB") ?? "—"}</b></article>
+            <article><span>资料来源</span><b>{player.profileSource ?? "curated"}</b></article>
+          </section>
+          {stats ? (
+            <section className={styles.card}>
+              <SectionHeader eyebrow="CURRENT EVENT" title="中国公开赛表现" action={stats.bestRoundLabelZh} />
+              <div className={styles.statGrid}>
+                <article><small>胜负</small><strong>{stats.wins}-{stats.losses}</strong><span>本届比赛</span></article>
+                <article><small>局分</small><strong>{stats.frameWins}-{stats.frameLosses}</strong><span>本届累计</span></article>
+              </div>
+              <div className={styles.playerMatches}>
+                {stats.matches.map((match) => {
+                  const opponentId = match.player1Id === player.id ? match.player2Id : match.player1Id;
+                  const opponent = players.get(opponentId)!;
+                  const selfScore = match.player1Id === player.id ? match.score1 : match.score2;
+                  const oppScore = match.player1Id === player.id ? match.score2 : match.score1;
+                  return (
+                    <button key={match.id} onClick={() => openMatch(match.id)}>
+                      <small>{match.roundLabelZh} · {match.timeLabelZh ?? ""}</small>
+                      <span>vs {opponent.nameZh}</span><b>{selfScore ?? "-"} : {oppScore ?? "-"}</b>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+          {player.avatar ? <p className={styles.avatarCredit}>头像：{player.avatar.credit} · {player.avatar.license}</p> : null}
+        </div>
+      </main>
+    );
+  }
+
+  if (detail?.type === "event") {
+    const calendarEvent = snapshot.calendar.find((item) => item.slug === detail.slug) ?? currentEventCard;
+    const fullData = calendarEvent.slug === event.slug && calendarEvent.dataReady;
+    const eventStats = fullData ? {
+      matchCount: eventMatches.length,
+      playerCount: new Set(eventMatches.flatMap((match) => [match.player1Id, match.player2Id])).size,
+      chinaCount: new Set(eventMatches.flatMap((match) => [match.player1Id, match.player2Id]).filter((id) => players.get(id)?.countryCode === "CHN")).size,
+      completed: eventMatches.filter((match) => match.status === "completed" || match.status === "walkover").length,
+    } : null;
+    const chinaStats = fullData
+      ? snapshot.players.filter((player) => player.countryCode === "CHN").map((player) => ({ player, stats: currentEventStats(player.id, event) })).filter((item) => item.stats)
+      : [];
+
+    return (
+      <main className={styles.appRoot} data-theme={theme}>
+        <div className={styles.detailShell}>
+          <header className={styles.detailHeader}>
+            <button onClick={() => setDetail(null)}>‹</button>
+            <strong>赛事中心</strong>
+            <span>{calendarEvent.season}</span>
+          </header>
+          <section className={styles.eventDetailHero}>
+            <div className={styles.eventDetailTop}><StatusPill status={calendarEvent.status} label={calendarEvent.statusLabelZh} /><span>{calendarEvent.typeZh}</span></div>
+            <h1>{calendarEvent.nameZh}</h1>
+            <p>{calendarEvent.nameEn}</p>
+            <div className={styles.eventDetailMeta}><span>{formatDateRange(calendarEvent.startDate, calendarEvent.endDate)}</span><span>{calendarEvent.countryZh} · {calendarEvent.cityZh}</span></div>
+          </section>
+          <div className={styles.eventTabs}>
+            <button className={detail.tab === "overview" ? styles.tabActive : ""} onClick={() => setDetail({ ...detail, tab: "overview" })}>赛事介绍</button>
+            <button className={detail.tab === "schedule" ? styles.tabActive : ""} onClick={() => setDetail({ ...detail, tab: "schedule" })}>赛程</button>
+            <button className={detail.tab === "data" ? styles.tabActive : ""} onClick={() => setDetail({ ...detail, tab: "data" })}>赛事数据</button>
+          </div>
+
+          {detail.tab === "overview" ? (
+            <section className={styles.card}>
+              <SectionHeader title="赛事概览" />
+              <div className={styles.overviewList}>
+                <div><span>赛季</span><b>{calendarEvent.season}</b></div>
+                <div><span>赛事类型</span><b>{calendarEvent.typeZh}</b></div>
+                <div><span>比赛时间</span><b>{formatDateRange(calendarEvent.startDate, calendarEvent.endDate)}</b></div>
+                <div><span>举办地</span><b>{calendarEvent.countryZh} · {calendarEvent.cityZh}</b></div>
+                {calendarEvent.venueZh ? <div><span>场馆</span><b>{calendarEvent.venueZh}</b></div> : null}
+                {calendarEvent.winnerZh ? <div><span>冠军</span><b>{calendarEvent.winnerZh}</b></div> : null}
+                {fullData ? <><div><span>冠军奖金</span><b>£{event.winnerPrize.toLocaleString("en-GB")}</b></div><div><span>亚军奖金</span><b>£{event.runnerUpPrize.toLocaleString("en-GB")}</b></div><div><span>决赛裁判</span><b>{event.refereeZh}</b></div></> : null}
+              </div>
+              {!fullData ? <p className={styles.dataNote}>该站目前先进入 2026/27 赛历，完整签表与比赛数据将在数据源接入后展示。</p> : null}
+            </section>
+          ) : null}
+
+          {detail.tab === "schedule" ? (
+            fullData ? (
+              <div className={styles.roundStack}>
+                {event.rounds.map((round) => (
+                  <section className={styles.card} key={round.key}>
+                    <SectionHeader title={round.labelZh} action={bestOfLabel(round.bestOf)} />
+                    <div className={styles.matchList}>{round.matches.map((match) => <MatchListRow key={match.id} match={match} players={players} onOpen={() => openMatch(match.id, event.slug)} />)}</div>
+                  </section>
+                ))}
+              </div>
+            ) : <section className={styles.card}><SectionHeader title="赛程" /><div className={styles.emptyState}>该站详细赛程正在接入。</div></section>
+          ) : null}
+
+          {detail.tab === "data" ? (
+            fullData && eventStats ? (
+              <>
+                <section className={styles.card}>
+                  <SectionHeader eyebrow="TOURNAMENT DATA" title="赛事统计" />
+                  <div className={styles.statGrid}>
+                    <article><small>主赛场次</small><strong>{eventStats.matchCount}</strong><span>完整主赛</span></article>
+                    <article><small>参赛球员</small><strong>{eventStats.playerCount}</strong><span>本站主赛</span></article>
+                    <article><small>中国球员</small><strong>{eventStats.chinaCount}</strong><span>本站主赛</span></article>
+                    <article><small>已完成</small><strong>{eventStats.completed}</strong><span>实时计算</span></article>
+                  </div>
+                </section>
+                <section className={styles.card}>
+                  <SectionHeader eyebrow="CHINA WATCH" title="中国军团本届成绩" />
+                  <div className={styles.chinaResultList}>
+                    {chinaStats.sort((a, b) => event.rounds.findIndex((round) => round.key === a.stats!.bestRoundKey) - event.rounds.findIndex((round) => round.key === b.stats!.bestRoundKey)).map(({ player, stats }) => (
+                      <button key={player.id} onClick={() => openPlayer(player.id)}>
+                        <PlayerAvatar player={player} size="sm" />
+                        <span><b>{player.nameZh}</b><small>世界第 {player.currentRank ?? "—"}</small></span>
+                        <strong>{stats!.bestRoundLabelZh}</strong>
+                        <em>{stats!.wins}胜{stats!.losses}负</em>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </>
+            ) : <section className={styles.card}><SectionHeader title="赛事数据" /><div className={styles.emptyState}>该站赛事数据正在接入。</div></section>
+          ) : null}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className={styles.appRoot} data-theme={theme}>
       <div className={styles.shell}>
         <header className={styles.header}>
-          <button className={styles.brand} onClick={() => changeView("home")} aria-label="返回首页">
-            <span>S</span>
-            <div><strong>世界斯诺克数据中心</strong><small>WORLD SNOOKER DATA</small></div>
+          <button className={styles.brand} onClick={() => changeView("home")}>
+            <span>S</span><div><strong>世界斯诺克数据中心</strong><small>WORLD SNOOKER DATA</small></div>
           </button>
           <div className={styles.headerRight}>
-            <span className={styles.versionBadge}>DATA v0.3</span>
+            <span className={styles.versionBadge}>DATA v0.4</span>
             <div className={styles.themeSwitch}>
               <button className={theme === "green" ? styles.themeActive : ""} onClick={() => setTheme("green")}>绿</button>
               <button className={theme === "red" ? styles.themeActive : ""} onClick={() => setTheme("red")}>红</button>
@@ -219,186 +509,80 @@ export default function SnookerDataCenter({ initialSnapshot, buildMark }: { init
           {activeView === "home" ? (
             <>
               <section className={styles.hero}>
-                <div className={styles.heroMeta}><span>{event.statusLabelZh}</span><b>{event.typeZh}</b></div>
+                <div className={styles.heroTop}><StatusPill status={currentEventCard.status} label={currentEventCard.statusLabelZh} /><span>{currentEventCard.typeZh}</span></div>
                 <small>CURRENT TOURNAMENT</small>
-                <h1>{event.nameZh}</h1>
-                <p>{event.startDate.slice(5).replace("-", ".")}—{event.endDate.slice(5).replace("-", ".")} · {event.countryZh} {event.cityZh}</p>
-                <div className={styles.heroButtons}><button onClick={() => changeView("matches")}>完整赛事</button><button onClick={() => changeView("data")}>数据中心</button></div>
-              </section>
-
-              <section className={styles.foundationBanner}>
-                <span className={styles.foundationIcon}>✓</span>
-                <div><b>中国公开赛完整数据已接入</b><small>33场主赛 · 34名球员 · 6个轮次，首屏不依赖外部实时接口</small></div>
-                <button onClick={() => changeView("matches")}>查看</button>
+                <h1>{currentEventCard.nameZh}</h1>
+                <p>{formatDateRange(currentEventCard.startDate, currentEventCard.endDate)} · {currentEventCard.countryZh} {currentEventCard.cityZh}</p>
+                <div className={styles.heroActions}><button onClick={() => openEvent(currentEventCard.slug, "schedule")}>进入赛事中心</button><button className={styles.secondaryButton} onClick={() => changeView("matches")}>查看赛历</button></div>
               </section>
 
               <section className={styles.card}>
-                <div className={styles.liveHeader}>
-                  <div><small>FINAL · 19局10胜</small><h2>决赛</h2></div>
-                  <span className={styles.statusPill}>{finalMatch.statusLabelZh}</span>
+                <div className={styles.liveHeader}><div><small>{finalMatch.roundLabelZh} · {finalMatch.timeLabelZh}</small><h2>中国公开赛 · 决赛</h2></div><StatusPill status={finalMatch.status} label={finalMatch.status === "session-break" ? "进行中" : finalMatch.statusLabelZh} /></div>
+                <div className={styles.homeScore}>
+                  <button onClick={() => openPlayer(finalMatch.player1Id)}><PlayerAvatar player={players.get(finalMatch.player1Id)!} size="lg" /><span>{players.get(finalMatch.player1Id)!.shortNameZh}</span></button>
+                  <div><strong>{finalMatch.score1 ?? "-"} <i>:</i> {finalMatch.score2 ?? "-"}</strong><small>{bestOfLabel(finalMatch.bestOf)}</small></div>
+                  <button onClick={() => openPlayer(finalMatch.player2Id)}><PlayerAvatar player={players.get(finalMatch.player2Id)!} size="lg" /><span>{players.get(finalMatch.player2Id)!.shortNameZh}</span></button>
                 </div>
-                <ScoreRows match={finalMatch} players={players} />
-                {finalMatch.frames?.length ? (
-                  <div className={styles.frameStrip}>
-                    {finalMatch.frames.map((frame) => <span key={frame.frameNo}>第{frame.frameNo}局 <b>{frame.score1}:{frame.score2}</b></span>)}
-                  </div>
-                ) : null}
-                <div className={styles.sourceLine}><span className={sourceHealth?.accepted ? styles.dotLive : styles.dotSnapshot} /><b>{sourceLabel}</b><small>更新 {updatedTime} · 每30秒检查</small></div>
+                <button className={styles.fullButton} onClick={() => openMatch(finalMatch.id)}>查看完整比分与逐局数据</button>
+                <div className={styles.sourceLine}><i className={sourceHealth?.accepted ? styles.liveOk : styles.liveWait} /><b>{sourceLabel}</b><small>{refreshing ? "刷新中…" : `最近检查 ${updatedTime}`}</small></div>
               </section>
 
-              <section className={styles.metricGrid}>
-                <article><small>MAIN DRAW</small><strong>33</strong><span>主赛场次</span></article>
-                <article><small>PLAYERS</small><strong>34</strong><span>参赛球员</span></article>
-                <article><small>CHINA</small><strong>{chinaEventPlayers.length}</strong><span>中国球员</span></article>
-                <article><small>COMPLETED</small><strong>{completedCount}</strong><span>已完成</span></article>
+              {nextEventCard ? <section className={styles.card}><SectionHeader eyebrow="NEXT EVENT" title="下一站" action={nextEventCard.statusLabelZh} /><button className={styles.nextEvent} onClick={() => openEvent(nextEventCard.slug)}><span>武</span><div><strong>{nextEventCard.nameZh}</strong><small>{nextEventCard.nameEn}</small><p>{formatDateRange(nextEventCard.startDate, nextEventCard.endDate)} · {nextEventCard.cityZh}</p></div><em>›</em></button></section> : null}
+
+              <section className={styles.card}>
+                <SectionHeader eyebrow="WORLD RANKING" title="世界排名" action="TOP 16" />
+                <div className={styles.rankingList}>{rankingRows.slice(0, 6).map((row) => <button key={row.rank} onClick={() => openPlayer(row.player.id)}><strong>{row.rank}</strong><PlayerAvatar player={row.player} size="sm" /><span><b>{row.player.nameZh}</b><small>{row.player.nameEn}</small></span><em>{row.points.toLocaleString("en-GB")}</em></button>)}</div>
+                <button className={styles.fullButton} onClick={() => changeView("data")}>查看完整世界排名</button>
               </section>
 
               <section className={styles.card}>
-                <SectionHeader eyebrow="NEXT EVENT" title="下一站" action="赛历" />
-                <div className={styles.nextEvent}><span>武</span><div><b>{nextEvent.nameZh}</b><small>{nextEvent.nameEn}</small><p>{nextEvent.dates} · {nextEvent.city}</p></div><i>即将开始</i></div>
-              </section>
-
-              <section className={styles.card}>
-                <SectionHeader eyebrow="WORLD RANKING" title="世界排名" action="TOP 6" />
-                <div className={styles.rankingList}>
-                  {rankingRows.slice(0, 6).map(({ rank, points: total, player }) => (
-                    <button key={rank} onClick={() => { setSelectedPlayerId(player.id); changeView("players"); }}>
-                      <strong>{rank}</strong><PlayerAvatar player={player} size="sm" /><span><b>{player.nameZh}</b><small>{player.nameEn}</small></span><em>{points(total)}</em>
-                    </button>
-                  ))}
-                </div>
-                <button className={styles.fullButton} onClick={() => changeView("data")}>查看完整 TOP 16</button>
+                <SectionHeader eyebrow="CHINA TOP 16" title="中国球员" action={`${chinaTop16.length} 人进入 TOP16`} />
+                <div className={styles.chinaTopGrid}>{chinaTop16.map((row) => <button key={row.player.id} onClick={() => openPlayer(row.player.id)}><span>{row.rank}</span><strong>{row.player.nameZh}</strong><small>世界第 {row.rank}</small></button>)}</div>
               </section>
             </>
           ) : null}
 
           {activeView === "matches" ? (
             <>
-              <section className={styles.pageIntro}><small>MATCH CENTRE</small><h1>比赛</h1><p>完整赛事作为本地已验证快照直接加载，实时源只做增量覆盖，不再因为接口异常而消失。</p></section>
-
-              <section className={styles.eventOverview}>
-                <div><span>{event.statusLabelZh}</span><small>{event.typeZh} · {event.season}</small></div>
-                <h2>{event.nameZh}</h2>
-                <p>{event.countryZh} · {event.cityZh} · {event.venueZh}</p>
-                <div className={styles.eventFacts}>
-                  <span><small>冠军奖金</small><b>{money(event.winnerPrize)}</b></span>
-                  <span><small>亚军奖金</small><b>{money(event.runnerUpPrize)}</b></span>
-                  <span><small>上届冠军</small><b>{event.previousChampionZh}</b></span>
-                  <span><small>决赛裁判</small><b>{event.refereeZh ?? "—"}</b></span>
-                </div>
+              <section className={styles.pageIntro}><small>TOURNAMENT CALENDAR</small><h1>比赛 · 赛历</h1><p>这里先展示 2026/27 赛季。当前赛事置顶突出，点击赛事后进入单站赛事中心，再查看赛程和单场比分。</p></section>
+              <section className={styles.currentEventBanner} onClick={() => openEvent(currentEventCard.slug, "schedule")}>
+                <div><StatusPill status="live" label="当前赛事" /><small>{currentEventCard.typeZh}</small></div><h2>{currentEventCard.nameZh}</h2><p>{formatDateRange(currentEventCard.startDate, currentEventCard.endDate)} · {currentEventCard.cityZh}</p><span>进入赛事中心 ›</span>
               </section>
-
               <section className={styles.card}>
-                <SectionHeader eyebrow="CHINA OPEN · MAIN DRAW" title="完整主赛" action={`${eventMatches.length} 场 · ${event.rounds.length} 轮`} />
-                <div className={styles.roundTabs}>
-                  {event.rounds.map((round) => <button className={selectedRoundKey === round.key ? styles.roundActive : ""} onClick={() => chooseRound(round.key)} key={round.key}>{round.labelZh}<small>{round.matches.length}</small></button>)}
-                </div>
-                <div className={styles.matchList}>
-                  {selectedRound.matches.map((match) => {
-                    const p1 = players.get(match.player1Id)!;
-                    const p2 = players.get(match.player2Id)!;
-                    return (
-                      <button className={selectedMatch.id === match.id ? styles.matchSelected : ""} key={match.id} onClick={() => setSelectedMatchId(match.id)}>
-                        <small>第{match.matchNo}场 · {match.bestOf}局{Math.floor(match.bestOf / 2) + 1}胜</small>
-                        <p><span>{p1.nameZh}</span><b>{match.status === "walkover" ? "W" : match.score1 ?? "-"}</b><i>:</i><b>{match.status === "walkover" ? "O" : match.score2 ?? "-"}</b><span>{p2.nameZh}</span></p>
-                        <em>{match.statusLabelZh}</em>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className={styles.card}>
-                <SectionHeader eyebrow="MATCH DETAIL" title={`${selectedMatch.roundLabelZh} · 第${selectedMatch.matchNo}场`} action={selectedMatch.statusLabelZh} />
-                <ScoreRows match={selectedMatch} players={players} />
-                {selectedMatch.frames?.length ? (
-                  <div className={styles.frameTable}>
-                    {selectedMatch.frames.map((frame) => <div key={frame.frameNo}><span>第 {frame.frameNo} 局</span><b>{frame.score1}</b><i>:</i><b>{frame.score2}</b><small>{frame.note ?? ""}</small></div>)}
-                  </div>
-                ) : <p className={styles.emptyDetail}>当前数据源提供总比分；逐局数据会在可用时自动补充。</p>}
-                {selectedMatch.note ? <p className={styles.matchNote}>{selectedMatch.note}</p> : null}
+                <div className={styles.filterHeader}><span className={styles.seasonChip}>2026/27赛季</span><div>{eventFilters.map((filter) => <button key={filter} className={eventFilter === filter ? styles.filterActive : ""} onClick={() => setEventFilter(filter)}>{filter}</button>)}</div></div>
+                <div className={styles.calendarList}>{filteredCalendar.map((item) => <button key={item.id} className={item.current ? styles.calendarCurrent : ""} onClick={() => openEvent(item.slug)}><div className={styles.calendarDate}><b>{new Date(`${item.startDate}T00:00:00+08:00`).getMonth() + 1}/{new Date(`${item.startDate}T00:00:00+08:00`).getDate()}</b><small>{item.statusLabelZh}</small></div><div><span><StatusPill status={item.status} label={item.typeZh} /></span><strong>{item.nameZh}</strong><small>{item.nameEn}</small><p>{formatDateRange(item.startDate, item.endDate)} · {item.countryZh} {item.cityZh}{item.winnerZh ? ` · 冠军 ${item.winnerZh}` : ""}</p></div><em>›</em></button>)}</div>
               </section>
             </>
           ) : null}
 
           {activeView === "players" ? (
             <>
-              <section className={styles.pageIntro}><small>PLAYER DATABASE</small><h1>球员</h1><p>本届赛事 34 名球员已进入统一主数据；中文名、英文名、排名与赛事战绩都按同一 player_id 对应。</p></section>
-
-              {selectedPlayer ? (
-                <section className={styles.playerProfile}>
-                  <div className={styles.profileTop}><PlayerAvatar player={selectedPlayer} size="lg" /><div><span>{selectedPlayer.countryCode === "CHN" ? "🇨🇳 中国球员" : selectedPlayer.nationalityZh}</span><h2>{selectedPlayer.nameZh}</h2><p>{selectedPlayer.nameEn}</p></div><b>{selectedPlayer.currentRank ? `#${selectedPlayer.currentRank}` : "WC"}</b></div>
-                  <div className={styles.profileMetrics}>
-                    <span><small>世界排名</small><b>{selectedPlayer.currentRank ?? "—"}</b></span>
-                    <span><small>本届最佳</small><b>{selectedPlayerStats?.bestRoundLabelZh ?? "—"}</b></span>
-                    <span><small>本届胜负</small><b>{selectedPlayerStats ? `${selectedPlayerStats.wins}-${selectedPlayerStats.losses}` : "—"}</b></span>
-                    <span><small>局分</small><b>{selectedPlayerStats ? `${selectedPlayerStats.frameWins}-${selectedPlayerStats.frameLosses}` : "—"}</b></span>
-                  </div>
-                  {selectedPlayerStats ? (
-                    <div className={styles.profileMatches}>{selectedPlayerStats.matches.map((match) => {
-                      const opponentId = match.player1Id === selectedPlayer.id ? match.player2Id : match.player1Id;
-                      const opponent = players.get(opponentId)!;
-                      const selfScore = match.player1Id === selectedPlayer.id ? match.score1 : match.score2;
-                      const opponentScore = match.player1Id === selectedPlayer.id ? match.score2 : match.score1;
-                      return <div key={match.id}><small>{match.roundLabelZh}</small><span>vs {opponent.nameZh}</span><b>{match.status === "walkover" ? match.statusLabelZh : `${selfScore ?? "-"}:${opponentScore ?? "-"}`}</b></div>;
-                    })}</div>
-                  ) : null}
-                  {selectedPlayer.avatar ? <a className={styles.photoCredit} href={selectedPlayer.avatar.sourcePage} target="_blank" rel="noreferrer">头像：{selectedPlayer.avatar.credit} · {selectedPlayer.avatar.license} · Wikimedia Commons</a> : <small className={styles.photoPending}>暂未接入可确认授权的头像，使用字母头像。</small>}
-                </section>
-              ) : null}
-
+              <section className={styles.pageIntro}><small>PLAYER DIRECTORY</small><h1>球员</h1><p>球员页只保留目录与搜索。点击任意球员后，再进入独立球员详情查看资料、排名和比赛记录。</p></section>
               <section className={styles.card}>
-                <div className={styles.playerToolbar}>
-                  <label><span>⌕</span><input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="搜索中文名 / 英文名" /></label>
-                  <div>{([['event','本站 34'],['china',`中国 ${chinaEventPlayers.length}`],['top16','TOP 16']] as Array<[PlayerFilter,string]>).map(([id,label]) => <button className={playerFilter === id ? styles.filterActive : ""} onClick={() => setPlayerFilter(id)} key={id}>{label}</button>)}</div>
-                </div>
-                <div className={styles.playerDirectory}>
-                  {filteredPlayers.map((player) => {
-                    const stats = currentEventStats(player.id, event);
-                    return <button className={selectedPlayer?.id === player.id ? styles.playerSelected : ""} key={player.id} onClick={() => { setSelectedPlayerId(player.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}><PlayerAvatar player={player} /><span><b>{player.nameZh}</b><small>{player.nameEn} · {player.nationalityZh}</small><em>{stats ? `${stats.bestRoundLabelZh} · ${stats.wins}胜${stats.losses}负` : ""}</em></span><strong>{player.currentRank ? `#${player.currentRank}` : "WC"}</strong></button>;
-                  })}
-                </div>
+                <div className={styles.searchBox}><span>⌕</span><input value={playerQuery} onChange={(event) => setPlayerQuery(event.target.value)} placeholder="搜索中文名 / 英文名" /></div>
+                <div className={styles.playerFilters}>{playerFilters.map((filter) => <button key={filter} className={playerFilter === filter ? styles.filterActive : ""} onClick={() => setPlayerFilter(filter)}>{filter}</button>)}</div>
+                <div className={styles.playerDirectory}>{filteredPlayers.map((player) => <button key={player.id} onClick={() => openPlayer(player.id)}><PlayerAvatar player={player} size="md" /><span><strong>{player.nameZh}</strong><small>{player.nameEn} · {player.nationalityZh}</small></span><b>{player.currentRank ? `#${player.currentRank}` : "—"}</b><em>›</em></button>)}</div>
               </section>
             </>
           ) : null}
 
           {activeView === "data" ? (
             <>
-              <section className={styles.pageIntro}><small>DATA CENTRE</small><h1>数据</h1><p>第一版数据中心已经从“展示排名”升级为赛事级数据底座：排名、参赛球员、轮次、比赛、局分和中国球员表现可以互相计算。</p></section>
-
-              <section className={styles.metricGrid}>
-                <article><small>EVENT</small><strong>{eventMatches.length}</strong><span>本届主赛</span></article>
-                <article><small>PLAYERS</small><strong>{eventPlayers.length}</strong><span>统一球员ID</span></article>
-                <article><small>CHINA</small><strong>{chinaEventPlayers.length}</strong><span>中国军团</span></article>
-                <article><small>ROUNDS</small><strong>{event.rounds.length}</strong><span>完整轮次</span></article>
-              </section>
-
+              <section className={styles.pageIntro}><small>GLOBAL DATA</small><h1>数据</h1><p>这里仅放跨赛事、跨赛季的数据。单站赛事统计已经移动到各赛事自己的“赛事数据”页。</p></section>
               <section className={styles.card}>
-                <SectionHeader eyebrow="WORLD RANKING" title="世界排名 TOP 16" action="当前快照" />
-                <div className={styles.rankingList}>
-                  {rankingRows.map(({ rank, points: total, player }) => <button key={rank} onClick={() => { setSelectedPlayerId(player.id); changeView("players"); }}><strong>{rank}</strong><PlayerAvatar player={player} size="sm" /><span><b>{player.nameZh}</b><small>{player.nameEn} · {player.nationalityZh}</small></span><em>{points(total)}</em></button>)}
-                </div>
+                <SectionHeader eyebrow="WORLD RANKING" title="世界排名 TOP16" />
+                <div className={styles.rankingList}>{rankingRows.map((row) => <button key={row.rank} onClick={() => openPlayer(row.player.id)}><strong>{row.rank}</strong><PlayerAvatar player={row.player} size="sm" /><span><b>{row.player.nameZh}</b><small>{row.player.nameEn} · {row.player.nationalityZh}</small></span><em>{row.points.toLocaleString("en-GB")}</em></button>)}</div>
               </section>
-
               <section className={styles.card}>
-                <SectionHeader eyebrow="CHINA WATCH" title="中国军团 · 本届成绩" action={`${chinaStats.length} 人`} />
-                <div className={styles.chinaStats}>
-                  {chinaStats.map(({ player, stats }) => <button key={player.id} onClick={() => { setSelectedPlayerId(player.id); changeView("players"); }}><PlayerAvatar player={player} size="sm" /><span><b>{player.nameZh}</b><small>世界第 {player.currentRank ?? "—"}</small></span><em>{stats.bestRoundLabelZh}</em><strong>{stats.wins}胜{stats.losses}负</strong></button>)}
-                </div>
-              </section>
-
-              <section className={styles.foundationCard}>
-                <div><small>DATA FOUNDATION</small><h2>数据底座状态</h2></div>
-                <dl><div><dt>版本</dt><dd>{buildMark}</dd></div><div><dt>主数据</dt><dd>34 名球员 / 33 场比赛</dd></div><div><dt>实时覆盖</dt><dd>{sourceHealth?.accepted ? `${sourceHealth.overlayCount} 场已校验` : "快照安全兜底"}</dd></div><div><dt>数据库</dt><dd>独立 Supabase Schema 已准备，尚未写入华彩库</dd></div></dl>
-                <p>{sourceHealth?.message ?? "页面当前由已验证赛事快照直接提供数据，后台同时检查实时数据源。"}</p>
+                <SectionHeader eyebrow="COMING NEXT" title="数据专题" />
+                <div className={styles.futureGrid}><article><small>HEAD TO HEAD</small><strong>交手记录</strong><span>正在接入</span></article><article><small>CENTURIES</small><strong>破百榜</strong><span>正在接入</span></article><article><small>DECIDERS</small><strong>决胜局</strong><span>正在接入</span></article><article><small>TITLES</small><strong>冠军榜</strong><span>正在接入</span></article></div>
               </section>
             </>
           ) : null}
         </div>
 
-        <nav className={styles.bottomNav} aria-label="斯诺克数据中心主导航">
-          {navItems.map((item) => <button className={activeView === item.id ? styles.navActive : ""} onClick={() => changeView(item.id)} key={item.id}><span>{item.icon}</span><b>{item.label}</b></button>)}
-        </nav>
+        <nav className={styles.bottomNav}>{navItems.map((item) => <button key={item.id} className={activeView === item.id ? styles.activeNav : ""} onClick={() => changeView(item.id)}><span>{item.icon}</span><b>{item.label}</b></button>)}</nav>
+        <span className={styles.buildMark}>{buildMark}</span>
       </div>
     </main>
   );
