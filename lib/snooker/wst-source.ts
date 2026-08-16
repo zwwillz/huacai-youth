@@ -15,6 +15,7 @@ export type WstPlayer = {
 };
 
 export type WstMatchAttributes = {
+  matchID?: string;
   name?: string;
   homePlayerID?: string;
   homePlayerScore?: number | null;
@@ -36,6 +37,12 @@ export type WstMatchRow = {
   type?: string;
   id: string;
   attributes: WstMatchAttributes;
+};
+
+type WstRawMatchRow = WstMatchAttributes & {
+  id?: string;
+  type?: string;
+  attributes?: WstMatchAttributes;
 };
 
 export type WstTournamentDetail = {
@@ -86,6 +93,17 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function normalizeMatchRow(raw: WstRawMatchRow): WstMatchRow | null {
+  const attributes = raw.attributes ?? raw;
+  const id = raw.id ?? attributes.matchID;
+  if (!id) return null;
+  return {
+    id,
+    type: raw.type ?? "match",
+    attributes,
+  };
+}
+
 export function wstPlayerName(player?: WstPlayer | null) {
   if (!player) return "";
   const first = player.customFirstName || player.firstName || "";
@@ -95,10 +113,11 @@ export function wstPlayerName(player?: WstPlayer | null) {
 
 export async function fetchWstTournament(tournamentId = WST_CHINA_OPEN_2026_ID): Promise<WstTournamentDetail> {
   const payload = await fetchJson<{
-    data?: { id?: string; attributes?: { name?: string; matches?: WstMatchRow[] } };
+    data?: { id?: string; attributes?: { name?: string; matches?: WstRawMatchRow[] } };
   }>(`${WST_TOURNAMENTS_API}/${encodeURIComponent(tournamentId)}`);
   const data = payload.data;
-  const matches = Array.isArray(data?.attributes?.matches) ? data.attributes.matches : [];
+  const rawMatches = Array.isArray(data?.attributes?.matches) ? data.attributes.matches : [];
+  const matches = rawMatches.map(normalizeMatchRow).filter((row): row is WstMatchRow => Boolean(row));
   if (!data || !matches.length) throw new Error("WST_TOURNAMENT_EMPTY");
   return {
     id: data.id ?? tournamentId,
@@ -108,9 +127,11 @@ export async function fetchWstTournament(tournamentId = WST_CHINA_OPEN_2026_ID):
 }
 
 export async function fetchWstMatch(matchId: string): Promise<WstMatchRow> {
-  const payload = await fetchJson<{ data?: WstMatchRow }>(`${WST_MATCHES_API}/${encodeURIComponent(matchId)}`);
+  const payload = await fetchJson<{ data?: WstRawMatchRow }>(`${WST_MATCHES_API}/${encodeURIComponent(matchId)}`);
   if (!payload.data) throw new Error("WST_MATCH_EMPTY");
-  return payload.data;
+  const normalized = normalizeMatchRow(payload.data);
+  if (!normalized) throw new Error("WST_MATCH_INVALID");
+  return normalized;
 }
 
 const MATCH_STATUS_QUERY = `query ($matchId: ID!) {
