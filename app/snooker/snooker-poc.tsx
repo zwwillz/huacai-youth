@@ -40,10 +40,6 @@ const navItems: Array<{ id: SnookerView; label: string; icon: string }> = [
   { id: "data", label: "数据", icon: "▥" },
 ];
 
-function money(value: number) {
-  return `£${value.toLocaleString("en-GB")}`;
-}
-
 function points(value: number) {
   return value.toLocaleString("en-GB");
 }
@@ -112,11 +108,12 @@ export default function SnookerPoc() {
         setLastCheckedAt(data.fetchedAt || new Date().toISOString());
         if (response.ok && data.ok && data.eventDetected) {
           setSourceState("online");
-          if (data.liveMatch) {
+          const nextLive = data.liveMatch;
+          if (nextLive) {
             setLiveMatch((current) => ({
               ...current,
-              ...data.liveMatch,
-              frames: data.liveMatch?.frames?.length ? data.liveMatch.frames : current.frames,
+              ...nextLive,
+              frames: nextLive.frames?.length ? nextLive.frames : current.frames,
             }));
           }
         } else {
@@ -158,6 +155,7 @@ export default function SnookerPoc() {
   };
 
   const sourceLabel = sourceState === "online" ? "数据源在线" : sourceState === "fallback" ? "使用最近快照" : "正在校验数据源";
+  const checkedTime = new Date(lastCheckedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" });
 
   return (
     <main className={styles.appRoot} data-theme={theme}>
@@ -211,7 +209,7 @@ export default function SnookerPoc() {
                 <div className={styles.sourceLine}>
                   <span className={sourceState === "online" ? styles.sourceOnline : styles.sourceWaiting} />
                   <b>{sourceLabel}</b>
-                  <small>snooker.org · POC 30秒检查 · {new Date(lastCheckedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</small>
+                  <small>snooker.org · POC 30秒检查 · {checkedTime}</small>
                 </div>
               </section>
 
