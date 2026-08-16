@@ -179,7 +179,6 @@ async function rest<T>(path: string): Promise<T> {
     cache: "no-store",
     headers: {
       apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
       Accept: "application/json",
     },
   });
