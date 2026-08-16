@@ -2,8 +2,13 @@ import { getDashboardWithLiveOverlay } from "./live-overlay";
 
 export type CachedSnookerDashboard = Awaited<ReturnType<typeof getDashboardWithLiveOverlay>>;
 
-const DEFAULT_TTL_MS = 10_000;
-const IDLE_TTL_MS = 30_000;
+// Live match data is intentionally shared for ~30 seconds. This prevents every
+// browser from turning into an independent WST poller while keeping the user
+// experience close to realtime for snooker scoring.
+const DEFAULT_TTL_MS = 30_000;
+// When no match is active, reuse the snapshot much longer. Rankings, calendar
+// and player profile refreshes are handled by separate low-frequency jobs.
+const IDLE_TTL_MS = 30 * 60_000;
 
 let cached: { value: CachedSnookerDashboard; expiresAt: number } | null = null;
 let inflight: Promise<CachedSnookerDashboard> | null = null;
@@ -16,11 +21,10 @@ function hasActiveMatch(value: CachedSnookerDashboard) {
 
 /**
  * Keep the public UI responsive without making every browser poll WST directly.
- * On a warm server runtime, concurrent requests share one in-flight request.
- * During live play the cache window stays very short; while no match is active
- * it backs off automatically so an idle monitor cannot keep hitting WST every
- * few seconds. A distributed cache can replace this POC layer later without
- * changing the page/API contract.
+ * Concurrent requests on a warm runtime share one in-flight request. Live play
+ * uses a 30-second shared window; once there is no active match, the cache backs
+ * off to 30 minutes. The dedicated Snooker database will become the long-term
+ * shared source, with the same 30-second live-match cadence.
  */
 export async function getCachedDashboardWithLiveOverlay(ttlMs = DEFAULT_TTL_MS): Promise<CachedSnookerDashboard> {
   const now = Date.now();
