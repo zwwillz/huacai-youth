@@ -10,7 +10,7 @@ import {
   type VisitorGeoPayload,
 } from "@/lib/site-monitor";
 
-const BLOCKED_PATH_PREFIXES = ["/admin", "/site-monitor", "/api"];
+const BLOCKED_PATH_PREFIXES = ["/admin", "/site-monitor", "/api", "/snooker/site-monitor"];
 const WECHAT_VERIFY_PATH = "/dd8ad1096190a17bbcd86e01faa9c979.txt";
 
 type VisitBody = {
