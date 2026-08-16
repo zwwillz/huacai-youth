@@ -47,7 +47,9 @@ test("snooker mobile IA is event list to event detail to match centre", async ()
     read("app/snooker/snooker-data-center.tsx"),
     read("app/snooker/snooker-priority.module.css"),
   ]);
-  assert.match(pageSource, /initialSnapshot=\{snapshot\}/);
+  assert.match(pageSource, /getDashboardWithLiveOverlay/);
+  assert.match(pageSource, /initialSourceHealth=\{sourceHealth\}/);
+  assert.match(pageSource, /dynamic = "force-dynamic"/);
   assert.match(uiSource, /label: "赛事"/);
   assert.match(uiSource, /近期赛事/);
   assert.match(uiSource, /赛季赛历/);
@@ -60,8 +62,11 @@ test("snooker mobile IA is event list to event detail to match centre", async ()
   assert.match(uiSource, /比赛详情/);
   assert.match(uiSource, /查看完整比分与逐局数据/);
   assert.match(uiSource, /单杆<br \/>\(50\+\)/);
+  assert.match(uiSource, /<b>局<\/b>/);
   assert.match(uiSource, /15_000/);
   assert.match(uiSource, /visibilitychange/);
+  assert.match(uiSource, /最近更新/);
+  assert.match(uiSource, /realtimeSignature/);
   assert.match(uiSource, /中国球员/);
   assert.match(priorityCss, /matchVersusRow/);
   assert.match(priorityCss, /grid-template-columns:minmax\(0,1fr\) auto minmax\(0,1fr\)/);
@@ -76,21 +81,25 @@ test("player main view stays a directory and detail opens on click", async () =>
   assert.doesNotMatch(uiSource, /useState\("p-zhao-xintong"\)/);
 });
 
-test("snooker live overlay uses a unique upstream URL and only reports matched overlays", async () => {
-  const [overlaySource, dashboardSource] = await Promise.all([
+test("snooker realtime overlay uses WST official REST and GraphQL data", async () => {
+  const [overlaySource, wstSource, dashboardSource] = await Promise.all([
     read("lib/snooker/live-overlay.ts"),
+    read("lib/snooker/wst-source.ts"),
     read("app/api/snooker/v1/dashboard/route.ts"),
   ]);
-  assert.match(overlaySource, /template=21/);
-  assert.match(overlaySource, /searchParams\.set\("_ts"/);
-  assert.match(overlaySource, /Math\.random/);
-  assert.match(overlaySource, /cache: "no-store"/);
-  assert.match(overlaySource, /pragma: "no-cache"/);
-  assert.match(overlaySource, /parsed\.rounds\.length >= 6/);
-  assert.match(overlaySource, /parsed\.matches\.length >= 30/);
-  assert.match(overlaySource, /liveAccepted = count > 0/);
-  assert.match(overlaySource, /const accepted = overlayCount > 0/);
+  assert.match(wstSource, /tournaments\.snooker\.web\.gc\.wstservices\.co\.uk\/v2/);
+  assert.match(wstSource, /matches\.snooker\.web\.gc\.wstservices\.co\.uk\/v2/);
+  assert.match(wstSource, /snooker\.graph\.gc\.wstservices\.co\.uk\/graphql/);
+  assert.match(wstSource, /matchStatus\(matchId: \$matchId\)/);
+  assert.match(wstSource, /homePlayerFiftyPlusBreaks/);
+  assert.match(wstSource, /cache: "no-store"/);
+  assert.match(overlaySource, /fetchWstTournament/);
+  assert.match(overlaySource, /fetchWstMatchStatus/);
+  assert.match(overlaySource, /result\.matched >= 30/);
+  assert.match(overlaySource, /overlayGraphStatus/);
+  assert.match(overlaySource, /source: "WST"/);
   assert.match(overlaySource, /structuredClone\(dashboardSnapshot\)/);
+  assert.doesNotMatch(overlaySource, /snooker\.org/);
   assert.match(dashboardSource, /dynamic = "force-dynamic"/);
   assert.match(dashboardSource, /revalidate = 0/);
   assert.match(dashboardSource, /Cache-Control/);
