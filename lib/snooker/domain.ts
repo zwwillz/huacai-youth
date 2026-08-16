@@ -45,6 +45,39 @@ export type SnookerFrame = {
   note?: string;
 };
 
+export type SnookerMatchPlayerStatistics = {
+  playerId: string;
+  totalPoints?: number;
+  averageShotTimeSeconds?: number;
+  potRate?: number;
+  breaks50Plus?: number;
+  breaks100Plus?: number;
+  highestBreak?: number;
+  averageBreak?: number;
+  shotsTaken?: number;
+  timeOnTablePct?: number;
+};
+
+export type SnookerHeadToHeadMeeting = {
+  date?: string;
+  tournament?: string;
+  round?: string;
+  homePlayerName?: string;
+  awayPlayerName?: string;
+  homeScore?: number;
+  awayScore?: number;
+};
+
+export type SnookerHeadToHead = {
+  meetings: number;
+  player1Wins: number;
+  player2Wins: number;
+  player1Frames: number;
+  player2Frames: number;
+  recentMeetings: SnookerHeadToHeadMeeting[];
+  sourceUpdatedAt?: string;
+};
+
 export type SnookerMatch = {
   id: string;
   roundKey: string;
@@ -63,6 +96,8 @@ export type SnookerMatch = {
   sessionLabelZh?: string;
   tableLabelZh?: string;
   frames?: SnookerFrame[];
+  statistics?: SnookerMatchPlayerStatistics[];
+  headToHead?: SnookerHeadToHead;
   note?: string;
   winnerId?: string;
 };
@@ -74,6 +109,16 @@ export type SnookerRound = {
   bestOf: number;
   loserPrize?: number;
   matches: SnookerMatch[];
+};
+
+export type SnookerPrizeRow = {
+  key: string;
+  labelZh: string;
+  labelEn?: string;
+  amount: number;
+  currency: "GBP";
+  sortOrder: number;
+  isTotal?: boolean;
 };
 
 export type SnookerEvent = {
@@ -94,14 +139,18 @@ export type SnookerEvent = {
   venueZh: string;
   venueEn?: string;
   previousChampionZh?: string;
+  previousChampionYear?: number;
   winnerPrize: number;
   runnerUpPrize: number;
   currency: "GBP";
+  prizes?: SnookerPrizeRow[];
   refereeZh?: string;
   sourceName: string;
   sourceUrl: string;
   snapshotAt: string;
   rounds: SnookerRound[];
+  schedulePartial?: boolean;
+  publishedMatchCount?: number;
 };
 
 export type SnookerCalendarEvent = {
