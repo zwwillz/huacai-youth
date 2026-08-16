@@ -5,7 +5,7 @@ import type { VisitorGeoPayload } from "@/lib/site-monitor";
 
 const VISITOR_KEY = "huacai_public_visitor_v1";
 const GEO_KEY = "huacai_public_geo_v1";
-const EXCLUDED_PREFIXES = ["/admin", "/site-monitor", "/api"];
+const EXCLUDED_PREFIXES = ["/admin", "/site-monitor", "/api", "/snooker"];
 const WECHAT_VERIFY_PATH = "/dd8ad1096190a17bbcd86e01faa9c979.txt";
 
 const TAB_LABELS: Record<string, string> = {
