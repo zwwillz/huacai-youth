@@ -47,12 +47,20 @@ jobs:
           if (!final) throw new Error('final missing');
           if (final.score1 === 4 && final.score2 === 4) throw new Error('final is still stale 4:4');
           if (!Array.isArray(final.frames) || final.frames.length < 9) throw new Error(`frame history too short: ${final.frames?.length}`);
-          const scoreText = `${final.score1} : ${final.score2}`;
+          const completedFrameCount = Number(final.score1 ?? 0) + Number(final.score2 ?? 0);
+          const latestFrame = final.frames.at(-1);
+          if ((final.status === 'live' || final.status === 'session-break') && final.frames.length > completedFrameCount && latestFrame) {
+            console.log(`OUR_API_ACTIVE_FRAME=局${latestFrame.frameNo} ${latestFrame.score1}:${latestFrame.score2}`);
+          }
           const html = await fetch('http://127.0.0.1:3000/snooker?probe=1', { cache: 'no-store' }).then(r => r.text());
-          if (!html.includes(scoreText)) throw new Error(`SSR page does not contain current score ${scoreText}`);
+          const plainSerialized = `score1":${final.score1},"score2":${final.score2}`;
+          const escapedSerialized = `score1\\":${final.score1},\\"score2\\":${final.score2}`;
+          if (!html.includes(plainSerialized) && !html.includes(escapedSerialized)) {
+            throw new Error(`SSR page does not serialize current score ${final.score1}:${final.score2}`);
+          }
           console.log(`OUR_API_SOURCE=${api.sourceHealth.source}`);
           console.log(`OUR_API_OVERLAY=${api.sourceHealth.overlayCount}`);
           console.log(`OUR_API_FINAL=${final.score1}:${final.score2}`);
           console.log(`OUR_API_FRAMES=${final.frames.length}`);
-          console.log(`SSR_CURRENT_SCORE=${scoreText}`);
+          console.log(`SSR_CURRENT_SCORE=${final.score1}:${final.score2}`);
           NODE
