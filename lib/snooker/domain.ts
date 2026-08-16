@@ -15,12 +15,30 @@ export type SnookerPlayerAvatar = {
   sourcePage: string;
 };
 
+export type SnookerSeasonStatistics = {
+  seasonStartYear: number;
+  seasonLabel: string;
+  ranking?: number;
+  tournamentsWon?: number;
+  pointsScored?: number;
+  matchesPlayed?: number;
+  matchesWon?: number;
+  matchWinRate?: number;
+  averageShotTimeSeconds?: number;
+  breaks50Plus?: number;
+  breaks100Plus?: number;
+  highestBreak?: number;
+  season147s?: number;
+  averageBreak?: number;
+};
+
 export type SnookerPlayer = {
   id: string;
   slug: string;
   nameEn: string;
   nameZh: string;
   shortNameZh: string;
+  shortNameEn?: string;
   nationalityZh: string;
   countryCode: string;
   currentRank: number | null;
@@ -29,10 +47,12 @@ export type SnookerPlayer = {
   turnedPro?: number;
   nickname?: string;
   careerStats?: SnookerPlayerCareerStats;
+  seasonStatistics?: SnookerSeasonStatistics;
   wstId?: string;
   snookerOrgId?: string;
   aliases?: string[];
   avatar?: SnookerPlayerAvatar;
+  avatarUrl?: string;
   profileSource?: "WST" | "snooker.org" | "curated";
 };
 
