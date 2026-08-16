@@ -67,6 +67,10 @@ test("snooker mobile IA is event list to event detail to match centre", async ()
   assert.match(uiSource, /visibilitychange/);
   assert.match(uiSource, /最近更新/);
   assert.match(uiSource, /realtimeSignature/);
+  assert.match(uiSource, /const isRealtimeMatch = match\.status === "live" \|\| match\.status === "session-break"/);
+  assert.match(uiSource, /match\.frames\?\.length \? match\.frames\.map/);
+  assert.match(uiSource, /isRealtimeMatch \? <small>/);
+  assert.match(uiSource, /isRealtimeMatch \? \(/);
   assert.match(uiSource, /中国球员/);
   assert.match(priorityCss, /matchVersusRow/);
   assert.match(priorityCss, /grid-template-columns:minmax\(0,1fr\) auto minmax\(0,1fr\)/);
@@ -92,11 +96,15 @@ test("snooker realtime overlay uses WST official REST and GraphQL data", async (
   assert.match(wstSource, /snooker\.graph\.gc\.wstservices\.co\.uk\/graphql/);
   assert.match(wstSource, /matchStatus\(matchId: \$matchId\)/);
   assert.match(wstSource, /homePlayerFiftyPlusBreaks/);
+  assert.match(wstSource, /matchHistory/);
+  assert.match(wstSource, /normalizeMatchRow/);
   assert.match(wstSource, /cache: "no-store"/);
   assert.match(overlaySource, /fetchWstTournament/);
   assert.match(overlaySource, /fetchWstMatchStatus/);
   assert.match(overlaySource, /result\.matched >= 30/);
   assert.match(overlaySource, /overlayGraphStatus/);
+  assert.match(overlaySource, /const rows = status\.matchHistory\?\.frames \?\? \[\]/);
+  assert.match(overlaySource, /if \(frames\.length\) match\.frames = frames/);
   assert.match(overlaySource, /source: "WST"/);
   assert.match(overlaySource, /structuredClone\(dashboardSnapshot\)/);
   assert.doesNotMatch(overlaySource, /snooker\.org/);
