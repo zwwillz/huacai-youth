@@ -1,6 +1,4 @@
-import type {
-  SnookerDatabaseView,
-} from "./database-public";
+import type { SnookerDatabaseView } from "./database-public";
 import { loadSnookerDatabaseView } from "./database-public";
 import type {
   SnookerEvent,
@@ -8,6 +6,7 @@ import type {
   SnookerHeadToHeadMeeting,
   SnookerMatchPlayerStatistics,
   SnookerPrizeRow,
+  SnookerSeasonStatistics,
 } from "./domain";
 
 const DEFAULT_SUPABASE_URL = "https://rtlvncsmbueatdzqvhbn.supabase.co";
@@ -37,6 +36,26 @@ type DbPrize = {
 
 type DbPlayerKey = { id: string; slug: string };
 
+type Numeric = number | string | null;
+
+type DbSeasonStat = {
+  player_id: string;
+  season_start_year: number;
+  season_label: string;
+  ranking: number | null;
+  tournaments_won: number | null;
+  points_scored: number | null;
+  matches_played: number | null;
+  matches_won: number | null;
+  match_win_rate: Numeric;
+  average_shot_time: Numeric;
+  breaks_50_plus: number | null;
+  breaks_100_plus: number | null;
+  highest_break: number | null;
+  season_147s: number | null;
+  average_break: Numeric;
+};
+
 type DbMatchStat = {
   match_id: string;
   player_id: string;
@@ -62,10 +81,10 @@ type DbHeadToHead = {
   source_updated_at: string | null;
 };
 
-async function rest<T>(path: string): Promise<T> {
+async function rest<T>(path: string, revalidate = 30): Promise<T> {
   const response = await fetch(`${REST_URL}/${path}`, {
-    cache: "no-store",
     headers: { apikey: SUPABASE_KEY, Accept: "application/json" },
+    next: { revalidate },
   });
   if (!response.ok) throw new Error(`SNOOKER_DB_V2_HTTP_${response.status}`);
   return response.json() as Promise<T>;
@@ -83,7 +102,7 @@ function dbMatchUuid(matchId: string) {
   return matchId.startsWith("db-") ? matchId.slice(3) : null;
 }
 
-function finite(value: number | null | undefined) {
+function finite(value: number | string | null | undefined) {
   return value === null || value === undefined || !Number.isFinite(Number(value)) ? undefined : Number(value);
 }
 
@@ -99,6 +118,25 @@ function mapStat(row: DbMatchStat, playerId: string): SnookerMatchPlayerStatisti
     ...(finite(row.average_break) !== undefined ? { averageBreak: finite(row.average_break) } : {}),
     ...(finite(row.shots_taken) !== undefined ? { shotsTaken: finite(row.shots_taken) } : {}),
     ...(finite(row.time_on_table_pct) !== undefined ? { timeOnTablePct: finite(row.time_on_table_pct) } : {}),
+  };
+}
+
+function mapSeason(row: DbSeasonStat): SnookerSeasonStatistics {
+  return {
+    seasonStartYear: row.season_start_year,
+    seasonLabel: row.season_label,
+    ...(finite(row.ranking) !== undefined ? { ranking: finite(row.ranking) } : {}),
+    ...(finite(row.tournaments_won) !== undefined ? { tournamentsWon: finite(row.tournaments_won) } : {}),
+    ...(finite(row.points_scored) !== undefined ? { pointsScored: finite(row.points_scored) } : {}),
+    ...(finite(row.matches_played) !== undefined ? { matchesPlayed: finite(row.matches_played) } : {}),
+    ...(finite(row.matches_won) !== undefined ? { matchesWon: finite(row.matches_won) } : {}),
+    ...(finite(row.match_win_rate) !== undefined ? { matchWinRate: finite(row.match_win_rate) } : {}),
+    ...(finite(row.average_shot_time) !== undefined ? { averageShotTimeSeconds: finite(row.average_shot_time) } : {}),
+    ...(finite(row.breaks_50_plus) !== undefined ? { breaks50Plus: finite(row.breaks_50_plus) } : {}),
+    ...(finite(row.breaks_100_plus) !== undefined ? { breaks100Plus: finite(row.breaks_100_plus) } : {}),
+    ...(finite(row.highest_break) !== undefined ? { highestBreak: finite(row.highest_break) } : {}),
+    ...(finite(row.season_147s) !== undefined ? { season147s: finite(row.season_147s) } : {}),
+    ...(finite(row.average_break) !== undefined ? { averageBreak: finite(row.average_break) } : {}),
   };
 }
 
@@ -143,9 +181,10 @@ export async function loadSnookerDatabaseViewV2(): Promise<SnookerDatabaseView> 
     const eventUuids = base.eventDetails.map(dbEventUuid).filter((id): id is string => Boolean(id));
     const matchUuids = base.eventDetails.flatMap((event) => event.rounds.flatMap((round) => round.matches.map((match) => dbMatchUuid(match.id)))).filter((id): id is string => Boolean(id));
 
-    const [eventMeta, playerKeys, prizes, stats, h2h] = await Promise.all([
+    const [eventMeta, playerKeys, seasonStats, prizes, stats, h2h] = await Promise.all([
       rest<DbEventMeta[]>(`snooker_events?select=id,slug,previous_champion_name_zh,previous_champion_year,expected_match_count&id=in.${inFilter(eventUuids)}`),
       rest<DbPlayerKey[]>("snooker_players?select=id,slug"),
+      rest<DbSeasonStat[]>("snooker_player_season_stats?select=player_id,season_start_year,season_label,ranking,tournaments_won,points_scored,matches_played,matches_won,match_win_rate,average_shot_time,breaks_50_plus,breaks_100_plus,highest_break,season_147s,average_break&season_start_year=eq.2026"),
       eventUuids.length ? rest<DbPrize[]>(`snooker_event_prizes?select=event_id,prize_key,label_zh,label_en,amount,currency,sort_order,is_total&event_id=in.${inFilter(eventUuids)}&order=sort_order.asc`) : Promise.resolve([]),
       matchUuids.length ? rest<DbMatchStat[]>(`snooker_match_statistics?select=match_id,player_id,total_points,average_shot_time_seconds,pot_rate,breaks_50_plus,breaks_100_plus,highest_break,average_break,shots_taken,time_on_table_pct&match_id=in.${inFilter(matchUuids)}`) : Promise.resolve([]),
       matchUuids.length ? rest<DbHeadToHead[]>(`snooker_match_head_to_head?select=match_id,meetings_before,player1_wins,player2_wins,player1_frames,player2_frames,recent_meetings,source_updated_at&match_id=in.${inFilter(matchUuids)}`) : Promise.resolve([]),
@@ -153,6 +192,12 @@ export async function loadSnookerDatabaseViewV2(): Promise<SnookerDatabaseView> 
 
     const playerCanonicalByUuid = new Map(playerKeys.map((row) => [row.id, `p-${row.slug}`]));
     const metaByUuid = new Map(eventMeta.map((row) => [row.id, row]));
+    const seasonByPlayer = new Map<string, SnookerSeasonStatistics>();
+    for (const row of seasonStats) {
+      const canonical = playerCanonicalByUuid.get(row.player_id);
+      if (canonical) seasonByPlayer.set(canonical, mapSeason(row));
+    }
+
     const prizesByEvent = new Map<string, SnookerPrizeRow[]>();
     for (const row of prizes) {
       const item: SnookerPrizeRow = {
@@ -193,9 +238,19 @@ export async function loadSnookerDatabaseViewV2(): Promise<SnookerDatabaseView> 
 
     const eventDetails = base.eventDetails.map((event) => enrichEvent(event, metaByUuid, prizesByEvent, statsByMatch, h2hByMatch));
     const primary = eventDetails.find((event) => event.slug === base.snapshot.event.slug) ?? eventDetails[0] ?? base.snapshot.event;
+    const players = base.snapshot.players.map((player) => {
+      const season = seasonByPlayer.get(player.id);
+      return season ? { ...player, seasonStatistics: season } : player;
+    });
+
     return {
       ...base,
-      snapshot: { ...base.snapshot, version: "0.7.0-prizes-match-insights", event: primary },
+      snapshot: {
+        ...base.snapshot,
+        version: "0.8.0-ui-performance",
+        event: primary,
+        players,
+      },
       eventDetails,
     };
   } catch (error) {
