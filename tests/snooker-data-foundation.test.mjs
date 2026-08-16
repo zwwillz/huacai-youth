@@ -41,13 +41,29 @@ test("snooker player master covers every China Open participant", async () => {
   assert.match(playersSource, /Mark_Selby\.JPG/);
 });
 
+test("snooker public snapshot keeps avatar metadata but serves lightweight letter avatars", async () => {
+  const [foundationSource, uiSource] = await Promise.all([
+    read("lib/snooker/foundation.ts"),
+    read("app/snooker/snooker-data-center.tsx"),
+  ]);
+  assert.match(foundationSource, /publicSnookerPlayers = snookerPlayers\.map\(\(player\) => \(\{ \.\.\.player, avatar: undefined \}\)\)/);
+  assert.match(foundationSource, /players: publicSnookerPlayers/);
+  assert.match(uiSource, /initials\(player\.nameEn\)/);
+});
+
 test("snooker mobile IA is event list to event detail to match centre", async () => {
-  const [pageSource, uiSource, priorityCss] = await Promise.all([
+  const [pageSource, cacheSource, uiSource, priorityCss] = await Promise.all([
     read("app/snooker/page.tsx"),
+    read("lib/snooker/live-dashboard-cache.ts"),
     read("app/snooker/snooker-data-center.tsx"),
     read("app/snooker/snooker-priority.module.css"),
   ]);
-  assert.match(pageSource, /getDashboardWithLiveOverlay/);
+  assert.match(pageSource, /getCachedDashboardWithLiveOverlay/);
+  assert.match(cacheSource, /getDashboardWithLiveOverlay/);
+  assert.match(cacheSource, /inflight/);
+  assert.match(cacheSource, /DEFAULT_TTL_MS = 10_000/);
+  assert.match(cacheSource, /IDLE_TTL_MS = 30_000/);
+  assert.match(cacheSource, /hasActiveMatch/);
   assert.match(pageSource, /initialSourceHealth=\{sourceHealth\}/);
   assert.match(pageSource, /dynamic = "force-dynamic"/);
   assert.match(uiSource, /label: "赛事"/);
@@ -90,10 +106,11 @@ test("player main view stays a directory and detail opens on click", async () =>
 });
 
 test("snooker realtime overlay uses WST official REST and GraphQL data", async () => {
-  const [overlaySource, wstSource, dashboardSource] = await Promise.all([
+  const [overlaySource, wstSource, dashboardSource, cacheSource] = await Promise.all([
     read("lib/snooker/live-overlay.ts"),
     read("lib/snooker/wst-source.ts"),
     read("app/api/snooker/v1/dashboard/route.ts"),
+    read("lib/snooker/live-dashboard-cache.ts"),
   ]);
   assert.match(wstSource, /tournaments\.snooker\.web\.gc\.wstservices\.co\.uk\/v2/);
   assert.match(wstSource, /matches\.snooker\.web\.gc\.wstservices\.co\.uk\/v2/);
@@ -115,6 +132,8 @@ test("snooker realtime overlay uses WST official REST and GraphQL data", async (
   assert.match(overlaySource, /source: "WST"/);
   assert.match(overlaySource, /structuredClone\(dashboardSnapshot\)/);
   assert.doesNotMatch(overlaySource, /snooker\.org/);
+  assert.match(cacheSource, /getDashboardWithLiveOverlay/);
+  assert.match(dashboardSource, /getCachedDashboardWithLiveOverlay/);
   assert.match(dashboardSource, /dynamic = "force-dynamic"/);
   assert.match(dashboardSource, /revalidate = 0/);
   assert.match(dashboardSource, /Cache-Control/);
