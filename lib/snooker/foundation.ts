@@ -6,12 +6,17 @@ import { playerById, snookerPlayers, top16Rankings } from "./data/players";
 export const SNOOKER_FOUNDATION_VERSION = "0.4.0-product-ux";
 export const SNOOKER_BUILD_MARK = "2026-08-16-UX-01";
 
+// POC currently uses lightweight letter avatars. Keep the curated image metadata
+// in the player master data so a faster/stable image delivery strategy can be
+// restored later without re-entering player assets.
+const publicSnookerPlayers = snookerPlayers.map((player) => ({ ...player, avatar: undefined }));
+
 export const dashboardSnapshot: SnookerDashboardSnapshot = {
   version: SNOOKER_FOUNDATION_VERSION,
   builtAt: "2026-08-16T20:05:00+08:00",
   event: chinaOpen2026,
   calendar: snookerCalendar2026,
-  players: snookerPlayers,
+  players: publicSnookerPlayers,
   rankings: top16Rankings,
 };
 
