@@ -15,11 +15,46 @@ import {
 
 type ThemeName = "green" | "red";
 
+type SourcePlayer = {
+  nameEn: string;
+  nameZh: string;
+  sourceRank: number | null;
+};
+
+type SourceMatch = {
+  id: string;
+  roundKey: string;
+  roundLabelZh: string;
+  bestOf: number;
+  player1: SourcePlayer;
+  player2: SourcePlayer;
+  score1: number | null;
+  score2: number | null;
+  status: "live" | "completed" | "walkover";
+  frames?: string[];
+};
+
+type SourceRound = {
+  key: string;
+  labelZh: string;
+  bestOf: number;
+  matches: SourceMatch[];
+};
+
+type SourceSummary = {
+  roundCount: number;
+  matchCount: number;
+  completedCount: number;
+  liveCount: number;
+};
+
 type SourceResponse = {
   ok?: boolean;
   fetchedAt?: string;
   latencyMs?: number;
   eventDetected?: boolean;
+  summary?: SourceSummary;
+  rounds?: SourceRound[];
   liveMatch?: null | {
     player1En: string;
     player1Zh: string;
@@ -30,6 +65,8 @@ type SourceResponse = {
     player2Rank: number;
     player2Score: number;
     frames?: string[];
+    round?: string;
+    status?: string;
   };
 };
 
@@ -86,16 +123,10 @@ export default function SnookerPoc() {
   const [sourceState, setSourceState] = useState<"checking" | "online" | "fallback">("checking");
   const [lastCheckedAt, setLastCheckedAt] = useState<string>(sourceSnapshot.capturedAt);
   const [liveMatch, setLiveMatch] = useState(liveFallback);
+  const [eventRounds, setEventRounds] = useState<SourceRound[]>([]);
+  const [sourceSummary, setSourceSummary] = useState<SourceSummary | null>(null);
+  const [selectedRoundKey, setSelectedRoundKey] = useState("final");
   const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem("snooker-poc-theme");
-      if (saved === "red" || saved === "green") setTheme(saved);
-    } catch {
-      // POC theme persistence is optional.
-    }
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,6 +146,12 @@ export default function SnookerPoc() {
               ...nextLive,
               frames: nextLive.frames?.length ? nextLive.frames : current.frames,
             }));
+          }
+          if (data.rounds?.length) {
+            const rounds = data.rounds;
+            setEventRounds(rounds);
+            setSourceSummary(data.summary ?? null);
+            setSelectedRoundKey((current) => rounds.some((round) => round.key === current) ? current : rounds[0].key);
           }
         } else {
           setSourceState("fallback");
@@ -140,12 +177,17 @@ export default function SnookerPoc() {
     );
   }, [query]);
 
+  const selectedRound = useMemo(
+    () => eventRounds.find((round) => round.key === selectedRoundKey) ?? eventRounds[0] ?? null,
+    [eventRounds, selectedRoundKey],
+  );
+
   const chooseTheme = (nextTheme: ThemeName) => {
     setTheme(nextTheme);
     try {
       window.localStorage.setItem("snooker-poc-theme", nextTheme);
     } catch {
-      // Ignore storage failures.
+      // Theme persistence is optional in the POC.
     }
   };
 
@@ -256,17 +298,54 @@ export default function SnookerPoc() {
                   <p>19局10胜 · 第二阶段 {liveMatch.sessionLabel.replace("第二阶段 ", "")}</p>
                 </div>
               </section>
+
               <section className={styles.card}>
-                <SectionHeader eyebrow="CHINA OPEN" title="最近结果" />
-                <div className={styles.resultsList}>
-                  {recentMatches.map((match, index) => (
-                    <div key={`${match.round}-${index}`}>
-                      <small>{match.round}</small>
-                      <p><span>{match.player1Zh}</span><b>{match.score1}</b><i>:</i><b>{match.score2}</b><span>{match.player2Zh}</span></p>
+                <SectionHeader
+                  eyebrow="CHINA OPEN · MAIN DRAW"
+                  title="完整主赛"
+                  action={sourceSummary ? `${sourceSummary.matchCount} 场 · ${sourceSummary.roundCount} 轮` : "自动同步"}
+                />
+                {eventRounds.length ? (
+                  <>
+                    <div className={styles.subTabs}>
+                      {eventRounds.map((round) => (
+                        <button
+                          className={selectedRound?.key === round.key ? styles.selectedSubTab : ""}
+                          onClick={() => setSelectedRoundKey(round.key)}
+                          key={round.key}
+                        >
+                          {round.labelZh}
+                        </button>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                    <div className={styles.resultsList}>
+                      {selectedRound?.matches.map((match) => (
+                        <div key={match.id}>
+                          <small>{match.roundLabelZh} · {match.bestOf}局{Math.floor(match.bestOf / 2) + 1}胜{match.status === "live" ? " · 进行中" : ""}</small>
+                          <p>
+                            <span>{match.player1.nameZh}</span>
+                            <b>{match.status === "walkover" ? "W" : match.score1 ?? "-"}</b>
+                            <i>:</i>
+                            <b>{match.status === "walkover" ? "O" : match.score2 ?? "-"}</b>
+                            <span>{match.player2.nameZh}</span>
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className={styles.resultsList}>
+                    {recentMatches.map((match, index) => (
+                      <div key={`${match.round}-${index}`}>
+                        <small>{match.round} · 最近数据快照</small>
+                        <p><span>{match.player1Zh}</span><b>{match.score1}</b><i>:</i><b>{match.score2}</b><span>{match.player2Zh}</span></p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className={styles.dataNote}>{eventRounds.length ? `已从赛事源解析 ${sourceSummary?.completedCount ?? 0} 场已完成比赛${sourceSummary?.liveCount ? `，${sourceSummary.liveCount} 场进行中` : ""}。` : "完整主赛正在从数据源读取，失败时保留最近结果快照。"}</p>
               </section>
+
               <section className={styles.card}>
                 <SectionHeader eyebrow="TOURNAMENT" title="赛事入口" />
                 <div className={styles.tournamentCards}>
