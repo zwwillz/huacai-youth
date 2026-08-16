@@ -1,0 +1,68 @@
+name: Patch Snooker Player Route V2
+
+on:
+  push:
+    branches: ["agent/snooker-player-route-fix-v2"]
+    paths:
+      - ".github/workflows/patch-snooker-player-route-v2.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/snooker-player-route-fix-v2
+      - name: Repair V2 player routes and add regression
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          ui_path = Path('app/snooker/snooker-data-center-v2.tsx')
+          text = ui_path.read_text()
+
+          old_import = 'import { useCallback, useEffect, useMemo, useRef, useState } from "react";\n'
+          new_import = old_import + 'import { useRouter } from "next/navigation";\n'
+          if text.count(old_import) != 1:
+              raise SystemExit('react import marker mismatch')
+          text = text.replace(old_import, new_import, 1)
+
+          state_marker = '  const [snapshot, setSnapshot] = useState(initialSnapshot);\n'
+          if text.count(state_marker) != 1:
+              raise SystemExit('component state marker mismatch')
+          text = text.replace(state_marker, '  const router = useRouter();\n' + state_marker, 1)
+
+          old_routes = '''  const openPlayer = (playerId: string) => { setDetail({ type: "player", playerId }); window.scrollTo({ top: 0, behavior: "smooth" }); };\n  const changeView = (view: MainView) => { setDetail(null); setActiveView(view); window.scrollTo({ top: 0, behavior: "smooth" }); };\n'''
+          new_routes = '''  const openPlayer = (playerId: string) => {\n    const target = players.get(playerId);\n    router.push(target?.slug ? `/snooker/players/${target.slug}` : "/snooker/players");\n  };\n  const changeView = (view: MainView) => {\n    if (view === "players") {\n      router.push("/snooker/players");\n      return;\n    }\n    setDetail(null);\n    setActiveView(view);\n    window.scrollTo({ top: 0, behavior: "smooth" });\n  };\n'''
+          if text.count(old_routes) != 1:
+              raise SystemExit('openPlayer/changeView marker mismatch')
+          text = text.replace(old_routes, new_routes, 1)
+          ui_path.write_text(text)
+
+          test_path = Path('tests/snooker-insights-v2.test.mjs')
+          tests = test_path.read_text()
+          block = r'''
+
+test("V2 always routes player entry points to the formal Supabase player module", async () => {
+  const ui = await read("app/snooker/snooker-data-center-v2.tsx");
+  assert.match(ui, /import \{ useRouter \} from "next\/navigation"/);
+  assert.match(ui, /const router = useRouter\(\)/);
+  assert.match(ui, /router\.push\(target\?\.slug \? `\/snooker\/players\/\$\{target\.slug\}` : "\/snooker\/players"\)/);
+  assert.match(ui, /if \(view === "players"\) \{[\s\S]*?router\.push\("\/snooker\/players"\);[\s\S]*?return;/);
+  assert.doesNotMatch(ui, /const openPlayer = \(playerId: string\) => \{ setDetail\(\{ type: "player", playerId \}\)/);
+});
+'''
+          if 'V2 always routes player entry points to the formal Supabase player module' not in tests:
+              tests += block
+          test_path.write_text(tests)
+          PY
+      - name: Commit repaired player routes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/snooker/snooker-data-center-v2.tsx tests/snooker-insights-v2.test.mjs
+          git commit -m "fix: route V2 player links to formal player module"
+          git push origin HEAD:agent/snooker-player-route-fix-v2
