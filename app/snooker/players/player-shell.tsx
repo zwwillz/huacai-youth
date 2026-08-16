@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 import styles from "./player.module.css";
 
 type Theme = "green" | "red";
@@ -18,24 +18,6 @@ export default function PlayerShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [theme, setTheme] = useState<Theme>("green");
 
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem("snooker-data-theme");
-      if (saved === "green" || saved === "red") setTheme(saved);
-    } catch {
-      // Theme persistence is optional.
-    }
-  }, []);
-
-  const chooseTheme = (nextTheme: Theme) => {
-    setTheme(nextTheme);
-    try {
-      window.localStorage.setItem("snooker-data-theme", nextTheme);
-    } catch {
-      // Ignore storage failures.
-    }
-  };
-
   return (
     <main className={styles.appRoot} data-theme={theme}>
       <div className={styles.shell}>
@@ -47,8 +29,8 @@ export default function PlayerShell({ children }: { children: ReactNode }) {
           <div className={styles.headerRight}>
             <span className={styles.versionBadge}>PLAYER v0.4</span>
             <div className={styles.themeSwitch} aria-label="主题色">
-              <button className={theme === "green" ? styles.themeActive : ""} onClick={() => chooseTheme("green")}>绿</button>
-              <button className={theme === "red" ? styles.themeActive : ""} onClick={() => chooseTheme("red")}>红</button>
+              <button className={theme === "green" ? styles.themeActive : ""} onClick={() => setTheme("green")}>绿</button>
+              <button className={theme === "red" ? styles.themeActive : ""} onClick={() => setTheme("red")}>红</button>
             </div>
           </div>
         </header>
