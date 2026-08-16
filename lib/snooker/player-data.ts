@@ -1,0 +1,307 @@
+const DEFAULT_SNOOKER_SUPABASE_URL = "https://rtlvncsmbueatdzqvhbn.supabase.co";
+const DEFAULT_SNOOKER_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0bHZuY3NtYnVlYXRkenF2aGJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODc4NjIsImV4cCI6MjEwMjQ2Mzg2Mn0.WXlu1um3a-FiUxpC_kuirrXZiE5uP08RFn3QVkF4qyI";
+
+const SNOOKER_SUPABASE_URL = process.env.SNOOKER_SUPABASE_URL ?? DEFAULT_SNOOKER_SUPABASE_URL;
+const SNOOKER_SUPABASE_ANON_KEY = process.env.SNOOKER_SUPABASE_ANON_KEY ?? DEFAULT_SNOOKER_SUPABASE_ANON_KEY;
+
+export type SnookerPlayerListItem = {
+  id: string;
+  slug: string;
+  nameEn: string;
+  nameZh: string;
+  shortNameZh: string | null;
+  nationalityZh: string | null;
+  countryCode: string | null;
+  dateOfBirth: string | null;
+  turnedPro: number | null;
+  currentRank: number | null;
+  rankingPoints: number | null;
+  avatarUrl: string | null;
+  isCurrentTour: boolean;
+  tourStatus: string;
+};
+
+export type SnookerPlayerCareerStats = {
+  rankingTitles: number | null;
+  rankingFinals: number | null;
+  highestRanking: number | null;
+  mastersTitles: number | null;
+  ukChampionshipTitles: number | null;
+  worldChampionshipTitles: number | null;
+  tripleCrownTitles: number | null;
+  career147s: number | null;
+  lastTournamentWin: string | null;
+};
+
+export type SnookerPlayerSeasonStats = {
+  seasonStartYear: number;
+  seasonLabel: string;
+  ranking: number | null;
+  tournamentsWon: number | null;
+  pointsScored: number | null;
+  matchesPlayed: number | null;
+  matchesWon: number | null;
+  matchWinRate: number | null;
+  averageShotTime: number | null;
+  breaks50Plus: number | null;
+  breaks100Plus: number | null;
+  highestBreak: number | null;
+  season147s: number | null;
+  averageBreak: number | null;
+  isFinal: boolean;
+};
+
+export type SnookerPlayerCareerHighlight = {
+  year: number | null;
+  sequenceNo: number;
+  descriptionEn: string;
+};
+
+export type SnookerPlayerDetail = SnookerPlayerListItem & {
+  nicknameEn: string | null;
+  biographyEn: string | null;
+  quoteEn: string | null;
+  career: SnookerPlayerCareerStats | null;
+  seasons: SnookerPlayerSeasonStats[];
+  highlights: SnookerPlayerCareerHighlight[];
+};
+
+type PlayerRow = {
+  id: string;
+  slug: string;
+  name_en: string;
+  name_zh: string;
+  short_name_zh: string | null;
+  nationality_zh: string | null;
+  country_code: string | null;
+  date_of_birth: string | null;
+  turned_pro: number | null;
+  current_rank: number | null;
+  ranking_points: number | null;
+  avatar_url: string | null;
+  is_current_tour: boolean;
+  tour_status: string;
+};
+
+type ProfileRow = {
+  nickname_en: string | null;
+  biography_html_en: string | null;
+  quote_en: string | null;
+};
+
+type CareerRow = {
+  ranking_titles: number | null;
+  ranking_finals: number | null;
+  highest_ranking: number | null;
+  masters_titles: number | null;
+  uk_championship_titles: number | null;
+  world_championship_titles: number | null;
+  triple_crown_titles: number | null;
+  career_147s: number | null;
+  last_tournament_win: string | null;
+};
+
+type SeasonRow = {
+  season_start_year: number;
+  season_label: string;
+  ranking: number | null;
+  tournaments_won: number | null;
+  points_scored: number | null;
+  matches_played: number | null;
+  matches_won: number | null;
+  match_win_rate: number | string | null;
+  average_shot_time: number | string | null;
+  breaks_50_plus: number | null;
+  breaks_100_plus: number | null;
+  highest_break: number | null;
+  season_147s: number | null;
+  average_break: number | string | null;
+  is_final: boolean;
+};
+
+type HighlightRow = {
+  highlight_year: number | null;
+  sequence_no: number;
+  description_en: string;
+};
+
+function toNumberOrNull(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function decodeEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&ndash;|&#8211;/gi, "–")
+    .replace(/&mdash;|&#8212;/gi, "—")
+    .replace(/&pound;/gi, "£")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)));
+}
+
+function htmlToText(html: string | null) {
+  if (!html) return null;
+  const text = decodeEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<br\s*\/?\s*>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return text || null;
+}
+
+async function rest<T>(resource: string, params: URLSearchParams, revalidate = 300): Promise<T> {
+  const response = await fetch(`${SNOOKER_SUPABASE_URL}/rest/v1/${resource}?${params.toString()}`, {
+    headers: {
+      apikey: SNOOKER_SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SNOOKER_SUPABASE_ANON_KEY}`,
+      Accept: "application/json",
+    },
+    next: { revalidate },
+  });
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(`Snooker Supabase ${resource} failed (${response.status})${message ? `: ${message.slice(0, 240)}` : ""}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+function mapPlayer(row: PlayerRow): SnookerPlayerListItem {
+  return {
+    id: row.id,
+    slug: row.slug,
+    nameEn: row.name_en,
+    nameZh: row.name_zh,
+    shortNameZh: row.short_name_zh,
+    nationalityZh: row.nationality_zh,
+    countryCode: row.country_code,
+    dateOfBirth: row.date_of_birth,
+    turnedPro: row.turned_pro,
+    currentRank: row.current_rank,
+    rankingPoints: row.ranking_points,
+    avatarUrl: row.avatar_url,
+    isCurrentTour: row.is_current_tour,
+    tourStatus: row.tour_status,
+  };
+}
+
+const PLAYER_SELECT = [
+  "id",
+  "slug",
+  "name_en",
+  "name_zh",
+  "short_name_zh",
+  "nationality_zh",
+  "country_code",
+  "date_of_birth",
+  "turned_pro",
+  "current_rank",
+  "ranking_points",
+  "avatar_url",
+  "is_current_tour",
+  "tour_status",
+].join(",");
+
+export async function getSnookerPlayerDirectory(): Promise<SnookerPlayerListItem[]> {
+  const params = new URLSearchParams({
+    select: PLAYER_SELECT,
+    order: "current_rank.asc.nullslast,name_en.asc",
+  });
+  const rows = await rest<PlayerRow[]>("snooker_players", params, 300);
+  return rows.map(mapPlayer);
+}
+
+export async function getSnookerPlayerDetail(slug: string): Promise<SnookerPlayerDetail | null> {
+  const playerParams = new URLSearchParams({
+    select: PLAYER_SELECT,
+    slug: `eq.${slug}`,
+    limit: "1",
+  });
+  const [playerRow] = await rest<PlayerRow[]>("snooker_players", playerParams, 300);
+  if (!playerRow) return null;
+
+  const profileParams = new URLSearchParams({
+    select: "nickname_en,biography_html_en,quote_en",
+    player_id: `eq.${playerRow.id}`,
+    limit: "1",
+  });
+  const careerParams = new URLSearchParams({
+    select: "ranking_titles,ranking_finals,highest_ranking,masters_titles,uk_championship_titles,world_championship_titles,triple_crown_titles,career_147s,last_tournament_win",
+    player_id: `eq.${playerRow.id}`,
+    limit: "1",
+  });
+  const seasonParams = new URLSearchParams({
+    select: "season_start_year,season_label,ranking,tournaments_won,points_scored,matches_played,matches_won,match_win_rate,average_shot_time,breaks_50_plus,breaks_100_plus,highest_break,season_147s,average_break,is_final",
+    player_id: `eq.${playerRow.id}`,
+    order: "season_start_year.desc",
+  });
+  const highlightParams = new URLSearchParams({
+    select: "highlight_year,sequence_no,description_en",
+    player_id: `eq.${playerRow.id}`,
+    order: "highlight_year.desc.nullslast,sequence_no.asc",
+  });
+
+  const [profileRows, careerRows, seasonRows, highlightRows] = await Promise.all([
+    rest<ProfileRow[]>("snooker_player_profile_details", profileParams, 1800),
+    rest<CareerRow[]>("snooker_player_career_stats", careerParams, 900),
+    rest<SeasonRow[]>("snooker_player_season_stats", seasonParams, 900),
+    rest<HighlightRow[]>("snooker_player_career_highlights", highlightParams, 1800),
+  ]);
+
+  const profile = profileRows[0] ?? null;
+  const careerRow = careerRows[0] ?? null;
+
+  return {
+    ...mapPlayer(playerRow),
+    nicknameEn: profile?.nickname_en ?? null,
+    biographyEn: htmlToText(profile?.biography_html_en ?? null),
+    quoteEn: profile?.quote_en ?? null,
+    career: careerRow
+      ? {
+          rankingTitles: careerRow.ranking_titles,
+          rankingFinals: careerRow.ranking_finals,
+          highestRanking: careerRow.highest_ranking,
+          mastersTitles: careerRow.masters_titles,
+          ukChampionshipTitles: careerRow.uk_championship_titles,
+          worldChampionshipTitles: careerRow.world_championship_titles,
+          tripleCrownTitles: careerRow.triple_crown_titles,
+          career147s: careerRow.career_147s,
+          lastTournamentWin: careerRow.last_tournament_win,
+        }
+      : null,
+    seasons: seasonRows.map((row) => ({
+      seasonStartYear: row.season_start_year,
+      seasonLabel: row.season_label,
+      ranking: row.ranking,
+      tournamentsWon: row.tournaments_won,
+      pointsScored: row.points_scored,
+      matchesPlayed: row.matches_played,
+      matchesWon: row.matches_won,
+      matchWinRate: toNumberOrNull(row.match_win_rate),
+      averageShotTime: toNumberOrNull(row.average_shot_time),
+      breaks50Plus: row.breaks_50_plus,
+      breaks100Plus: row.breaks_100_plus,
+      highestBreak: row.highest_break,
+      season147s: row.season_147s,
+      averageBreak: toNumberOrNull(row.average_break),
+      isFinal: row.is_final,
+    })),
+    highlights: highlightRows.map((row) => ({
+      year: row.highlight_year,
+      sequenceNo: row.sequence_no,
+      descriptionEn: row.description_en,
+    })),
+  };
+}
