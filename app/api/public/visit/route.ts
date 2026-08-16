@@ -110,6 +110,7 @@ export async function POST(request: Request) {
           where existing.module_type='public_visit'
             and existing.target_id=${visitorId}
             and coalesce(existing.after_json,'{}')::jsonb->>'path'=${path}
+            and coalesce(existing.after_json,'{}')::jsonb->>'pageLabel'=${pageLabel}
             and existing.created_at::timestamptz>now()-interval '20 seconds'
         )
     `;
