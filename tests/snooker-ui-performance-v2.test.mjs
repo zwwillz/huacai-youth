@@ -39,7 +39,7 @@ test("home result winner is a small badge and compact names do not add English s
   assert.doesNotMatch(homeScore, /\.nameEn/);
 });
 
-test("match detail presents roomy Match Season and H2H rows inside one matchup card", async () => {
+test("match detail presents compact divided Match Season and H2H rows inside one matchup card", async () => {
   const [ui, css, insights, dbV2] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
     read("app/snooker/snooker-ui-polish.module.css"),
@@ -62,9 +62,9 @@ test("match detail presents roomy Match Season and H2H rows inside one matchup c
   assert.match(css, /\.matchupPortrait\{[^}]*width:76px;height:94px/);
   assert.match(css, /\.panelMeta\{display:none\}/);
   assert.match(css, /\.matchupCard \.compareGrid>div\{padding:0;border:0\}/);
-  assert.match(css, /\.matchupCard \.compareGrid>div>div\{[^}]*min-height:58px[^}]*padding:15px 2px[^}]*border-bottom:1px solid #d8dfdb/);
+  assert.match(css, /\.matchupCard \.compareGrid>div>div\{[^}]*height:36px[^}]*min-height:36px[^}]*padding:5px 2px[^}]*border-bottom:1px solid #d8dfdb/);
   assert.match(css, /\.matchupCard \.compareGrid>div:last-child>div\{border-bottom:0\}/);
-  assert.match(css, /\.matchupCard \.compareGrid>div>div\{min-height:56px;padding:14px 2px;font-size:12px\}/);
+  assert.match(css, /\.matchupCard \.compareGrid>div>div\{height:36px;min-height:36px;padding:5px 2px;font-size:12px\}/);
   assert.match(css, /\.matchupCard \.compareLeft\{[^}]*padding-left:2px/);
   assert.match(css, /\.matchupCard \.compareRight\{[^}]*padding-right:2px/);
   assert.match(insights, /\.h2hSummary\{[^}]*min-height:62px[^}]*border-bottom:1px solid #dfe5e2/);
@@ -127,7 +127,7 @@ test("recent events keep original type/status positions and semantic colors", as
   assert.match(css, /\.eventStatusCompleted>span\{background:#f0f2f1!important;color:#737b77!important\}/);
 });
 
-test("player directory has one canonical UI and detail navigation is prefetched", async () => {
+test("player directory has one canonical UI and detail uses bottom navigation instead of a broken back link", async () => {
   const [ui, directory, directoryPage, detail, detailPage, loader, loading, playerCss] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
     read("app/snooker/players/player-directory.tsx"),
@@ -142,7 +142,9 @@ test("player directory has one canonical UI and detail navigation is prefetched"
   assert.match(ui, /activeView === "players" \? <PlayerDirectoryContent players=\{directoryPlayers\}/);
   assert.match(directoryPage, /redirect\("\/snooker\?view=players"\)/);
   assert.match(directory, /<Link className=\{styles\.playerRow\} href=\{`\/snooker\/players\/\$\{player\.slug\}`\} prefetch/);
-  assert.match(detail, /href="\/snooker\?view=players" prefetch/);
+  assert.doesNotMatch(detail, /styles\.backLink/);
+  assert.doesNotMatch(detail, /返回球员/);
+  assert.doesNotMatch(detail, /import Link from "next\/link"/);
   assert.match(detailPage, /getSnookerPlayerDetailFast/);
   assert.match(loader, /rpc\/snooker_player_detail_public/);
   assert.match(loader, /next: \{ revalidate: 300 \}/);
@@ -151,10 +153,11 @@ test("player directory has one canonical UI and detail navigation is prefetched"
   assert.match(playerCss, /\.directoryToolbar \.filters button\{/);
 });
 
-test("bottom navigation keeps all four main tabs local and root data is short cached", async () => {
-  const [ui, shell, db, page] = await Promise.all([
+test("bottom navigation keeps all four main tabs local while synchronizing the refresh URL", async () => {
+  const [ui, shell, sync, db, page] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
     read("app/snooker/players/player-shell.tsx"),
+    read("app/snooker/snooker-view-url-sync.tsx"),
     read("lib/snooker/database-public.ts"),
     read("app/snooker/page.tsx"),
   ]);
@@ -164,6 +167,15 @@ test("bottom navigation keeps all four main tabs local and root data is short ca
   assert.match(ui, /const changeView = \(view: NavId\) => \{[\s\S]*?setActiveView\(view\)/);
   assert.doesNotMatch(ui, /router\.push\("\/snooker\/players"\)/);
   assert.match(shell, /href: "\/snooker\?view=players"/);
+  assert.match(sync, /首页: "home"/);
+  assert.match(sync, /赛事: "matches"/);
+  assert.match(sync, /球员: "players"/);
+  assert.match(sync, /数据: "data"/);
+  assert.match(sync, /url\.searchParams\.delete\("view"\)/);
+  assert.match(sync, /url\.searchParams\.set\("view", view\)/);
+  assert.match(sync, /window\.history\.replaceState\(window\.history\.state/);
+  assert.match(page, /import SnookerViewUrlSync from "\.\/snooker-view-url-sync"/);
+  assert.match(page, /<SnookerViewUrlSync \/>/);
   assert.match(db, /next: \{ revalidate \}/);
   assert.match(page, /export const revalidate = 30/);
   assert.doesNotMatch(page, /force-dynamic/);
