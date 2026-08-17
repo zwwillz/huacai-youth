@@ -91,7 +91,7 @@ export default function SnookerRootController({
       <div style={{ display: playerSlug ? "none" : undefined }} aria-hidden={playerSlug ? true : undefined}>
         <SnookerDataCenterV2 key={rootKey} {...dataCenterProps} initialView={rootView} />
       </div>
-      {playerSlug ? <PlayerDetailInline summaryPlayer={summaryPlayer} slug={playerSlug} onNavigate={navigateFromDetail} /> : null}
+      {playerSlug ? <PlayerDetailInline key={playerSlug} summaryPlayer={summaryPlayer} slug={playerSlug} onNavigate={navigateFromDetail} /> : null}
     </>
   );
 }
