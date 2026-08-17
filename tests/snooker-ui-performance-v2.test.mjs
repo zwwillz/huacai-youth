@@ -55,13 +55,16 @@ test("match detail presents roomy Match Season and H2H rows inside one matchup c
   assert.match(ui, />本场<\/span><small>MATCH<\/small>/);
   assert.match(ui, />赛季<\/span><small>SEASON<\/small>/);
   assert.match(ui, />交手<\/span><small>H2H<\/small>/);
+  assert.match(ui, /style=\{\{ display: "contents" \}\}/);
   assert.match(css, /\.matchupCard\{[^}]*display:flex;flex-direction:column/);
   assert.match(css, /\.matchupCard \.dataTabs\{[^}]*order:1/);
   assert.match(css, /\.matchupPlayers\{[^}]*order:2[^}]*margin:10px 0 0/);
   assert.match(css, /\.matchupPortrait\{[^}]*width:76px;height:94px/);
   assert.match(css, /\.panelMeta\{display:none\}/);
-  assert.match(css, /\.matchupCard \.compareGrid>div\{[^}]*min-height:72px[^}]*padding:21px 2px[^}]*border-bottom:1px solid #d8dfdb/);
-  assert.match(css, /\.matchupCard \.compareGrid>div\{min-height:68px;padding:20px 2px;font-size:12px\}/);
+  assert.match(css, /\.matchupCard \.compareGrid>div\{padding:0;border:0\}/);
+  assert.match(css, /\.matchupCard \.compareGrid>div>div\{[^}]*min-height:58px[^}]*padding:15px 2px[^}]*border-bottom:1px solid #d8dfdb/);
+  assert.match(css, /\.matchupCard \.compareGrid>div:last-child>div\{border-bottom:0\}/);
+  assert.match(css, /\.matchupCard \.compareGrid>div>div\{min-height:56px;padding:14px 2px;font-size:12px\}/);
   assert.match(css, /\.matchupCard \.compareLeft\{[^}]*padding-left:2px/);
   assert.match(css, /\.matchupCard \.compareRight\{[^}]*padding-right:2px/);
   assert.match(insights, /\.h2hSummary\{[^}]*min-height:62px[^}]*border-bottom:1px solid #dfe5e2/);
