@@ -27,8 +27,11 @@ type RpcPlayer = {
 
 type RpcProfile = {
   nickname_en: string | null;
+  nickname_zh: string | null;
   biography_html_en: string | null;
+  biography_html_zh: string | null;
   quote_en: string | null;
+  quote_zh: string | null;
 };
 
 type RpcCareer = {
@@ -41,6 +44,7 @@ type RpcCareer = {
   triple_crown_titles: number | null;
   career_147s: number | null;
   last_tournament_win: string | null;
+  last_tournament_win_zh: string | null;
 };
 
 type RpcSeason = {
@@ -65,6 +69,7 @@ type RpcHighlight = {
   highlight_year: number | null;
   sequence_no: number;
   description_en: string;
+  description_zh: string | null;
 };
 
 type RpcRanking = {
@@ -139,8 +144,11 @@ function mapPayload(payload: RpcPayload): SnookerPlayerDetail {
     isCurrentTour: p.is_current_tour,
     tourStatus: p.tour_status,
     nicknameEn: payload.profile?.nickname_en ?? null,
+    nicknameZh: payload.profile?.nickname_zh ?? payload.profile?.nickname_en ?? null,
     biographyEn: htmlToText(payload.profile?.biography_html_en ?? null),
+    biographyZh: htmlToText(payload.profile?.biography_html_zh ?? payload.profile?.biography_html_en ?? null),
     quoteEn: payload.profile?.quote_en ?? null,
+    quoteZh: payload.profile?.quote_zh ?? payload.profile?.quote_en ?? null,
     career: career ? {
       rankingTitles: career.ranking_titles,
       rankingFinals: career.ranking_finals,
@@ -151,6 +159,7 @@ function mapPayload(payload: RpcPayload): SnookerPlayerDetail {
       tripleCrownTitles: career.triple_crown_titles,
       career147s: career.career_147s,
       lastTournamentWin: career.last_tournament_win,
+      lastTournamentWinZh: career.last_tournament_win_zh ?? career.last_tournament_win,
     } : null,
     seasons: (payload.seasons ?? []).map((row) => ({
       seasonStartYear: row.season_start_year,
@@ -173,6 +182,7 @@ function mapPayload(payload: RpcPayload): SnookerPlayerDetail {
       year: row.highlight_year,
       sequenceNo: row.sequence_no,
       descriptionEn: row.description_en,
+      descriptionZh: row.description_zh ?? row.description_en,
     })),
   };
 }
