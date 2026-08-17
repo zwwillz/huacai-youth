@@ -61,7 +61,7 @@ test("match detail presents roomy Match Season and H2H rows inside one matchup c
   assert.match(css, /\.matchupPortrait\{[^}]*width:76px;height:94px/);
   assert.match(css, /\.panelMeta\{display:none\}/);
   assert.match(css, /\.matchupCard \.compareGrid>div\{[^}]*min-height:72px[^}]*padding:21px 2px[^}]*border-bottom:1px solid #d8dfdb/);
-  assert.match(css, /@media\(max-width:420px\)\{[^}]*\.matchupCard \.compareGrid>div\{[^}]*min-height:68px[^}]*padding:20px 2px/);
+  assert.match(css, /\.matchupCard \.compareGrid>div\{min-height:68px;padding:20px 2px;font-size:12px\}/);
   assert.match(css, /\.matchupCard \.compareLeft\{[^}]*padding-left:2px/);
   assert.match(css, /\.matchupCard \.compareRight\{[^}]*padding-right:2px/);
   assert.match(insights, /\.h2hSummary\{[^}]*min-height:62px[^}]*border-bottom:1px solid #dfe5e2/);
