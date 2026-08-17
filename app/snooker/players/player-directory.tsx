@@ -1,7 +1,7 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { SnookerPlayerListItem } from "@/lib/snooker/player-data";
 import PlayerShell from "./player-shell";
 import styles from "./player.module.css";
@@ -24,7 +24,6 @@ function points(value: number | null) {
 }
 
 export function PlayerDirectoryContent({ players }: { players: SnookerPlayerListItem[] }) {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -74,7 +73,7 @@ export function PlayerDirectoryContent({ players }: { players: SnookerPlayerList
         </div>
         <div className={styles.playerDirectory}>
           {filtered.length ? filtered.map((player) => (
-            <button className={styles.playerRow} onPointerDown={() => router.prefetch(`/snooker/players/${player.slug}`)} onClick={() => router.push(`/snooker/players/${player.slug}`)} key={player.id}>
+            <Link className={styles.playerRow} href={`/snooker/players/${player.slug}`} prefetch key={player.id}>
               <span className={styles.listAvatar}>
                 {player.avatarUrl ? <img src={player.avatarUrl} alt="" loading="lazy" decoding="async" /> : <span>{initials(player.nameEn)}</span>}
               </span>
@@ -93,7 +92,7 @@ export function PlayerDirectoryContent({ players }: { players: SnookerPlayerList
                 </span>
                 <span className={styles.rowArrow}>›</span>
               </span>
-            </button>
+            </Link>
           )) : <div className={styles.emptyState}>没有找到匹配的球员。<br />可以尝试中文名、英文名或切换筛选条件。</div>}
         </div>
       </section>
