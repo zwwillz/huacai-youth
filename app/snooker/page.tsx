@@ -1,5 +1,4 @@
-import SnookerDataCenterV2 from "./snooker-data-center-v2";
-import SnookerViewUrlSync from "./snooker-view-url-sync";
+import SnookerRootController from "./snooker-root-controller";
 import { SNOOKER_BUILD_MARK } from "@/lib/snooker/foundation";
 import { loadSnookerDatabaseViewV2 } from "@/lib/snooker/database-public-v2";
 
@@ -7,9 +6,14 @@ export const revalidate = 30;
 
 type SnookerRootView = "home" | "matches" | "players" | "data";
 
-export default async function SnookerPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function SnookerPage({ searchParams }: { searchParams: Promise<{ view?: string; player?: string }> }) {
   const [database, query] = await Promise.all([loadSnookerDatabaseViewV2(), searchParams]);
-  const initialView: SnookerRootView = query.view === "matches" || query.view === "players" || query.view === "data" ? query.view : "home";
+  const requestedPlayer = query.player?.trim() || null;
+  const initialView: SnookerRootView = requestedPlayer
+    ? "players"
+    : query.view === "matches" || query.view === "players" || query.view === "data"
+      ? query.view
+      : "home";
   const sourceHealth = {
     online: database.databaseOnline,
     accepted: database.databaseOnline,
@@ -20,15 +24,13 @@ export default async function SnookerPage({ searchParams }: { searchParams: Prom
   };
 
   return (
-    <>
-      <SnookerViewUrlSync />
-      <SnookerDataCenterV2
-        initialSnapshot={database.snapshot}
-        initialDatabaseEvents={database.eventDetails}
-        initialSourceHealth={sourceHealth}
-        buildMark={`${SNOOKER_BUILD_MARK}-DB09`}
-        initialView={initialView}
-      />
-    </>
+    <SnookerRootController
+      initialSnapshot={database.snapshot}
+      initialDatabaseEvents={database.eventDetails}
+      initialSourceHealth={sourceHealth}
+      buildMark={`${SNOOKER_BUILD_MARK}-DB09`}
+      initialView={initialView}
+      initialPlayerSlug={requestedPlayer}
+    />
   );
 }

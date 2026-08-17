@@ -132,64 +132,70 @@ test("recent events keep original type/status positions and semantic colors", as
   assert.match(css, /\.eventStatusCompleted>span\{background:#f0f2f1!important;color:#737b77!important\}/);
 });
 
-test("player directory keeps the shared UI while routed pages use a lightweight fast-return path", async () => {
-  const [ui, directory, directoryPage, detail, detailPage, loader, loading, playerCss, shell] = await Promise.all([
+test("player directory and detail stay under the root player tab with cached inline data", async () => {
+  const [ui, directory, directoryPage, detail, detailPage, loader, playerCss, shell, controller, inline, client, api] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
     read("app/snooker/players/player-directory.tsx"),
     read("app/snooker/players/page.tsx"),
     read("app/snooker/players/[slug]/player-detail.tsx"),
     read("app/snooker/players/[slug]/page.tsx"),
     read("lib/snooker/player-detail-fast.ts"),
-    read("app/snooker/players/[slug]/loading.tsx"),
     read("app/snooker/players/player.module.css"),
     read("app/snooker/players/player-shell.tsx"),
+    read("app/snooker/snooker-root-controller.tsx"),
+    read("app/snooker/players/player-detail-inline.tsx"),
+    read("app/snooker/players/player-detail-client.ts"),
+    read("app/api/snooker/v1/player-detail/route.ts"),
   ]);
 
   assert.match(ui, /activeView === "players" \? <PlayerDirectoryContent players=\{directoryPlayers\}/);
-  assert.match(directoryPage, /getSnookerPlayerDirectory/);
-  assert.match(directoryPage, /<PlayerDirectory players=\{players\} \/>/);
-  assert.doesNotMatch(directoryPage, /redirect\(/);
-  assert.match(directory, /filtered\.slice\(0, 6\)/);
-  assert.match(directory, /router\.prefetch\(`\/snooker\/players\/\$\{player\.slug\}`\)/);
-  assert.match(directory, /aria-busy=\{opening\}/);
-  assert.match(directory, /onPointerEnter=\{\(\) => router\.prefetch\(href\)\}/);
-  assert.doesNotMatch(detail, /styles\.backLink/);
-  assert.doesNotMatch(detail, /返回球员/);
-  assert.doesNotMatch(detail, /import Link from "next\/link"/);
-  assert.match(detailPage, /getSnookerPlayerDetailFast/);
+  assert.match(directoryPage, /redirect\("\/snooker\?view=players"\)/);
+  assert.match(directory, /\/snooker\?view=players&player=/);
+  assert.match(directory, /new CustomEvent\("snooker:open-player"/);
+  assert.match(directory, /prefetchPlayerDetail\(player\.slug\)/);
+  assert.doesNotMatch(directory, /router\.prefetch\(`\/snooker\/players/);
+  assert.match(detail, /export function PlayerDetailContent/);
+  assert.match(detailPage, /redirect\(`\/snooker\?view=players&player=/);
   assert.match(loader, /rpc\/snooker_player_detail_public/);
-  assert.match(loader, /next: \{ revalidate: 300 \}/);
-  assert.match(loading, /正在加载球员资料/);
+  assert.match(api, /getSnookerPlayerDetailFast\(slug\)/);
+  assert.match(api, /stale-while-revalidate=1800/);
+  assert.match(client, /const detailCache = new Map/);
+  assert.match(client, /inflightCache/);
+  assert.match(controller, /window\.addEventListener\("snooker:open-player"/);
+  assert.match(controller, /window\.history\.pushState/);
+  assert.match(controller, /initialPlayerSlug/);
+  assert.match(inline, /summary\?\.avatarUrl && !detail\.avatarUrl/);
+  assert.match(inline, /<PlayerDetailContent player=\{player\} \/>/);
   assert.match(playerCss, /\.directoryToolbar \.searchBox input\{/);
   assert.match(playerCss, /\.directoryToolbar \.filters button\{/);
-  assert.match(shell, /href: "\/snooker\/players"/);
-  assert.match(shell, /router\.prefetch\("\/snooker\/players"\)/);
-  assert.doesNotMatch(shell, /for \(const item of navItems\)/);
+  assert.match(shell, /href: "\/snooker\?view=players"/);
 });
 
-test("bottom navigation keeps all four main tabs local while synchronizing the refresh URL", async () => {
-  const [ui, shell, sync, db, page] = await Promise.all([
+test("bottom navigation remains one root-level URL model and direct player links hydrate the player tab", async () => {
+  const [ui, shell, sync, db, page, controller] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
     read("app/snooker/players/player-shell.tsx"),
     read("app/snooker/snooker-view-url-sync.tsx"),
     read("lib/snooker/database-public.ts"),
     read("app/snooker/page.tsx"),
+    read("app/snooker/snooker-root-controller.tsx"),
   ]);
 
   assert.match(ui, /type MainView = "home" \| "matches" \| "players" \| "data"/);
   assert.match(ui, /activeView === "players" \? <PlayerDirectoryContent/);
   assert.match(ui, /const changeView = \(view: NavId\) => \{[\s\S]*?setActiveView\(view\)/);
-  assert.doesNotMatch(ui, /router\.push\("\/snooker\/players"\)/);
-  assert.match(shell, /href: "\/snooker\/players"/);
+  assert.match(shell, /href: "\/snooker\?view=players"/);
   assert.match(sync, /首页: "home"/);
   assert.match(sync, /赛事: "matches"/);
   assert.match(sync, /球员: "players"/);
   assert.match(sync, /数据: "data"/);
-  assert.match(sync, /url\.searchParams\.delete\("view"\)/);
-  assert.match(sync, /url\.searchParams\.set\("view", view\)/);
   assert.match(sync, /window\.history\.replaceState\(window\.history\.state/);
-  assert.match(page, /import SnookerViewUrlSync from "\.\/snooker-view-url-sync"/);
-  assert.match(page, /<SnookerViewUrlSync \/>/);
+  assert.match(page, /query\.player\?\.trim\(\)/);
+  assert.match(page, /requestedPlayer[\s\S]*\? "players"/);
+  assert.match(page, /<SnookerRootController/);
+  assert.match(page, /initialPlayerSlug=\{requestedPlayer\}/);
+  assert.match(controller, /rootHref\("players", slug\)/);
+  assert.match(controller, /window\.addEventListener\("popstate"/);
   assert.match(db, /next: \{ revalidate \}/);
   assert.match(page, /export const revalidate = 30/);
   assert.doesNotMatch(page, /force-dynamic/);

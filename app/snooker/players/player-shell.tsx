@@ -2,34 +2,34 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
+import { type MouseEvent, type ReactNode, useState } from "react";
 import styles from "./player.module.css";
 
 type Theme = "green" | "red";
+export type PlayerShellView = "home" | "matches" | "players" | "data";
 
-const navItems = [
-  { label: "首页", icon: "⌂", href: "/snooker" },
-  { label: "赛事", icon: "◫", href: "/snooker?view=matches" },
-  { label: "球员", icon: "◎", href: "/snooker/players" },
-  { label: "数据", icon: "▥", href: "/snooker?view=data" },
-] as const;
+const navItems: Array<{ id: PlayerShellView; label: string; icon: string; href: string }> = [
+  { id: "home", label: "首页", icon: "⌂", href: "/snooker" },
+  { id: "matches", label: "赛事", icon: "◫", href: "/snooker?view=matches" },
+  { id: "players", label: "球员", icon: "◎", href: "/snooker?view=players" },
+  { id: "data", label: "数据", icon: "▥", href: "/snooker?view=data" },
+];
 
-export default function PlayerShell({ children }: { children: ReactNode }) {
+export default function PlayerShell({ children, onNavigate }: { children: ReactNode; onNavigate?: (view: PlayerShellView) => void }) {
   const router = useRouter();
   const [theme, setTheme] = useState<Theme>("green");
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      router.prefetch("/snooker/players");
-    }, 80);
-    return () => window.clearTimeout(timer);
-  }, [router]);
+  const handleBrand = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!onNavigate || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onNavigate("home");
+  };
 
   return (
     <main className={styles.appRoot} data-theme={theme}>
       <div className={styles.shell}>
         <header className={styles.header}>
-          <Link className={styles.brand} href="/snooker" prefetch aria-label="返回世界斯诺克数据中心首页">
+          <Link className={styles.brand} href="/snooker" prefetch aria-label="返回世界斯诺克数据中心首页" onClick={handleBrand}>
             <span>S</span>
             <div><strong>世界斯诺克数据中心</strong><small>WORLD SNOOKER DATA</small></div>
           </Link>
@@ -47,10 +47,10 @@ export default function PlayerShell({ children }: { children: ReactNode }) {
         <nav className={styles.bottomNav} aria-label="世界斯诺克数据中心主导航">
           {navItems.map((item) => (
             <button
-              className={item.label === "球员" ? styles.navActive : ""}
-              onPointerDown={() => router.prefetch(item.href)}
-              onClick={() => router.push(item.href)}
-              key={item.label}
+              className={item.id === "players" ? styles.navActive : ""}
+              onPointerDown={() => { if (!onNavigate) router.prefetch(item.href); }}
+              onClick={() => onNavigate ? onNavigate(item.id) : router.push(item.href)}
+              key={item.id}
             >
               <span>{item.icon}</span><b>{item.label}</b>
             </button>

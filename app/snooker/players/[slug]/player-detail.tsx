@@ -50,7 +50,7 @@ function seasonMetric(season: SnookerPlayerSeasonStats, key: "matches" | "wins")
   return key === "matches" ? integer(season.matchesPlayed) : integer(season.matchesWon);
 }
 
-export default function PlayerDetail({ player }: { player: SnookerPlayerDetail }) {
+export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail }) {
   const [seasonYear, setSeasonYear] = useState(player.seasons[0]?.seasonStartYear ?? null);
   const [bioExpanded, setBioExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -67,7 +67,7 @@ export default function PlayerDetail({ player }: { player: SnookerPlayerDetail }
   const career = player.career;
 
   return (
-    <PlayerShell>
+    <>
       <section className={styles.playerHero}>
         <span className={styles.heroGhost}>147</span>
         <div className={styles.heroCopy}>
@@ -187,6 +187,10 @@ export default function PlayerDetail({ player }: { player: SnookerPlayerDetail }
           <p className={styles.languageNote}>职业生涯中文化将在下一轮内容层完成，数据结构与时间轴已经按正式版保留。</p>
         </section>
       ) : null}
-    </PlayerShell>
+    </>
   );
+}
+
+export default function PlayerDetail({ player }: { player: SnookerPlayerDetail }) {
+  return <PlayerShell><PlayerDetailContent player={player} /></PlayerShell>;
 }
