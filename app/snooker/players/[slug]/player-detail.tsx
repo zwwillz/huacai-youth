@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { SnookerPlayerDetail, SnookerPlayerSeasonStats } from "@/lib/snooker/player-data";
 import PlayerShell from "../player-shell";
@@ -69,8 +68,6 @@ export default function PlayerDetail({ player }: { player: SnookerPlayerDetail }
 
   return (
     <PlayerShell>
-      <Link className={styles.backLink} href="/snooker?view=players" prefetch><span>‹</span> 返回球员</Link>
-
       <section className={styles.playerHero}>
         <span className={styles.heroGhost}>147</span>
         <div className={styles.heroCopy}>
