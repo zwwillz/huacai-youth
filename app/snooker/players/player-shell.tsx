@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 import styles from "./player.module.css";
 
 type Theme = "green" | "red";
@@ -10,20 +10,13 @@ type Theme = "green" | "red";
 const navItems = [
   { label: "首页", icon: "⌂", href: "/snooker" },
   { label: "赛事", icon: "◫", href: "/snooker?view=matches" },
-  { label: "球员", icon: "◎", href: "/snooker/players" },
+  { label: "球员", icon: "◎", href: "/snooker?view=players" },
   { label: "数据", icon: "▥", href: "/snooker?view=data" },
 ] as const;
 
 export default function PlayerShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [theme, setTheme] = useState<Theme>("green");
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      router.prefetch("/snooker/players");
-    }, 80);
-    return () => window.clearTimeout(timer);
-  }, [router]);
 
   return (
     <main className={styles.appRoot} data-theme={theme}>
