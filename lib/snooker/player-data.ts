@@ -32,6 +32,7 @@ export type SnookerPlayerCareerStats = {
   tripleCrownTitles: number | null;
   career147s: number | null;
   lastTournamentWin: string | null;
+  lastTournamentWinZh: string | null;
 };
 
 export type SnookerPlayerSeasonStats = {
@@ -56,12 +57,16 @@ export type SnookerPlayerCareerHighlight = {
   year: number | null;
   sequenceNo: number;
   descriptionEn: string;
+  descriptionZh: string;
 };
 
 export type SnookerPlayerDetail = SnookerPlayerListItem & {
   nicknameEn: string | null;
+  nicknameZh: string | null;
   biographyEn: string | null;
+  biographyZh: string | null;
   quoteEn: string | null;
+  quoteZh: string | null;
   career: SnookerPlayerCareerStats | null;
   seasons: SnookerPlayerSeasonStats[];
   highlights: SnookerPlayerCareerHighlight[];
@@ -93,8 +98,11 @@ type OfficialRankingRow = {
 
 type ProfileRow = {
   nickname_en: string | null;
+  nickname_zh: string | null;
   biography_html_en: string | null;
+  biography_html_zh: string | null;
   quote_en: string | null;
+  quote_zh: string | null;
 };
 
 type CareerRow = {
@@ -107,6 +115,7 @@ type CareerRow = {
   triple_crown_titles: number | null;
   career_147s: number | null;
   last_tournament_win: string | null;
+  last_tournament_win_zh: string | null;
 };
 
 type SeasonRow = {
@@ -131,6 +140,7 @@ type HighlightRow = {
   highlight_year: number | null;
   sequence_no: number;
   description_en: string;
+  description_zh: string | null;
 };
 
 function toNumberOrNull(value: number | string | null | undefined) {
@@ -281,12 +291,12 @@ export async function getSnookerPlayerDetail(slug: string): Promise<SnookerPlaye
   if (!playerRow) return null;
 
   const profileParams = new URLSearchParams({
-    select: "nickname_en,biography_html_en,quote_en",
+    select: "nickname_en,nickname_zh,biography_html_en,biography_html_zh,quote_en,quote_zh",
     player_id: `eq.${playerRow.id}`,
     limit: "1",
   });
   const careerParams = new URLSearchParams({
-    select: "ranking_titles,ranking_finals,highest_ranking,masters_titles,uk_championship_titles,world_championship_titles,triple_crown_titles,career_147s,last_tournament_win",
+    select: "ranking_titles,ranking_finals,highest_ranking,masters_titles,uk_championship_titles,world_championship_titles,triple_crown_titles,career_147s,last_tournament_win,last_tournament_win_zh",
     player_id: `eq.${playerRow.id}`,
     limit: "1",
   });
@@ -296,7 +306,7 @@ export async function getSnookerPlayerDetail(slug: string): Promise<SnookerPlaye
     order: "season_start_year.desc",
   });
   const highlightParams = new URLSearchParams({
-    select: "highlight_year,sequence_no,description_en",
+    select: "highlight_year,sequence_no,description_en,description_zh",
     player_id: `eq.${playerRow.id}`,
     order: "highlight_year.desc.nullslast,sequence_no.asc",
   });
@@ -316,8 +326,11 @@ export async function getSnookerPlayerDetail(slug: string): Promise<SnookerPlaye
   return {
     ...basePlayer,
     nicknameEn: profile?.nickname_en ?? null,
+    nicknameZh: profile?.nickname_zh ?? profile?.nickname_en ?? null,
     biographyEn: htmlToText(profile?.biography_html_en ?? null),
+    biographyZh: htmlToText(profile?.biography_html_zh ?? profile?.biography_html_en ?? null),
     quoteEn: profile?.quote_en ?? null,
+    quoteZh: profile?.quote_zh ?? profile?.quote_en ?? null,
     career: careerRow
       ? {
           rankingTitles: careerRow.ranking_titles,
@@ -329,6 +342,7 @@ export async function getSnookerPlayerDetail(slug: string): Promise<SnookerPlaye
           tripleCrownTitles: careerRow.triple_crown_titles,
           career147s: careerRow.career_147s,
           lastTournamentWin: careerRow.last_tournament_win,
+          lastTournamentWinZh: careerRow.last_tournament_win_zh ?? careerRow.last_tournament_win,
         }
       : null,
     seasons: seasonRows.map((row) => ({
@@ -352,6 +366,7 @@ export async function getSnookerPlayerDetail(slug: string): Promise<SnookerPlaye
       year: row.highlight_year,
       sequenceNo: row.sequence_no,
       descriptionEn: row.description_en,
+      descriptionZh: row.description_zh ?? row.description_en,
     })),
   };
 }
