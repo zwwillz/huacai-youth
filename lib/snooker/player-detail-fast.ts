@@ -122,6 +122,7 @@ function mapPayload(payload: RpcPayload): SnookerPlayerDetail {
   const p = payload.player;
   const ranking = payload.official_ranking;
   const career = payload.career;
+  const rankingPoints = ranking?.ranking_money ?? ranking?.points ?? p.ranking_points;
   return {
     id: p.id,
     slug: p.slug,
@@ -133,7 +134,7 @@ function mapPayload(payload: RpcPayload): SnookerPlayerDetail {
     dateOfBirth: p.date_of_birth,
     turnedPro: p.turned_pro,
     currentRank: ranking?.rank ?? p.current_rank,
-    rankingPoints: Number(ranking?.ranking_money ?? ranking?.points ?? p.ranking_points ?? 0),
+    rankingPoints: rankingPoints === null || rankingPoints === undefined ? null : Number(rankingPoints),
     avatarUrl: p.avatar_url,
     isCurrentTour: p.is_current_tour,
     tourStatus: p.tour_status,
