@@ -30,8 +30,11 @@ function partialDetail(summary: SnookerPlayerListItem): SnookerPlayerDetail {
   return {
     ...summary,
     nicknameEn: null,
+    nicknameZh: null,
     biographyEn: null,
+    biographyZh: null,
     quoteEn: null,
+    quoteZh: null,
     career: null,
     seasons: [],
     highlights: [],
