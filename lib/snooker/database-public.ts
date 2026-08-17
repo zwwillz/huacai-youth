@@ -13,6 +13,7 @@ import { dashboardSnapshot } from "./foundation";
 
 const DEFAULT_SUPABASE_URL = "https://rtlvncsmbueatdzqvhbn.supabase.co";
 const DEFAULT_PUBLISHABLE_KEY = "sb_publishable_SR0NVsqpSBGBMP3xg9utvQ_jywPEUNP";
+const ID_FILTER_BATCH_SIZE = 32;
 
 const SUPABASE_URL = process.env.SNOOKER_SUPABASE_URL || DEFAULT_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SNOOKER_SUPABASE_PUBLISHABLE_KEY || DEFAULT_PUBLISHABLE_KEY;
@@ -192,6 +193,34 @@ function inFilter(ids: string[]) {
   return encodeURIComponent(`(${ids.join(",")})`);
 }
 
+function idBatches(ids: string[], batchSize = ID_FILTER_BATCH_SIZE) {
+  const batches: string[][] = [];
+  for (let index = 0; index < ids.length; index += batchSize) {
+    batches.push(ids.slice(index, index + batchSize));
+  }
+  return batches;
+}
+
+async function restInBatchesBestEffort<T>(
+  ids: string[],
+  buildPath: (batch: string[]) => string,
+  label: string,
+): Promise<T[]> {
+  if (!ids.length) return [];
+  const results = await Promise.allSettled(
+    idBatches(ids).map((batch) => rest<T[]>(buildPath(batch))),
+  );
+  const rows: T[] = [];
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      rows.push(...result.value);
+      return;
+    }
+    console.error(`[snooker-db] ${label} batch ${index + 1}/${results.length} failed`, result.reason);
+  });
+  return rows;
+}
+
 function mapPlayers(rows: DbPlayer[]) {
   const uuidToCanonical = new Map<string, string>();
   const players: SnookerPlayer[] = rows.map((row) => {
@@ -359,9 +388,11 @@ export async function loadSnookerDatabaseView(): Promise<SnookerDatabaseView> {
         rest<DbMatch[]>(`snooker_matches?select=id,event_id,round_id,source_match_id,match_no,player1_id,player2_id,score1,score2,best_of,status,scheduled_at,session_label_zh,winner_id,note,source_updated_at&event_id=in.${inFilter(dataReadyIds)}&order=match_no.asc`),
       ]);
       const matchIds = matchRows.map((row) => row.id);
-      if (matchIds.length) {
-        frameRows = await rest<DbFrame[]>(`snooker_frames?select=id,match_id,frame_no,score1,score2,break1,break2,note&match_id=in.${inFilter(matchIds)}&order=frame_no.asc`);
-      }
+      frameRows = await restInBatchesBestEffort<DbFrame>(
+        matchIds,
+        (batch) => `snooker_frames?select=id,match_id,frame_no,score1,score2,break1,break2,note&match_id=in.${inFilter(batch)}&order=frame_no.asc`,
+        "frame read",
+      );
     }
 
     const eventDetails = buildEventDetails(eventRows, roundRows, matchRows, frameRows, uuidToCanonical, loadedAt);
