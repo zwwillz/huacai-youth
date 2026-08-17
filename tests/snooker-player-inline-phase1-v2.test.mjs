@@ -8,6 +8,8 @@ const directory = readFileSync(new URL("../app/snooker/players/player-directory.
 const inline = readFileSync(new URL("../app/snooker/players/player-detail-inline.tsx", import.meta.url), "utf8");
 const detail = readFileSync(new URL("../app/snooker/players/player-detail-content.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../app/api/snooker/v1/player-detail/route.ts", import.meta.url), "utf8");
+const fastLoader = readFileSync(new URL("../lib/snooker/player-detail-fast.ts", import.meta.url), "utf8");
+const playerData = readFileSync(new URL("../lib/snooker/player-data.ts", import.meta.url), "utf8");
 
 test("player detail stays inside the root SnookerDataCenterV2 flow", () => {
   assert.match(root, /\| \{ type: "player"; slug: string; returnView: MainView \}/);
@@ -47,6 +49,20 @@ test("player detail is content-only and uses the focused cached API", () => {
   assert.doesNotMatch(detail, /PlayerShell/);
   assert.match(api, /getSnookerPlayerDetailFast/);
   assert.match(api, /stale-while-revalidate=1800/);
+});
+
+test("player detail prefers translated Chinese profile and career text", () => {
+  assert.match(fastLoader, /biography_html_zh/);
+  assert.match(fastLoader, /description_zh/);
+  assert.match(fastLoader, /last_tournament_win_zh/);
+  assert.match(playerData, /nickname_zh,biography_html_en,biography_html_zh,quote_en,quote_zh/);
+  assert.match(playerData, /description_en,description_zh/);
+  assert.match(detail, /player\.biographyZh/);
+  assert.match(detail, /player\.nicknameZh/);
+  assert.match(detail, /career\?\.lastTournamentWinZh/);
+  assert.match(detail, /item\.descriptionZh/);
+  assert.doesNotMatch(detail, /中文简介将在资料翻译校验后替换/);
+  assert.doesNotMatch(detail, /职业生涯中文化将在下一轮内容层完成/);
 });
 
 test("old independent player routes and shell stay removed", () => {
