@@ -263,10 +263,13 @@ export async function loadSnookerDatabaseViewV2(): Promise<SnookerDatabaseView> 
     const players = base.snapshot.players.map((player) => {
       const season = seasonByPlayer.get(player.id);
       const official = officialByPlayer.get(player.id);
+      const currentSeason = season
+        ? { ...season, ...(official ? { ranking: official.rank } : {}) }
+        : undefined;
       return {
         ...player,
         ...(official ? { currentRank: official.rank, rankingPoints: official.money } : {}),
-        ...(season ? { seasonStatistics: season } : {}),
+        ...(currentSeason ? { seasonStatistics: currentSeason } : {}),
       };
     });
 
