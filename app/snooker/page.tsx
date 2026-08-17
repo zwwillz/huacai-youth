@@ -1,4 +1,5 @@
 import SnookerDataCenterV2 from "./snooker-data-center-v2";
+import SnookerViewUrlSync from "./snooker-view-url-sync";
 import { SNOOKER_BUILD_MARK } from "@/lib/snooker/foundation";
 import { loadSnookerDatabaseViewV2 } from "@/lib/snooker/database-public-v2";
 
@@ -19,12 +20,15 @@ export default async function SnookerPage({ searchParams }: { searchParams: Prom
   };
 
   return (
-    <SnookerDataCenterV2
-      initialSnapshot={database.snapshot}
-      initialDatabaseEvents={database.eventDetails}
-      initialSourceHealth={sourceHealth}
-      buildMark={`${SNOOKER_BUILD_MARK}-DB09`}
-      initialView={initialView}
-    />
+    <>
+      <SnookerViewUrlSync />
+      <SnookerDataCenterV2
+        initialSnapshot={database.snapshot}
+        initialDatabaseEvents={database.eventDetails}
+        initialSourceHealth={sourceHealth}
+        buildMark={`${SNOOKER_BUILD_MARK}-DB09`}
+        initialView={initialView}
+      />
+    </>
   );
 }
