@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, type MouseEvent } from "react";
 import type { SnookerPlayerListItem } from "@/lib/snooker/player-data";
 import PlayerShell from "./player-shell";
+import { prefetchPlayerDetail } from "./player-detail-client";
 import styles from "./player.module.css";
 
 type Filter = "all" | "china" | "top16" | "current";
@@ -24,8 +23,11 @@ function points(value: number | null) {
   return value === null ? "—" : `€${value.toLocaleString("en-GB")}`;
 }
 
+function playerHref(slug: string) {
+  return `/snooker?view=players&player=${encodeURIComponent(slug)}`;
+}
+
 export function PlayerDirectoryContent({ players }: { players: SnookerPlayerListItem[] }) {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [openingSlug, setOpeningSlug] = useState<string | null>(null);
@@ -42,14 +44,13 @@ export function PlayerDirectoryContent({ players }: { players: SnookerPlayerList
     });
   }, [filter, players, query]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      for (const player of filtered.slice(0, 6)) {
-        router.prefetch(`/snooker/players/${player.slug}`);
-      }
-    }, 120);
-    return () => window.clearTimeout(timer);
-  }, [filtered, router]);
+  const openPlayer = (event: MouseEvent<HTMLAnchorElement>, player: SnookerPlayerListItem) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    setOpeningSlug(player.slug);
+    window.dispatchEvent(new CustomEvent("snooker:open-player", { detail: { slug: player.slug } }));
+    window.setTimeout(() => setOpeningSlug((current) => current === player.slug ? null : current), 250);
+  };
 
   return (
     <>
@@ -85,17 +86,17 @@ export function PlayerDirectoryContent({ players }: { players: SnookerPlayerList
         </div>
         <div className={styles.playerDirectory}>
           {filtered.length ? filtered.map((player) => {
-            const href = `/snooker/players/${player.slug}`;
+            const href = playerHref(player.slug);
             const opening = openingSlug === player.slug;
             return (
-              <Link
+              <a
                 className={styles.playerRow}
                 href={href}
-                prefetch
                 aria-busy={opening}
-                onPointerEnter={() => router.prefetch(href)}
-                onTouchStart={() => router.prefetch(href)}
-                onClick={() => setOpeningSlug(player.slug)}
+                onPointerEnter={() => prefetchPlayerDetail(player.slug)}
+                onTouchStart={() => prefetchPlayerDetail(player.slug)}
+                onFocus={() => prefetchPlayerDetail(player.slug)}
+                onClick={(event) => openPlayer(event, player)}
                 key={player.id}
               >
                 <span className={styles.listAvatar}>
@@ -116,7 +117,7 @@ export function PlayerDirectoryContent({ players }: { players: SnookerPlayerList
                   </span>
                   <span className={styles.rowArrow}>{opening ? "…" : "›"}</span>
                 </span>
-              </Link>
+              </a>
             );
           }) : <div className={styles.emptyState}>没有找到匹配的球员。<br />可以尝试中文名、英文名或切换筛选条件。</div>}
         </div>
