@@ -84,6 +84,13 @@ type PlayerRow = {
   tour_status: string;
 };
 
+type OfficialRankingRow = {
+  player_id: string;
+  rank: number;
+  points: number | null;
+  ranking_money: number | null;
+};
+
 type ProfileRow = {
   nickname_en: string | null;
   biography_html_en: string | null;
@@ -197,6 +204,15 @@ function mapPlayer(row: PlayerRow): SnookerPlayerListItem {
   };
 }
 
+function withOfficialRanking(player: SnookerPlayerListItem, ranking?: OfficialRankingRow) {
+  if (!ranking) return player;
+  return {
+    ...player,
+    currentRank: ranking.rank,
+    rankingPoints: Number(ranking.ranking_money ?? ranking.points ?? 0),
+  };
+}
+
 function isDirectoryPlayerRow(row: PlayerRow) {
   const slug = row.slug.trim().toLowerCase();
   const nameEn = row.name_en.trim();
@@ -230,13 +246,29 @@ const PLAYER_SELECT = [
   "tour_status",
 ].join(",");
 
+function officialRankingParams(extra: Record<string, string> = {}) {
+  return new URLSearchParams({
+    select: "player_id,rank,points,ranking_money",
+    list_key: "eq.world_official",
+    order: "rank.asc",
+    ...extra,
+  });
+}
+
 export async function getSnookerPlayerDirectory(): Promise<SnookerPlayerListItem[]> {
   const params = new URLSearchParams({
     select: PLAYER_SELECT,
     order: "current_rank.asc.nullslast,name_en.asc",
   });
-  const rows = await rest<PlayerRow[]>("snooker_players", params, 300);
-  return rows.filter(isDirectoryPlayerRow).map(mapPlayer);
+  const [rows, rankingRows] = await Promise.all([
+    rest<PlayerRow[]>("snooker_players", params, 300),
+    rest<OfficialRankingRow[]>("snooker_latest_rankings", officialRankingParams({ limit: "256" }), 60),
+  ]);
+  const rankingByPlayer = new Map(rankingRows.map((row) => [row.player_id, row]));
+  return rows
+    .filter(isDirectoryPlayerRow)
+    .map((row) => withOfficialRanking(mapPlayer(row), rankingByPlayer.get(row.id)))
+    .sort((a, b) => (a.currentRank ?? 9999) - (b.currentRank ?? 9999) || a.nameEn.localeCompare(b.nameEn));
 }
 
 export async function getSnookerPlayerDetail(slug: string): Promise<SnookerPlayerDetail | null> {
@@ -269,18 +301,20 @@ export async function getSnookerPlayerDetail(slug: string): Promise<SnookerPlaye
     order: "highlight_year.desc.nullslast,sequence_no.asc",
   });
 
-  const [profileRows, careerRows, seasonRows, highlightRows] = await Promise.all([
+  const [profileRows, careerRows, seasonRows, highlightRows, officialRows] = await Promise.all([
     rest<ProfileRow[]>("snooker_player_profile_details", profileParams, 1800),
     rest<CareerRow[]>("snooker_player_career_stats", careerParams, 900),
     rest<SeasonRow[]>("snooker_player_season_stats", seasonParams, 900),
     rest<HighlightRow[]>("snooker_player_career_highlights", highlightParams, 1800),
+    rest<OfficialRankingRow[]>("snooker_latest_rankings", officialRankingParams({ player_id: `eq.${playerRow.id}`, limit: "1" }), 60),
   ]);
 
   const profile = profileRows[0] ?? null;
   const careerRow = careerRows[0] ?? null;
+  const basePlayer = withOfficialRanking(mapPlayer(playerRow), officialRows[0]);
 
   return {
-    ...mapPlayer(playerRow),
+    ...basePlayer,
     nicknameEn: profile?.nickname_en ?? null,
     biographyEn: htmlToText(profile?.biography_html_en ?? null),
     quoteEn: profile?.quote_en ?? null,
