@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { SnookerPlayerListItem } from "@/lib/snooker/player-data";
-import PlayerShell from "./player-shell";
 import styles from "./player.module.css";
 
 type Filter = "all" | "china" | "top16" | "current";
@@ -15,6 +13,11 @@ const filters: Array<{ id: Filter; label: string }> = [
   { id: "current", label: "现役" },
 ];
 
+const directorySession: { query: string; filter: Filter } = {
+  query: "",
+  filter: "all",
+};
+
 function initials(name: string) {
   return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 }
@@ -23,9 +26,27 @@ function points(value: number | null) {
   return value === null ? "—" : `€${value.toLocaleString("en-GB")}`;
 }
 
-export function PlayerDirectoryContent({ players }: { players: SnookerPlayerListItem[] }) {
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+export function PlayerDirectoryContent({
+  players,
+  onOpenPlayer,
+  onPrefetchPlayer,
+}: {
+  players: SnookerPlayerListItem[];
+  onOpenPlayer: (player: SnookerPlayerListItem) => void;
+  onPrefetchPlayer?: (player: SnookerPlayerListItem) => void;
+}) {
+  const [query, setQuery] = useState(directorySession.query);
+  const [filter, setFilter] = useState<Filter>(directorySession.filter);
+
+  const updateQuery = (value: string) => {
+    directorySession.query = value;
+    setQuery(value);
+  };
+
+  const updateFilter = (value: Filter) => {
+    directorySession.filter = value;
+    setFilter(value);
+  };
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("zh-CN");
@@ -52,14 +73,14 @@ export function PlayerDirectoryContent({ players }: { players: SnookerPlayerList
           <span>⌕</span>
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => updateQuery(event.target.value)}
             placeholder="搜索中文名 / 英文名"
             aria-label="搜索球员"
           />
         </label>
         <div className={styles.filters}>
           {filters.map((item) => (
-            <button className={filter === item.id ? styles.filterActive : ""} onClick={() => setFilter(item.id)} key={item.id}>
+            <button className={filter === item.id ? styles.filterActive : ""} onClick={() => updateFilter(item.id)} key={item.id}>
               {item.label}
             </button>
           ))}
@@ -73,7 +94,15 @@ export function PlayerDirectoryContent({ players }: { players: SnookerPlayerList
         </div>
         <div className={styles.playerDirectory}>
           {filtered.length ? filtered.map((player) => (
-            <Link className={styles.playerRow} href={`/snooker/players/${player.slug}`} prefetch key={player.id}>
+            <button
+              type="button"
+              className={styles.playerRow}
+              onPointerEnter={() => onPrefetchPlayer?.(player)}
+              onFocus={() => onPrefetchPlayer?.(player)}
+              onTouchStart={() => onPrefetchPlayer?.(player)}
+              onClick={() => onOpenPlayer(player)}
+              key={player.id}
+            >
               <span className={styles.listAvatar}>
                 {player.avatarUrl ? <img src={player.avatarUrl} alt="" loading="lazy" decoding="async" /> : <span>{initials(player.nameEn)}</span>}
               </span>
@@ -92,14 +121,10 @@ export function PlayerDirectoryContent({ players }: { players: SnookerPlayerList
                 </span>
                 <span className={styles.rowArrow}>›</span>
               </span>
-            </Link>
+            </button>
           )) : <div className={styles.emptyState}>没有找到匹配的球员。<br />可以尝试中文名、英文名或切换筛选条件。</div>}
         </div>
       </section>
     </>
   );
-}
-
-export default function PlayerDirectory({ players }: { players: SnookerPlayerListItem[] }) {
-  return <PlayerShell><PlayerDirectoryContent players={players} /></PlayerShell>;
 }
