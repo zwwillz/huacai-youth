@@ -5,17 +5,10 @@ import type { SnookerPlayer } from "@/lib/snooker/domain";
 import type { SnookerPlayerDetail, SnookerPlayerListItem } from "@/lib/snooker/player-data";
 import { PlayerDetailContent } from "./[slug]/player-detail";
 import { getCachedPlayerDetail, loadPlayerDetail } from "./player-detail-client";
-import styles from "../snooker-data-center.module.css";
-import polish from "../snooker-ui-polish.module.css";
+import PlayerShell, { type PlayerShellView } from "./player-shell";
+import styles from "./player.module.css";
 
-export type PlayerRootView = "home" | "matches" | "players" | "data";
-
-const navItems: Array<{ id: PlayerRootView; label: string; icon: string }> = [
-  { id: "home", label: "首页", icon: "⌂" },
-  { id: "matches", label: "赛事", icon: "◫" },
-  { id: "players", label: "球员", icon: "◎" },
-  { id: "data", label: "数据", icon: "▥" },
-];
+export type PlayerRootView = PlayerShellView;
 
 function toSummary(player: SnookerPlayer): SnookerPlayerListItem {
   return {
@@ -57,7 +50,6 @@ export default function PlayerDetailInline({
   slug: string;
   onNavigate: (view: PlayerRootView) => void;
 }) {
-  const [theme, setTheme] = useState<"green" | "red">("green");
   const summary = useMemo(() => summaryPlayer ? toSummary(summaryPlayer) : null, [summaryPlayer]);
   const [player, setPlayer] = useState<SnookerPlayerDetail | null>(() => getCachedPlayerDetail(slug) ?? (summary ? partialDetail(summary) : null));
 
@@ -78,34 +70,8 @@ export default function PlayerDetailInline({
   }, [slug, summary]);
 
   return (
-    <main className={styles.appRoot} data-theme={theme}>
-      <div className={styles.shell}>
-        <header className={styles.header}>
-          <button className={styles.brand} onClick={() => onNavigate("home")} aria-label="返回世界斯诺克数据中心首页">
-            <span>S</span>
-            <div><strong>世界斯诺克数据中心</strong><small>WORLD SNOOKER DATA</small></div>
-          </button>
-          <div className={styles.headerRight}>
-            <span className={styles.versionBadge}>DATA v0.9</span>
-            <div className={styles.themeSwitch} aria-label="主题色">
-              <button className={theme === "green" ? styles.themeActive : ""} onClick={() => setTheme("green")}>绿</button>
-              <button className={theme === "red" ? styles.themeActive : ""} onClick={() => setTheme("red")}>红</button>
-            </div>
-          </div>
-        </header>
-
-        <div className={styles.content}>
-          {player ? <PlayerDetailContent player={player} /> : <section className={styles.card}><div className={styles.emptyState}>正在加载球员资料…</div></section>}
-        </div>
-
-        <nav className={`${styles.bottomNav} ${polish.fastNav}`} aria-label="世界斯诺克数据中心主导航">
-          {navItems.map((item) => (
-            <button key={item.id} className={item.id === "players" ? styles.activeNav : ""} onClick={() => onNavigate(item.id)}>
-              <span>{item.icon}</span><b>{item.label}</b>
-            </button>
-          ))}
-        </nav>
-      </div>
-    </main>
+    <PlayerShell onNavigate={onNavigate}>
+      {player ? <PlayerDetailContent player={player} /> : <section className={styles.card}><div className={styles.emptyState}>正在加载球员资料…</div></section>}
+    </PlayerShell>
   );
 }
