@@ -60,7 +60,7 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
     [player.seasons, seasonYear],
   );
 
-  const bio = player.biographyEn ?? "暂无球员简介。";
+  const bio = player.biographyZh ?? "暂无球员简介。";
   const visibleBio = bioExpanded || bio.length <= 520 ? bio : `${bio.slice(0, 520).trimEnd()}…`;
   const highlights = historyExpanded ? player.highlights : player.highlights.slice(0, 6);
   const career = player.career;
@@ -73,7 +73,7 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
           <small>PLAYER PROFILE</small>
           <h1>{player.nameZh}</h1>
           <p>{player.nameEn}</p>
-          {player.nicknameEn ? <p className={styles.nickname}>“{player.nicknameEn}”</p> : null}
+          {player.nicknameZh ? <p className={styles.nickname}>“{player.nicknameZh}”</p> : null}
           <span className={styles.countryPill}>{player.nationalityZh ?? "国籍待补充"}</span>
 
           <div className={styles.heroRank}>
@@ -100,7 +100,7 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
         </div>
         <div className={styles.careerRows}>
           <div><span>历史最高世界排名</span><b>{ranking(career?.highestRanking ?? null)}</b></div>
-          <div><span>最近一次赛事冠军</span><b>{career?.lastTournamentWin ?? "—"}</b></div>
+          <div><span>最近一次赛事冠军</span><b>{career?.lastTournamentWinZh ?? "—"}</b></div>
         </div>
       </section>
 
@@ -164,10 +164,9 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
 
       <section className={styles.card}>
         <div className={styles.sectionHeader}><div><small>PROFILE</small><h2>球员简介</h2></div></div>
-        {player.quoteEn ? <blockquote className={styles.quote}>{player.quoteEn}</blockquote> : null}
+        {player.quoteZh ? <blockquote className={styles.quote}>{player.quoteZh}</blockquote> : null}
         <p className={styles.bioText}>{visibleBio}</p>
         {bio.length > 520 ? <button className={styles.expandButton} onClick={() => setBioExpanded((value) => !value)}>{bioExpanded ? "收起" : "展开全文"}</button> : null}
-        {player.biographyEn ? <p className={styles.languageNote}>中文简介将在资料翻译校验后替换；当前先展示已入库的完整人物资料。</p> : null}
       </section>
 
       {player.highlights.length ? (
@@ -178,12 +177,11 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
               <div className={styles.timelineItem} key={`${item.year ?? "na"}-${item.sequenceNo}-${index}`}>
                 <span className={styles.timelineYear}>{item.year ?? "—"}</span>
                 <span className={styles.timelineDot} />
-                <span className={styles.timelineText}>{item.descriptionEn}</span>
+                <span className={styles.timelineText}>{item.descriptionZh}</span>
               </div>
             ))}
           </div>
           {player.highlights.length > 6 ? <button className={styles.expandButton} onClick={() => setHistoryExpanded((value) => !value)}>{historyExpanded ? "收起职业生涯" : "查看完整职业生涯"}</button> : null}
-          <p className={styles.languageNote}>职业生涯中文化将在下一轮内容层完成，数据结构与时间轴已经按正式版保留。</p>
         </section>
       ) : null}
     </>
@@ -191,4 +189,3 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
 }
 
 export default PlayerDetailContent;
-
