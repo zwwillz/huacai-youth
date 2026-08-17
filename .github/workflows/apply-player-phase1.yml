@@ -20,7 +20,19 @@ jobs:
         with:
           node-version: 20
       - name: Apply scoped player patch
-        run: node scripts/apply-player-phase1.mjs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path("scripts/apply-player-phase1.mjs")
+          source = path.read_text()
+          source, count_one = re.subn(r'    const nextUrl = .*?;\n', '    const nextUrl = url.pathname + url.search + url.hash;\n', source, count=1)
+          source, count_two = re.subn(r'    window\.history\.replaceState\(window\.history\.state, "", .*?\);\n', '    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);\n', source, count=1)
+          if count_one != 1 or count_two != 1:
+              raise SystemExit(f"bootstrap patch anchors failed: nextUrl={count_one}, replaceState={count_two}")
+          path.write_text(source)
+          PY
+          node scripts/apply-player-phase1.mjs
       - name: Commit final scoped changes
         run: |
           git config user.name "github-actions[bot]"
