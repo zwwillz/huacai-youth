@@ -23,7 +23,7 @@ function points(value: number | null) {
   return value === null ? "—" : `€${value.toLocaleString("en-GB")}`;
 }
 
-export default function PlayerDirectory({ players }: { players: SnookerPlayerListItem[] }) {
+export function PlayerDirectoryContent({ players }: { players: SnookerPlayerListItem[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -41,7 +41,7 @@ export default function PlayerDirectory({ players }: { players: SnookerPlayerLis
   }, [filter, players, query]);
 
   return (
-    <PlayerShell>
+    <>
       <section className={styles.pageIntro}>
         <small>PLAYER DATABASE</small>
         <h1>球员</h1>
@@ -69,14 +69,14 @@ export default function PlayerDirectory({ players }: { players: SnookerPlayerLis
 
       <section className={styles.card}>
         <div className={styles.directorySummary}>
-          <span>按当前世界排名排列</span>
+          <span>按官方世界排名排列</span>
           <b>{filtered.length} 名球员</b>
         </div>
         <div className={styles.playerDirectory}>
           {filtered.length ? filtered.map((player) => (
-            <button className={styles.playerRow} onClick={() => router.push(`/snooker/players/${player.slug}`)} key={player.id}>
+            <button className={styles.playerRow} onPointerDown={() => router.prefetch(`/snooker/players/${player.slug}`)} onClick={() => router.push(`/snooker/players/${player.slug}`)} key={player.id}>
               <span className={styles.listAvatar}>
-                {player.avatarUrl ? <img src={player.avatarUrl} alt="" loading="lazy" /> : <span>{initials(player.nameEn)}</span>}
+                {player.avatarUrl ? <img src={player.avatarUrl} alt="" loading="lazy" decoding="async" /> : <span>{initials(player.nameEn)}</span>}
               </span>
               <span className={styles.rowMain}>
                 <b>{player.nameZh}</b>
@@ -97,6 +97,10 @@ export default function PlayerDirectory({ players }: { players: SnookerPlayerLis
           )) : <div className={styles.emptyState}>没有找到匹配的球员。<br />可以尝试中文名、英文名或切换筛选条件。</div>}
         </div>
       </section>
-    </PlayerShell>
+    </>
   );
+}
+
+export default function PlayerDirectory({ players }: { players: SnookerPlayerListItem[] }) {
+  return <PlayerShell><PlayerDirectoryContent players={players} /></PlayerShell>;
 }
