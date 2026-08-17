@@ -1,22 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import type { SnookerPlayerListItem } from "@/lib/snooker/player-data";
 import styles from "./player.module.css";
 
-type Filter = "all" | "china" | "top16" | "current";
+export type PlayerFilter = "all" | "china" | "top16" | "current";
 
-const filters: Array<{ id: Filter; label: string }> = [
+const filters: Array<{ id: PlayerFilter; label: string }> = [
   { id: "all", label: "全部" },
   { id: "china", label: "中国" },
   { id: "top16", label: "TOP 16" },
   { id: "current", label: "现役" },
 ];
-
-const directorySession: { query: string; filter: Filter } = {
-  query: "",
-  filter: "all",
-};
 
 function initials(name: string) {
   return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
@@ -28,37 +22,30 @@ function points(value: number | null) {
 
 export function PlayerDirectoryContent({
   players,
+  query,
+  filter,
+  onQueryChange,
+  onFilterChange,
   onOpenPlayer,
   onPrefetchPlayer,
 }: {
   players: SnookerPlayerListItem[];
+  query: string;
+  filter: PlayerFilter;
+  onQueryChange: (value: string) => void;
+  onFilterChange: (value: PlayerFilter) => void;
   onOpenPlayer: (player: SnookerPlayerListItem) => void;
   onPrefetchPlayer?: (player: SnookerPlayerListItem) => void;
 }) {
-  const [query, setQuery] = useState(directorySession.query);
-  const [filter, setFilter] = useState<Filter>(directorySession.filter);
-
-  const updateQuery = (value: string) => {
-    directorySession.query = value;
-    setQuery(value);
-  };
-
-  const updateFilter = (value: Filter) => {
-    directorySession.filter = value;
-    setFilter(value);
-  };
-
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase("zh-CN");
-    return players.filter((player) => {
-      if (filter === "china" && player.countryCode !== "CHN" && player.countryCode !== "CN") return false;
-      if (filter === "top16" && (player.currentRank === null || player.currentRank > 16)) return false;
-      if (filter === "current" && !player.isCurrentTour) return false;
-      if (!needle) return true;
-      const haystack = `${player.nameZh} ${player.shortNameZh ?? ""} ${player.nameEn} ${player.nationalityZh ?? ""}`.toLocaleLowerCase("zh-CN");
-      return haystack.includes(needle);
-    });
-  }, [filter, players, query]);
+  const needle = query.trim().toLocaleLowerCase("zh-CN");
+  const filtered = players.filter((player) => {
+    if (filter === "china" && player.countryCode !== "CHN" && player.countryCode !== "CN") return false;
+    if (filter === "top16" && (player.currentRank === null || player.currentRank > 16)) return false;
+    if (filter === "current" && !player.isCurrentTour) return false;
+    if (!needle) return true;
+    const haystack = `${player.nameZh} ${player.shortNameZh ?? ""} ${player.nameEn} ${player.nationalityZh ?? ""}`.toLocaleLowerCase("zh-CN");
+    return haystack.includes(needle);
+  });
 
   return (
     <>
@@ -73,14 +60,14 @@ export function PlayerDirectoryContent({
           <span>⌕</span>
           <input
             value={query}
-            onChange={(event) => updateQuery(event.target.value)}
+            onChange={(event) => onQueryChange(event.target.value)}
             placeholder="搜索中文名 / 英文名"
             aria-label="搜索球员"
           />
         </label>
         <div className={styles.filters}>
           {filters.map((item) => (
-            <button className={filter === item.id ? styles.filterActive : ""} onClick={() => updateFilter(item.id)} key={item.id}>
+            <button className={filter === item.id ? styles.filterActive : ""} onClick={() => onFilterChange(item.id)} key={item.id}>
               {item.label}
             </button>
           ))}
