@@ -69,7 +69,7 @@ export default function PlayerDetail({ player }: { player: SnookerPlayerDetail }
 
   return (
     <PlayerShell>
-      <Link className={styles.backLink} href="/snooker/players"><span>‹</span> 返回球员</Link>
+      <Link className={styles.backLink} href="/snooker?view=players" prefetch><span>‹</span> 返回球员</Link>
 
       <section className={styles.playerHero}>
         <span className={styles.heroGhost}>147</span>
