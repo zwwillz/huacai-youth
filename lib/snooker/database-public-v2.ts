@@ -12,6 +12,7 @@ import type {
 
 const DEFAULT_SUPABASE_URL = "https://rtlvncsmbueatdzqvhbn.supabase.co";
 const DEFAULT_PUBLISHABLE_KEY = "sb_publishable_SR0NVsqpSBGBMP3xg9utvQ_jywPEUNP";
+const ID_FILTER_BATCH_SIZE = 32;
 const SUPABASE_URL = process.env.SNOOKER_SUPABASE_URL || DEFAULT_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SNOOKER_SUPABASE_PUBLISHABLE_KEY || DEFAULT_PUBLISHABLE_KEY;
 const REST_URL = `${SUPABASE_URL}/rest/v1`;
@@ -101,6 +102,34 @@ async function rest<T>(path: string, revalidate = 30): Promise<T> {
 
 function inFilter(ids: string[]) {
   return encodeURIComponent(`(${ids.join(",")})`);
+}
+
+function idBatches(ids: string[], batchSize = ID_FILTER_BATCH_SIZE) {
+  const batches: string[][] = [];
+  for (let index = 0; index < ids.length; index += batchSize) {
+    batches.push(ids.slice(index, index + batchSize));
+  }
+  return batches;
+}
+
+async function restInBatchesBestEffort<T>(
+  ids: string[],
+  buildPath: (batch: string[]) => string,
+  label: string,
+): Promise<T[]> {
+  if (!ids.length) return [];
+  const results = await Promise.allSettled(
+    idBatches(ids).map((batch) => rest<T[]>(buildPath(batch))),
+  );
+  const rows: T[] = [];
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      rows.push(...result.value);
+      return;
+    }
+    console.error(`[snooker-db-v2] ${label} batch ${index + 1}/${results.length} failed`, result.reason);
+  });
+  return rows;
 }
 
 function dbEventUuid(event: SnookerEvent) {
@@ -196,8 +225,16 @@ export async function loadSnookerDatabaseViewV2(): Promise<SnookerDatabaseView> 
       rest<DbSeasonStat[]>("snooker_player_season_stats?select=player_id,season_start_year,season_label,ranking,tournaments_won,points_scored,matches_played,matches_won,match_win_rate,average_shot_time,breaks_50_plus,breaks_100_plus,highest_break,season_147s,average_break&season_start_year=eq.2026"),
       rest<DbOfficialRanking[]>("snooker_latest_rankings?select=player_id,rank,points,ranking_money,list_key&list_key=eq.world_official&order=rank.asc&limit=256"),
       eventUuids.length ? rest<DbPrize[]>(`snooker_event_prizes?select=event_id,prize_key,label_zh,label_en,amount,currency,sort_order,is_total&event_id=in.${inFilter(eventUuids)}&order=sort_order.asc`) : Promise.resolve([]),
-      matchUuids.length ? rest<DbMatchStat[]>(`snooker_match_statistics?select=match_id,player_id,total_points,average_shot_time_seconds,pot_rate,breaks_50_plus,breaks_100_plus,highest_break,average_break,shots_taken,time_on_table_pct&match_id=in.${inFilter(matchUuids)}`) : Promise.resolve([]),
-      matchUuids.length ? rest<DbHeadToHead[]>(`snooker_match_head_to_head?select=match_id,meetings_before,player1_wins,player2_wins,player1_frames,player2_frames,recent_meetings,source_updated_at&match_id=in.${inFilter(matchUuids)}`) : Promise.resolve([]),
+      restInBatchesBestEffort<DbMatchStat>(
+        matchUuids,
+        (batch) => `snooker_match_statistics?select=match_id,player_id,total_points,average_shot_time_seconds,pot_rate,breaks_50_plus,breaks_100_plus,highest_break,average_break,shots_taken,time_on_table_pct&match_id=in.${inFilter(batch)}`,
+        "match statistics",
+      ),
+      restInBatchesBestEffort<DbHeadToHead>(
+        matchUuids,
+        (batch) => `snooker_match_head_to_head?select=match_id,meetings_before,player1_wins,player2_wins,player1_frames,player2_frames,recent_meetings,source_updated_at&match_id=in.${inFilter(batch)}`,
+        "head-to-head",
+      ),
     ]);
 
     const playerCanonicalByUuid = new Map(playerKeys.map((row) => [row.id, `p-${row.slug}`]));
