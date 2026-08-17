@@ -39,7 +39,7 @@ test("home result winner is a small badge and compact names do not add English s
   assert.doesNotMatch(homeScore, /\.nameEn/);
 });
 
-test("match detail presents Match Season and H2H inside one roomy matchup card", async () => {
+test("match detail presents roomy Match Season and H2H rows inside one matchup card", async () => {
   const [ui, css, insights, dbV2] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
     read("app/snooker/snooker-ui-polish.module.css"),
@@ -57,10 +57,14 @@ test("match detail presents Match Season and H2H inside one roomy matchup card",
   assert.match(ui, />交手<\/span><small>H2H<\/small>/);
   assert.match(css, /\.matchupCard\{[^}]*display:flex;flex-direction:column/);
   assert.match(css, /\.matchupCard \.dataTabs\{[^}]*order:1/);
-  assert.match(css, /\.matchupPlayers\{[^}]*order:2/);
+  assert.match(css, /\.matchupPlayers\{[^}]*order:2[^}]*margin:10px 0 0/);
   assert.match(css, /\.matchupPortrait\{[^}]*width:76px;height:94px/);
   assert.match(css, /\.panelMeta\{display:none\}/);
-  assert.match(css, /\.matchupCard \.compareGrid>div\{[^}]*min-height:54px/);
+  assert.match(css, /\.matchupCard \.compareGrid>div\{[^}]*min-height:62px[^}]*border-bottom:1px solid #dfe5e2/);
+  assert.match(css, /\.matchupCard \.compareLeft\{[^}]*padding-left:2px/);
+  assert.match(css, /\.matchupCard \.compareRight\{[^}]*padding-right:2px/);
+  assert.match(insights, /\.h2hSummary\{[^}]*min-height:62px[^}]*border-bottom:1px solid #dfe5e2/);
+  assert.match(insights, /\.h2hSide\{[^}]*padding:0 2px/);
   assert.match(insights, /\.h2hMiddle strong\{display:none\}/);
   assert.match(insights, /content:"历史对阵"/);
   assert.match(ui, /localizedTournamentLabel\(item\.tournament, snapshot\.calendar\)/);
@@ -101,7 +105,7 @@ test("event overview typography and public source wording are consistent", async
   assert.doesNotMatch(ui, /WST Match Centre/);
 });
 
-test("recent events retain the featured event and use semantic status labels", async () => {
+test("recent events keep original type/status positions and semantic colors", async () => {
   const [ui, css] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
     read("app/snooker/snooker-ui-polish.module.css"),
@@ -109,10 +113,38 @@ test("recent events retain the featured event and use semantic status labels", a
 
   assert.match(ui, /item\.id === featuredEventCard\?\.id/);
   assert.doesNotMatch(ui, /item\.id !== featuredEventCard\?\.id/);
-  assert.match(ui, /item\.status === "live" \? "进行中" : item\.status === "upcoming" \? "即将开始" : "已结束"/);
+  assert.match(ui, /eventStatusText.*eventStatusClass\(item\.status\).*eventStatusLabel\(item\)/s);
+  assert.match(ui, /<StatusPill status="type" label=\{item\.typeZh\} \/>/);
+  assert.match(ui, /eyebrow="RECENT TOURNAMENTS" title="近期赛事"/);
+  assert.match(ui, /actionClassName=\{`\$\{polish\.eventStatusText\} \$\{eventStatusClass\(nextEventCard\.status\)\}`\}/);
   assert.match(css, /\.eventStatusLive>span\{background:#eaf3ff!important;color:#2465a8!important\}/);
   assert.match(css, /\.eventStatusUpcoming>span\{background:#fff0e6!important;color:#bd5615!important\}/);
+  assert.match(css, /\.eventStatusText\.eventStatusUpcoming\{color:#bd5615!important\}/);
   assert.match(css, /\.eventStatusCompleted>span\{background:#f0f2f1!important;color:#737b77!important\}/);
+});
+
+test("player directory has one canonical UI and detail navigation is prefetched", async () => {
+  const [ui, directory, directoryPage, detail, detailPage, loader, loading, playerCss] = await Promise.all([
+    read("app/snooker/snooker-data-center-v2.tsx"),
+    read("app/snooker/players/player-directory.tsx"),
+    read("app/snooker/players/page.tsx"),
+    read("app/snooker/players/[slug]/player-detail.tsx"),
+    read("app/snooker/players/[slug]/page.tsx"),
+    read("lib/snooker/player-detail-fast.ts"),
+    read("app/snooker/players/[slug]/loading.tsx"),
+    read("app/snooker/players/player.module.css"),
+  ]);
+
+  assert.match(ui, /activeView === "players" \? <PlayerDirectoryContent players=\{directoryPlayers\}/);
+  assert.match(directoryPage, /redirect\("\/snooker\?view=players"\)/);
+  assert.match(directory, /<Link className=\{styles\.playerRow\} href=\{`\/snooker\/players\/\$\{player\.slug\}`\} prefetch/);
+  assert.match(detail, /href="\/snooker\?view=players" prefetch/);
+  assert.match(detailPage, /getSnookerPlayerDetailFast/);
+  assert.match(loader, /rpc\/snooker_player_detail_public/);
+  assert.match(loader, /next: \{ revalidate: 300 \}/);
+  assert.match(loading, /正在加载球员资料/);
+  assert.match(playerCss, /\.directoryToolbar \.searchBox input\{/);
+  assert.match(playerCss, /\.directoryToolbar \.filters button\{/);
 });
 
 test("bottom navigation keeps all four main tabs local and root data is short cached", async () => {
