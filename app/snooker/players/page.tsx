@@ -1,5 +1,9 @@
-import { redirect } from "next/navigation";
+import PlayerDirectory from "./player-directory";
+import { getSnookerPlayerDirectory } from "@/lib/snooker/player-data";
 
-export default function SnookerPlayersPage() {
-  redirect("/snooker?view=players");
+export const revalidate = 300;
+
+export default async function SnookerPlayersPage() {
+  const players = await getSnookerPlayerDirectory();
+  return <PlayerDirectory players={players} />;
 }
