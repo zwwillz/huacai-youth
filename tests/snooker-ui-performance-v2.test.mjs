@@ -127,36 +127,35 @@ test("recent events keep original type/status positions and semantic colors", as
   assert.match(css, /\.eventStatusCompleted>span\{background:#f0f2f1!important;color:#737b77!important\}/);
 });
 
-test("player directory has one canonical UI and detail uses bottom navigation instead of a broken back link", async () => {
-  const [ui, directory, directoryPage, detail, detailPage, loader, loading, playerCss] = await Promise.all([
+test("player directory and player detail share one root shell and focused data path", async () => {
+  const [ui, directory, detail, inline, loader, api, playerCss] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
     read("app/snooker/players/player-directory.tsx"),
-    read("app/snooker/players/page.tsx"),
-    read("app/snooker/players/[slug]/player-detail.tsx"),
-    read("app/snooker/players/[slug]/page.tsx"),
+    read("app/snooker/players/player-detail-content.tsx"),
+    read("app/snooker/players/player-detail-inline.tsx"),
     read("lib/snooker/player-detail-fast.ts"),
-    read("app/snooker/players/[slug]/loading.tsx"),
+    read("app/api/snooker/v1/player-detail/route.ts"),
     read("app/snooker/players/player.module.css"),
   ]);
 
   assert.match(ui, /activeView === "players" \? <PlayerDirectoryContent players=\{directoryPlayers\}/);
-  assert.match(directoryPage, /redirect\("\/snooker\?view=players"\)/);
-  assert.match(directory, /<Link className=\{styles\.playerRow\} href=\{`\/snooker\/players\/\$\{player\.slug\}`\} prefetch/);
-  assert.doesNotMatch(detail, /styles\.backLink/);
-  assert.doesNotMatch(detail, /返回球员/);
+  assert.match(ui, /if \(detail\?\.type === "player"\)/);
+  assert.match(ui, /<PlayerDetailInline key=\{detail\.slug\}/);
+  assert.match(directory, /type="button"[\s\S]*className=\{styles\.playerRow\}/);
+  assert.doesNotMatch(directory, /next\/link/);
+  assert.doesNotMatch(detail, /PlayerShell/);
   assert.doesNotMatch(detail, /import Link from "next\/link"/);
-  assert.match(detailPage, /getSnookerPlayerDetailFast/);
+  assert.match(inline, /loadPlayerDetail\(slug\)/);
   assert.match(loader, /rpc\/snooker_player_detail_public/);
   assert.match(loader, /next: \{ revalidate: 300 \}/);
-  assert.match(loading, /正在加载球员资料/);
+  assert.match(api, /getSnookerPlayerDetailFast/);
   assert.match(playerCss, /\.directoryToolbar \.searchBox input\{/);
   assert.match(playerCss, /\.directoryToolbar \.filters button\{/);
 });
 
-test("bottom navigation keeps all four main tabs local while synchronizing the refresh URL", async () => {
-  const [ui, shell, sync, db, page] = await Promise.all([
+test("bottom navigation keeps all four main tabs local while the root owns player detail URL state", async () => {
+  const [ui, sync, db, page] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
-    read("app/snooker/players/player-shell.tsx"),
     read("app/snooker/snooker-view-url-sync.tsx"),
     read("lib/snooker/database-public.ts"),
     read("app/snooker/page.tsx"),
@@ -165,8 +164,10 @@ test("bottom navigation keeps all four main tabs local while synchronizing the r
   assert.match(ui, /type MainView = "home" \| "matches" \| "players" \| "data"/);
   assert.match(ui, /activeView === "players" \? <PlayerDirectoryContent/);
   assert.match(ui, /const changeView = \(view: NavId\) => \{[\s\S]*?setActiveView\(view\)/);
+  assert.match(ui, /url\.searchParams\.set\("view", "players"\)/);
+  assert.match(ui, /url\.searchParams\.set\("player", target\.slug\)/);
   assert.doesNotMatch(ui, /router\.push\("\/snooker\/players"\)/);
-  assert.match(shell, /href: "\/snooker\?view=players"/);
+  assert.doesNotMatch(ui, /SnookerRootController/);
   assert.match(sync, /首页: "home"/);
   assert.match(sync, /赛事: "matches"/);
   assert.match(sync, /球员: "players"/);
@@ -176,6 +177,7 @@ test("bottom navigation keeps all four main tabs local while synchronizing the r
   assert.match(sync, /window\.history\.replaceState\(window\.history\.state/);
   assert.match(page, /import SnookerViewUrlSync from "\.\/snooker-view-url-sync"/);
   assert.match(page, /<SnookerViewUrlSync \/>/);
+  assert.match(page, /initialPlayerSlug=\{requestedPlayer\}/);
   assert.match(db, /next: \{ revalidate \}/);
   assert.match(page, /export const revalidate = 30/);
   assert.doesNotMatch(page, /force-dynamic/);
