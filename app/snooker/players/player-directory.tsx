@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import type { SnookerPlayerListItem } from "@/lib/snooker/player-data";
 import PlayerShell from "./player-shell";
 import styles from "./player.module.css";
@@ -24,8 +25,10 @@ function points(value: number | null) {
 }
 
 export function PlayerDirectoryContent({ players }: { players: SnookerPlayerListItem[] }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [openingSlug, setOpeningSlug] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("zh-CN");
@@ -38,6 +41,15 @@ export function PlayerDirectoryContent({ players }: { players: SnookerPlayerList
       return haystack.includes(needle);
     });
   }, [filter, players, query]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      for (const player of filtered.slice(0, 6)) {
+        router.prefetch(`/snooker/players/${player.slug}`);
+      }
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [filtered, router]);
 
   return (
     <>
@@ -72,28 +84,41 @@ export function PlayerDirectoryContent({ players }: { players: SnookerPlayerList
           <b>{filtered.length} 名球员</b>
         </div>
         <div className={styles.playerDirectory}>
-          {filtered.length ? filtered.map((player) => (
-            <Link className={styles.playerRow} href={`/snooker/players/${player.slug}`} prefetch key={player.id}>
-              <span className={styles.listAvatar}>
-                {player.avatarUrl ? <img src={player.avatarUrl} alt="" loading="lazy" decoding="async" /> : <span>{initials(player.nameEn)}</span>}
-              </span>
-              <span className={styles.rowMain}>
-                <b>{player.nameZh}</b>
-                <small>{player.nameEn}</small>
-                <p>
-                  {player.nationalityZh ?? "国籍待补充"}
-                  {!player.isCurrentTour ? <i>非现役巡回赛</i> : null}
-                </p>
-              </span>
-              <span className={styles.rowEnd}>
-                <span className={styles.rankBlock}>
-                  <b>{player.currentRank === null ? "—" : `#${player.currentRank}`}</b>
-                  <small>{points(player.rankingPoints)}</small>
+          {filtered.length ? filtered.map((player) => {
+            const href = `/snooker/players/${player.slug}`;
+            const opening = openingSlug === player.slug;
+            return (
+              <Link
+                className={styles.playerRow}
+                href={href}
+                prefetch
+                aria-busy={opening}
+                onPointerEnter={() => router.prefetch(href)}
+                onTouchStart={() => router.prefetch(href)}
+                onClick={() => setOpeningSlug(player.slug)}
+                key={player.id}
+              >
+                <span className={styles.listAvatar}>
+                  {player.avatarUrl ? <img src={player.avatarUrl} alt="" loading="lazy" decoding="async" /> : <span>{initials(player.nameEn)}</span>}
                 </span>
-                <span className={styles.rowArrow}>›</span>
-              </span>
-            </Link>
-          )) : <div className={styles.emptyState}>没有找到匹配的球员。<br />可以尝试中文名、英文名或切换筛选条件。</div>}
+                <span className={styles.rowMain}>
+                  <b>{player.nameZh}</b>
+                  <small>{player.nameEn}</small>
+                  <p>
+                    {player.nationalityZh ?? "国籍待补充"}
+                    {!player.isCurrentTour ? <i>非现役巡回赛</i> : null}
+                  </p>
+                </span>
+                <span className={styles.rowEnd}>
+                  <span className={styles.rankBlock}>
+                    <b>{player.currentRank === null ? "—" : `#${player.currentRank}`}</b>
+                    <small>{points(player.rankingPoints)}</small>
+                  </span>
+                  <span className={styles.rowArrow}>{opening ? "…" : "›"}</span>
+                </span>
+              </Link>
+            );
+          }) : <div className={styles.emptyState}>没有找到匹配的球员。<br />可以尝试中文名、英文名或切换筛选条件。</div>}
         </div>
       </section>
     </>
