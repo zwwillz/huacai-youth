@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { SnookerPlayer } from "@/lib/snooker/domain";
 import type { SnookerPlayerDetail, SnookerPlayerListItem } from "@/lib/snooker/player-data";
 import { PlayerDetailContent } from "./player-detail-content";
@@ -45,19 +45,12 @@ export default function PlayerDetailInline({
   summaryPlayer?: SnookerPlayer;
   slug: string;
 }) {
-  const summary = useMemo(() => summaryPlayer ? toSummary(summaryPlayer) : null, [summaryPlayer]);
-  const [player, setPlayer] = useState<SnookerPlayerDetail | null>(() => getCachedPlayerDetail(slug) ?? (summary ? partialDetail(summary) : null));
+  const summary = summaryPlayer ? toSummary(summaryPlayer) : null;
+  const [loadedPlayer, setLoadedPlayer] = useState<SnookerPlayerDetail | null>(() => getCachedPlayerDetail(slug));
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
-    setLoadFailed(false);
-    const cached = getCachedPlayerDetail(slug);
-    if (cached) {
-      setPlayer(summary?.avatarUrl && !cached.avatarUrl ? { ...cached, avatarUrl: summary.avatarUrl } : cached);
-      return;
-    }
-
-    setPlayer(summary ? partialDetail(summary) : null);
+    if (getCachedPlayerDetail(slug)) return;
     let cancelled = false;
     void loadPlayerDetail(slug).then((detail) => {
       if (cancelled) return;
@@ -65,10 +58,15 @@ export default function PlayerDetailInline({
         setLoadFailed(true);
         return;
       }
-      setPlayer(summary?.avatarUrl && !detail.avatarUrl ? { ...detail, avatarUrl: summary.avatarUrl } : detail);
+      setLoadedPlayer(detail);
     });
     return () => { cancelled = true; };
-  }, [slug, summary]);
+  }, [slug]);
+
+  const basePlayer = loadedPlayer ?? (summary ? partialDetail(summary) : null);
+  const player = basePlayer && summary?.avatarUrl && !basePlayer.avatarUrl
+    ? { ...basePlayer, avatarUrl: summary.avatarUrl }
+    : basePlayer;
 
   return (
     <div className={styles.content}>
