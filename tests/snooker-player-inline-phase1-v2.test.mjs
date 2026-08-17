@@ -11,7 +11,7 @@ const api = readFileSync(new URL("../app/api/snooker/v1/player-detail/route.ts",
 
 test("player detail stays inside the root SnookerDataCenterV2 flow", () => {
   assert.match(root, /\| \{ type: "player"; slug: string; returnView: MainView \}/);
-  assert.match(root, /<PlayerDetailInline summaryPlayer=\{summaryPlayer\} slug=\{detail\.slug\} \/>/);
+  assert.match(root, /<PlayerDetailInline key=\{detail\.slug\} summaryPlayer=\{summaryPlayer\} slug=\{detail\.slug\} \/>/);
   assert.match(root, /history\.pushState\(/);
   assert.match(root, /searchParams\.set\("player", target\.slug\)/);
   assert.match(root, /window\.addEventListener\("popstate", onPopState\)/);
@@ -30,9 +30,19 @@ test("canonical player deep links use root query params", () => {
   assert.match(directory, /onPrefetchPlayer/);
 });
 
+test("player directory search and filter state are owned by the persistent root", () => {
+  assert.match(root, /const \[playerQuery, setPlayerQuery\] = useState\(""\)/);
+  assert.match(root, /const \[playerFilter, setPlayerFilter\] = useState<PlayerFilter>\("all"\)/);
+  assert.match(root, /query=\{playerQuery\} filter=\{playerFilter\}/);
+  assert.match(directory, /query: string/);
+  assert.match(directory, /filter: PlayerFilter/);
+  assert.doesNotMatch(directory, /directorySession/);
+});
+
 test("player detail is content-only and uses the focused cached API", () => {
   assert.match(inline, /loadPlayerDetail\(slug\)/);
   assert.match(inline, /partialDetail\(summary\)/);
+  assert.doesNotMatch(inline, /setLoadFailed\(false\)/);
   assert.match(detail, /export function PlayerDetailContent/);
   assert.doesNotMatch(detail, /PlayerShell/);
   assert.match(api, /getSnookerPlayerDetailFast/);
