@@ -13,7 +13,7 @@ import type {
   SnookerSeasonStatistics,
 } from "@/lib/snooker/domain";
 import type { SnookerPlayerListItem } from "@/lib/snooker/player-data";
-import { PlayerDirectoryContent } from "./players/player-directory";
+import { PlayerDirectoryContent, type PlayerFilter } from "./players/player-directory";
 import PlayerDetailInline from "./players/player-detail-inline";
 import { prefetchPlayerDetail } from "./players/player-detail-client";
 import styles from "./snooker-data-center.module.css";
@@ -323,6 +323,8 @@ export default function SnookerDataCenterV2({
   const [sourceHealth, setSourceHealth] = useState<SourceHealth | null>(initialSourceHealth ?? null);
   const [refreshing, setRefreshing] = useState(false);
   const [eventListMode, setEventListMode] = useState<EventListMode>("recent");
+  const [playerQuery, setPlayerQuery] = useState("");
+  const [playerFilter, setPlayerFilter] = useState<PlayerFilter>("all");
   const [matchDataTab, setMatchDataTab] = useState<MatchDataTab>("match");
   const [matchUpdatedAt, setMatchUpdatedAt] = useState<Record<string, string>>({});
   const signatures = useRef(new Map(initialDatabaseEvents.flatMap((event) => allMatches(event)).map((match) => [match.id, matchSignature(match)])));
@@ -500,7 +502,7 @@ export default function SnookerDataCenterV2({
     const summaryPlayer = snapshot.players.find((player) => player.slug === detail.slug);
     return <main className={styles.appRoot} data-theme={theme}><div className={styles.detailShell}>
       <header className={styles.detailHeader}><button onClick={closePlayer}>‹</button><strong>{summaryPlayer?.nameZh ?? "球员详情"}</strong><span>PLAYER</span></header>
-      <PlayerDetailInline summaryPlayer={summaryPlayer} slug={detail.slug} />
+      <PlayerDetailInline key={detail.slug} summaryPlayer={summaryPlayer} slug={detail.slug} />
     </div></main>;
   }
 
@@ -686,7 +688,7 @@ export default function SnookerDataCenterV2({
         {eventListMode === "recent" ? <>{featuredEventCard ? <section className={styles.currentEventBanner} onClick={() => openEvent(featuredEventCard.slug, featuredDetail?.rounds.length ? "schedule" : "overview")}><div><span className={eventStatusClass(featuredEventCard.status)}><StatusPill status={featuredEventCard.status} label={activeEventCard ? "当前赛事" : graceEventCard ? "刚刚结束" : "下一站"} /></span><small>{featuredEventCard.typeZh}</small></div><h2>{featuredEventCard.nameZh}</h2><p>{formatDateRange(featuredEventCard.startDate, featuredEventCard.endDate)} · {featuredEventCard.cityZh}</p><span>查看赛事 ›</span></section> : null}<section className={styles.card}><SectionHeader eyebrow="RECENT TOURNAMENTS" title="近期赛事" action="本赛季" /><div className={styles.calendarList}>{recentEvents.map((item) => <CalendarCard key={item.id} item={item} onOpen={() => openEvent(item.slug)} />)}</div></section></> : <section className={styles.card}><SectionHeader eyebrow="2026/27 SEASON" title="赛季赛历" action="按时间顺序" /><div className={priority.calendarStaticList}>{seasonCalendar.map((item) => <CalendarCard key={item.id} item={item} interactive={false} />)}</div></section>}
       </> : null}
 
-      {activeView === "players" ? <PlayerDirectoryContent players={directoryPlayers} onOpenPlayer={(player) => openPlayer(player.id)} onPrefetchPlayer={(player) => prefetchPlayerDetail(player.slug)} /> : null}
+      {activeView === "players" ? <PlayerDirectoryContent players={directoryPlayers} query={playerQuery} filter={playerFilter} onQueryChange={setPlayerQuery} onFilterChange={setPlayerFilter} onOpenPlayer={(player) => openPlayer(player.id)} onPrefetchPlayer={(player) => prefetchPlayerDetail(player.slug)} /> : null}
 
       {activeView === "data" ? <>
         <section className={styles.pageIntro}><small>GLOBAL DATA</small><h1>数据</h1><p>跨赛事、跨赛季数据；单站数据仍放在各赛事自己的“赛事数据”页。</p></section>
