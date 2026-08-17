@@ -223,14 +223,15 @@ function PlayerAvatar({ player, size = "md" }: { player: SnookerPlayer; size?: "
 
 function MatchupPlayer({ player }: { player: SnookerPlayer }) {
   const image = player.avatarUrl || player.avatar?.url;
+  const shortNameEn = player.shortNameEn || player.nameEn.split(/\s+/).slice(-1)[0] || player.nameEn;
   return (
     <div className={polish.matchupPlayer}>
       <div className={polish.matchupPortrait} aria-label={player.nameZh}>
         {image ? <img src={image} alt="" loading="lazy" decoding="async" /> : <span className={polish.matchupFallback}>{initials(player.nameEn)}</span>}
       </div>
       <div className={polish.matchupPlayerText}>
-        <strong>{player.nameZh}</strong>
-        <small>{player.nameEn}</small>
+        <strong>{player.shortNameZh || player.nameZh}</strong>
+        <small>{shortNameEn}</small>
       </div>
     </div>
   );
@@ -492,7 +493,7 @@ export default function SnookerDataCenterV2({
 
       <section className={styles.frameSection}>
         <div className={styles.frameHead}><span>单杆<br />(50+)</span><span>分数</span><b>局</b><span>分数</span><span>单杆<br />(50+)</span></div>
-        {match.frames?.length ? match.frames.map((frame) => <div className={styles.frameRow} key={frame.frameNo}><span>{frame.break1 ?? "-"}</span><strong>{frame.score1}</strong><b>{frame.frameNo}</b><strong>{frame.score2}</strong><span>{frame.break2 ?? "-"}</span></div>) : <div className={styles.emptyFrames}>{match.status === "upcoming" ? "比赛尚未开始，逐局比分将在开赛后同步。" : "官方当前未提供该场逐局明细，已保存官方总比分。"}</div>}
+        {match.frames?.length ? match.frames.map((frame) => <div className={styles.frameRow} style={{ minHeight: 50 }} key={frame.frameNo}><span>{frame.break1 ?? "-"}</span><strong>{frame.score1}</strong><b>{frame.frameNo}</b><strong>{frame.score2}</strong><span>{frame.break2 ?? "-"}</span></div>) : <div className={styles.emptyFrames}>{match.status === "upcoming" ? "比赛尚未开始，逐局比分将在开赛后同步。" : "官方当前未提供该场逐局明细，已保存官方总比分。"}</div>}
       </section>
 
       {(hasStats || hasSeason || hasH2h) ? <section className={polish.matchupCard}>
