@@ -13,13 +13,15 @@ import type {
   SnookerPlayer,
   SnookerSeasonStatistics,
 } from "@/lib/snooker/domain";
+import type { SnookerPlayerListItem } from "@/lib/snooker/player-data";
+import { PlayerDirectoryContent } from "./players/player-directory";
 import styles from "./snooker-data-center.module.css";
 import priority from "./snooker-priority.module.css";
 import insight from "./snooker-insights.module.css";
 import polish from "./snooker-ui-polish.module.css";
 
-type MainView = "home" | "matches" | "data";
-type NavId = MainView | "players";
+type MainView = "home" | "matches" | "players" | "data";
+type NavId = MainView;
 type Theme = "green" | "red";
 type EventTab = "overview" | "schedule" | "data";
 type EventListMode = "recent" | "calendar";
@@ -147,6 +149,10 @@ function money(value: number) {
   return `£${value.toLocaleString("en-GB")}`;
 }
 
+function rankingMoney(value: number) {
+  return `€${value.toLocaleString("en-GB")}`;
+}
+
 function SectionHeader({ eyebrow, title, action }: { eyebrow?: string; title: string; action?: string }) {
   return <div className={styles.sectionHeader}><div>{eyebrow ? <small>{eyebrow}</small> : null}<h2>{title}</h2></div>{action ? <span>{action}</span> : null}</div>;
 }
@@ -157,6 +163,21 @@ function PlayerAvatar({ player, size = "md" }: { player: SnookerPlayer; size?: "
     <span className={`${styles.avatar} ${styles[`avatar_${size}`]} ${image ? polish.avatarPhoto : ""}`} aria-label={player.nameZh}>
       {image ? <img src={image} alt="" loading={size === "xl" ? "eager" : "lazy"} decoding="async" /> : initials(player.nameEn)}
     </span>
+  );
+}
+
+function MatchupPlayer({ player }: { player: SnookerPlayer }) {
+  const image = player.avatarUrl || player.avatar?.url;
+  return (
+    <div className={polish.matchupPlayer}>
+      <div className={polish.matchupPortrait} aria-label={player.nameZh}>
+        {image ? <img src={image} alt="" loading="lazy" decoding="async" /> : <span className={polish.matchupFallback}>{initials(player.nameEn)}</span>}
+      </div>
+      <div className={polish.matchupPlayerText}>
+        <strong>{player.nameZh}</strong>
+        <small>{player.nameEn}</small>
+      </div>
+    </div>
   );
 }
 
@@ -248,6 +269,24 @@ export default function SnookerDataCenterV2({
   const signatures = useRef(new Map(initialDatabaseEvents.flatMap((event) => allMatches(event)).map((match) => [match.id, matchSignature(match)])));
 
   const players = useMemo(() => playerMap(snapshot), [snapshot]);
+  const directoryPlayers = useMemo<SnookerPlayerListItem[]>(() => snapshot.players
+    .map((player) => ({
+      id: player.id,
+      slug: player.slug,
+      nameEn: player.nameEn,
+      nameZh: player.nameZh,
+      shortNameZh: player.shortNameZh || null,
+      nationalityZh: player.nationalityZh || null,
+      countryCode: player.countryCode || null,
+      dateOfBirth: player.dateOfBirth ?? null,
+      turnedPro: player.turnedPro ?? null,
+      currentRank: player.currentRank,
+      rankingPoints: player.rankingPoints,
+      avatarUrl: player.avatarUrl || player.avatar?.url || null,
+      isCurrentTour: player.currentRank !== null,
+      tourStatus: player.currentRank !== null ? "current" : "unknown",
+    }))
+    .sort((a, b) => (a.currentRank ?? 9999) - (b.currentRank ?? 9999) || a.nameEn.localeCompare(b.nameEn)), [snapshot.players]);
   const eventBySlug = useMemo(() => new Map(databaseEvents.map((event) => [event.slug, event])), [databaseEvents]);
   const hasLiveMatch = useMemo(() => databaseEvents.some((event) => allMatches(event).some((match) => match.status === "live" || match.status === "session-break")), [databaseEvents]);
 
@@ -278,11 +317,6 @@ export default function SnookerDataCenterV2({
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => router.prefetch("/snooker/players"), 350);
-    return () => window.clearTimeout(timer);
-  }, [router]);
-
-  useEffect(() => {
     if (!hasLiveMatch) return;
     const timer = window.setInterval(() => void refresh(), 30_000);
     const onVisibility = () => { if (!document.hidden) void refresh(); };
@@ -309,7 +343,8 @@ export default function SnookerDataCenterV2({
 
   const rankingRows = useMemo(() => snapshot.rankings
     .map((row) => ({ ...row, player: players.get(row.playerId) }))
-    .filter((row): row is typeof row & { player: SnookerPlayer } => Boolean(row.player)), [snapshot.rankings, players]);
+    .filter((row): row is typeof row & { player: SnookerPlayer } => Boolean(row.player))
+    .sort((a, b) => a.rank - b.rank), [snapshot.rankings, players]);
   const chinaTop16 = rankingRows.filter((row) => isChina(row.player));
 
   const openEvent = (slug: string, tab: EventTab = "overview") => {
@@ -323,16 +358,11 @@ export default function SnookerDataCenterV2({
   };
   const openPlayer = (playerId: string) => {
     const target = players.get(playerId);
-    const href = target?.slug ? `/snooker/players/${target.slug}` : "/snooker/players";
+    const href = target?.slug ? `/snooker/players/${target.slug}` : "/snooker?view=players";
     router.prefetch(href);
     router.push(href);
   };
   const changeView = (view: NavId) => {
-    if (view === "players") {
-      router.prefetch("/snooker/players");
-      router.push("/snooker/players");
-      return;
-    }
     setDetail(null);
     setActiveView(view);
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -411,29 +441,33 @@ export default function SnookerDataCenterV2({
         {match.frames?.length ? match.frames.map((frame) => <div className={styles.frameRow} key={frame.frameNo}><span>{frame.break1 ?? "-"}</span><strong>{frame.score1}</strong><b>{frame.frameNo}</b><strong>{frame.score2}</strong><span>{frame.break2 ?? "-"}</span></div>) : <div className={styles.emptyFrames}>{match.status === "upcoming" ? "比赛尚未开始，逐局比分将在开赛后同步。" : "官方当前未提供该场逐局明细，已保存官方总比分。"}</div>}
       </section>
 
-      {(hasStats || hasSeason || hasH2h) ? <section className={polish.dataArea}>
-        <div className={polish.dataTabs} aria-label="比赛数据切换">
+      {(hasStats || hasSeason || hasH2h) ? <section className={polish.matchupCard}>
+        <div className={polish.matchupHeader}><small>MATCHUP DATA</small><h2>对阵数据</h2></div>
+        <div className={polish.matchupPlayers}>
+          <MatchupPlayer player={p1} />
+          <div className={polish.matchupVs}>VS</div>
+          <MatchupPlayer player={p2} />
+        </div>
+        <div className={polish.dataTabs} aria-label="对阵数据切换">
           <button disabled={!hasStats} className={selectedDataTab === "match" ? polish.dataTabActive : ""} onClick={() => setMatchDataTab("match")}><span>本场</span><small>MATCH</small></button>
           <button disabled={!hasSeason} className={selectedDataTab === "season" ? polish.dataTabActive : ""} onClick={() => setMatchDataTab("season")}><span>赛季</span><small>SEASON</small></button>
           <button disabled={!hasH2h} className={selectedDataTab === "h2h" ? polish.dataTabActive : ""} onClick={() => setMatchDataTab("h2h")}><span>交手</span><small>H2H</small></button>
         </div>
 
         {selectedDataTab === "match" && hasStats ? <div className={polish.dataPanel}>
-          <SectionHeader eyebrow="MATCH" title="本场比赛统计" />
-          <div className={polish.compareNames}><div><strong>{p1.nameZh}</strong><small>{p1.nameEn}</small></div><div><strong>{p2.nameZh}</strong><small>{p2.nameEn}</small></div></div>
+          <div className={polish.panelMeta}><span>本场比赛统计</span><b>{match.roundLabelZh}</b></div>
           <div className={polish.compareGrid}>{statRows.map(([label, key, suffix]) => <div key={label} style={{ display: "contents" }}><div className={polish.compareLeft}>{statValue(s1, key, suffix)}</div><div className={polish.compareLabel}>{label}</div><div className={polish.compareRight}>{statValue(s2, key, suffix)}</div></div>)}</div>
           <p className={polish.dataHint}>数据来自官方比赛中心，完赛后冻结保存到本站数据库。</p>
         </div> : null}
 
         {selectedDataTab === "season" && hasSeason ? <div className={polish.dataPanel}>
-          <SectionHeader eyebrow="SEASON" title="赛季数据对比" action={season1?.seasonLabel ?? season2?.seasonLabel ?? "2026/27"} />
-          <div className={polish.compareNames}><div><strong>{p1.nameZh}</strong><small>{p1.nameEn}</small></div><div><strong>{p2.nameZh}</strong><small>{p2.nameEn}</small></div></div>
+          <div className={polish.panelMeta}><span>赛季数据对比</span><b>{season1?.seasonLabel ?? season2?.seasonLabel ?? "2026/27"}</b></div>
           <div className={polish.compareGrid}>{seasonRows.map(([label, key, suffix]) => <div key={label} style={{ display: "contents" }}><div className={polish.compareLeft}>{seasonValue(season1, key, suffix)}</div><div className={polish.compareLabel}>{label}</div><div className={polish.compareRight}>{seasonValue(season2, key, suffix)}</div></div>)}</div>
           <p className={polish.dataHint}>赛季数据来自官方赛季统计，当前赛季会随比赛结果持续更新。</p>
         </div> : null}
 
-        {selectedDataTab === "h2h" && h2h ? <div className={polish.dataPanel}>
-          <SectionHeader eyebrow="HEAD TO HEAD" title="历史对阵" action={`赛前 ${h2h.meetings} 次`} />
+        {selectedDataTab === "h2h" && h2h ? <div className={`${polish.dataPanel} ${polish.h2hPanel}`}>
+          <div className={polish.h2hPanelHeader}><span>历史对阵</span><b>赛前 {h2h.meetings} 次</b></div>
           <div className={insight.h2hSummary}><div className={insight.h2hSide}><strong>{h2h.player1Wins}</strong><span>{p1.nameZh} 胜</span></div><div className={insight.h2hMiddle}><strong>{h2h.player1Frames} : {h2h.player2Frames}</strong><small>历史局分</small></div><div className={insight.h2hSide}><strong>{h2h.player2Wins}</strong><span>{p2.nameZh} 胜</span></div></div>
           {h2h.recentMeetings.length ? <div className={insight.h2hHistory}>{h2h.recentMeetings.map((item, index) => <div className={insight.h2hMeeting} key={`${item.date}-${index}`}><time>{meetingDate(item)}</time><div><small>{item.tournament ?? "官方赛事"}{item.round ? ` · ${item.round}` : ""}</small><strong>{localized(item.homePlayerName)} {item.homeScore ?? "-"} : {item.awayScore ?? "-"} {localized(item.awayPlayerName)}</strong></div></div>)}</div> : <div className={insight.noHistory}>此前没有官方可识别的正式交手记录。</div>}
         </div> : null}
@@ -489,7 +523,7 @@ export default function SnookerDataCenterV2({
   const headlineEvent = activeEventCard ? currentOrLatest : latestCompleted;
 
   return <main className={styles.appRoot} data-theme={theme}><div className={styles.shell}>
-    <header className={styles.header}><button className={styles.brand} onClick={() => changeView("home")}><span>S</span><div><strong>世界斯诺克数据中心</strong><small>WORLD SNOOKER DATA</small></div></button><div className={styles.headerRight}><span className={styles.versionBadge}>DATA v0.8</span><div className={styles.themeSwitch}><button className={theme === "green" ? styles.themeActive : ""} onClick={() => setTheme("green")}>绿</button><button className={theme === "red" ? styles.themeActive : ""} onClick={() => setTheme("red")}>红</button></div></div></header>
+    <header className={styles.header}><button className={styles.brand} onClick={() => changeView("home")}><span>S</span><div><strong>世界斯诺克数据中心</strong><small>WORLD SNOOKER DATA</small></div></button><div className={styles.headerRight}><span className={styles.versionBadge}>DATA v0.9</span><div className={styles.themeSwitch}><button className={theme === "green" ? styles.themeActive : ""} onClick={() => setTheme("green")}>绿</button><button className={theme === "red" ? styles.themeActive : ""} onClick={() => setTheme("red")}>红</button></div></div></header>
     <div className={styles.content}>
       {activeView === "home" ? <>
         {featuredEventCard ? <section className={styles.hero}><div className={styles.heroTop}><StatusPill status={featuredEventCard.status} label={activeEventCard ? "当前赛事" : graceEventCard ? "刚刚结束" : "下一站"} /><span>{featuredEventCard.typeZh}</span></div><small>{activeEventCard ? "CURRENT TOURNAMENT" : graceEventCard ? "JUST FINISHED" : "NEXT TOURNAMENT"}</small><h1>{featuredEventCard.nameZh}</h1><p>{formatDateRange(featuredEventCard.startDate, featuredEventCard.endDate)} · {featuredEventCard.countryZh} {featuredEventCard.cityZh}</p><div className={styles.heroActions}><button onClick={() => openEvent(featuredEventCard.slug, featuredDetail?.rounds.length ? "schedule" : "overview")}>查看赛事</button><button className={styles.secondaryButton} onClick={() => changeView("matches")}>赛事列表</button></div></section> : null}
@@ -506,8 +540,8 @@ export default function SnookerDataCenterV2({
         </section> : null}
 
         {nextEventCard ? <section className={styles.card}><SectionHeader eyebrow="NEXT EVENT" title="下一站" action={nextEventCard.statusLabelZh} /><button className={styles.nextEvent} onClick={() => openEvent(nextEventCard.slug)}><span>{nextEventCard.cityZh?.slice(0, 1) || "赛"}</span><div><strong>{nextEventCard.nameZh}</strong><small>{nextEventCard.nameEn}</small><p>{formatDateRange(nextEventCard.startDate, nextEventCard.endDate)} · {nextEventCard.cityZh}</p></div><em>›</em></button></section> : null}
-        <section className={styles.card}><SectionHeader eyebrow="WORLD RANKING" title="世界排名" action="TOP 16" /><div className={styles.rankingList}>{rankingRows.slice(0, 6).map((row) => <button key={row.rank} onClick={() => openPlayer(row.player.id)}><strong>{row.rank}</strong><PlayerAvatar player={row.player} size="sm" /><span><b>{row.player.nameZh}</b><small>{row.player.nameEn}</small></span><em>{row.points.toLocaleString("en-GB")}</em></button>)}</div><button className={styles.fullButton} onClick={() => changeView("data")}>查看完整世界排名</button></section>
-        <section className={styles.card}><SectionHeader eyebrow="CHINA TOP 16" title="中国球员" action={`${chinaTop16.length} 人进入 TOP16`} /><div className={styles.chinaTopGrid}>{chinaTop16.map((row) => <button key={row.player.id} onClick={() => openPlayer(row.player.id)}><span>{row.rank}</span><strong>{row.player.nameZh}</strong><small>世界第 {row.rank}</small></button>)}</div></section>
+        <section className={styles.card}><SectionHeader eyebrow="Official World Ranking" title="世界排名" action="TOP 3" /><div className={styles.rankingList}>{rankingRows.slice(0, 3).map((row) => <div className={polish.rankingStaticRow} key={row.rank}><strong>{row.rank}</strong><button className={polish.rankingAvatarButton} onClick={() => openPlayer(row.player.id)} aria-label={`查看${row.player.nameZh}球员详情`}><PlayerAvatar player={row.player} size="sm" /></button><span><b>{row.player.nameZh}</b><small>{row.player.nameEn}</small></span><em>{rankingMoney(row.points)}</em></div>)}</div><button className={styles.fullButton} onClick={() => changeView("data")}>查看完整世界排名</button></section>
+        <section className={styles.card}><SectionHeader eyebrow="Official World Ranking" title="中国球员" action={`${chinaTop16.length} 人进入 TOP16`} /><div className={styles.chinaTopGrid}>{chinaTop16.map((row) => <button key={row.player.id} onClick={() => openPlayer(row.player.id)}><span>{row.rank}</span><strong>{row.player.nameZh}</strong><small>世界第 {row.rank}</small></button>)}</div></section>
       </> : null}
 
       {activeView === "matches" ? <>
@@ -516,13 +550,15 @@ export default function SnookerDataCenterV2({
         {eventListMode === "recent" ? <>{featuredEventCard ? <section className={styles.currentEventBanner} onClick={() => openEvent(featuredEventCard.slug, featuredDetail?.rounds.length ? "schedule" : "overview")}><div><StatusPill status={featuredEventCard.status} label={activeEventCard ? "当前赛事" : graceEventCard ? "刚刚结束" : "下一站"} /><small>{featuredEventCard.typeZh}</small></div><h2>{featuredEventCard.nameZh}</h2><p>{formatDateRange(featuredEventCard.startDate, featuredEventCard.endDate)} · {featuredEventCard.cityZh}</p><span>查看赛事 ›</span></section> : null}<section className={styles.card}><SectionHeader title="近期赛事" action="本赛季" /><div className={styles.calendarList}>{recentEvents.map((item) => <CalendarCard key={item.id} item={item} onOpen={() => openEvent(item.slug)} />)}</div></section></> : <section className={styles.card}><SectionHeader eyebrow="2026/27 SEASON" title="赛季赛历" action="按时间顺序" /><div className={priority.calendarStaticList}>{seasonCalendar.map((item) => <CalendarCard key={item.id} item={item} interactive={false} />)}</div></section>}
       </> : null}
 
+      {activeView === "players" ? <PlayerDirectoryContent players={directoryPlayers} /> : null}
+
       {activeView === "data" ? <>
         <section className={styles.pageIntro}><small>GLOBAL DATA</small><h1>数据</h1><p>跨赛事、跨赛季数据；单站数据仍放在各赛事自己的“赛事数据”页。</p></section>
-        <section className={styles.card}><SectionHeader eyebrow="WORLD RANKING" title="世界排名 TOP16" /><div className={styles.rankingList}>{rankingRows.map((row) => <button key={row.rank} onClick={() => openPlayer(row.player.id)}><strong>{row.rank}</strong><PlayerAvatar player={row.player} size="sm" /><span><b>{row.player.nameZh}</b><small>{row.player.nameEn} · {row.player.nationalityZh}</small></span><em>{row.points.toLocaleString("en-GB")}</em></button>)}</div></section>
+        <section className={styles.card}><SectionHeader eyebrow="Official World Ranking" title="世界排名 TOP16" /><div className={styles.rankingList}>{rankingRows.map((row) => <div className={polish.rankingStaticRow} key={row.rank}><strong>{row.rank}</strong><button className={polish.rankingAvatarButton} onClick={() => openPlayer(row.player.id)} aria-label={`查看${row.player.nameZh}球员详情`}><PlayerAvatar player={row.player} size="sm" /></button><span><b>{row.player.nameZh}</b><small>{row.player.nameEn} · {row.player.nationalityZh}</small></span><em>{rankingMoney(row.points)}</em></div>)}</div></section>
         <section className={styles.card}><SectionHeader eyebrow="COMING NEXT" title="数据专题" /><div className={styles.futureGrid}><article><small>HEAD TO HEAD</small><strong>交手记录</strong><span>已进入比赛详情</span></article><article><small>CENTURIES</small><strong>破百榜</strong><span>正在接入</span></article><article><small>DECIDERS</small><strong>决胜局</strong><span>正在接入</span></article><article><small>TITLES</small><strong>冠军榜</strong><span>正在接入</span></article></div></section>
       </> : null}
     </div>
-    <nav className={`${styles.bottomNav} ${polish.fastNav}`}>{navItems.map((item) => <button key={item.id} className={item.id === activeView ? styles.activeNav : ""} onPointerDown={() => { if (item.id === "players") router.prefetch("/snooker/players"); }} onClick={() => changeView(item.id)}><span>{item.icon}</span><b>{item.label}</b></button>)}</nav>
+    <nav className={`${styles.bottomNav} ${polish.fastNav}`}>{navItems.map((item) => <button key={item.id} className={item.id === activeView ? styles.activeNav : ""} onClick={() => changeView(item.id)}><span>{item.icon}</span><b>{item.label}</b></button>)}</nav>
     <span className={styles.buildMark}>{buildMark}</span>
   </div></main>;
 }

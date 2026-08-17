@@ -6,6 +6,7 @@ import type {
   SnookerHeadToHeadMeeting,
   SnookerMatchPlayerStatistics,
   SnookerPrizeRow,
+  SnookerRankingRow,
   SnookerSeasonStatistics,
 } from "./domain";
 
@@ -35,6 +36,14 @@ type DbPrize = {
 };
 
 type DbPlayerKey = { id: string; slug: string };
+
+type DbOfficialRanking = {
+  player_id: string;
+  rank: number;
+  points: number | null;
+  ranking_money: number | null;
+  list_key: string;
+};
 
 type Numeric = number | string | null;
 
@@ -181,10 +190,11 @@ export async function loadSnookerDatabaseViewV2(): Promise<SnookerDatabaseView> 
     const eventUuids = base.eventDetails.map(dbEventUuid).filter((id): id is string => Boolean(id));
     const matchUuids = base.eventDetails.flatMap((event) => event.rounds.flatMap((round) => round.matches.map((match) => dbMatchUuid(match.id)))).filter((id): id is string => Boolean(id));
 
-    const [eventMeta, playerKeys, seasonStats, prizes, stats, h2h] = await Promise.all([
+    const [eventMeta, playerKeys, seasonStats, officialRanking, prizes, stats, h2h] = await Promise.all([
       rest<DbEventMeta[]>(`snooker_events?select=id,slug,previous_champion_name_zh,previous_champion_year,expected_match_count&id=in.${inFilter(eventUuids)}`),
       rest<DbPlayerKey[]>("snooker_players?select=id,slug"),
       rest<DbSeasonStat[]>("snooker_player_season_stats?select=player_id,season_start_year,season_label,ranking,tournaments_won,points_scored,matches_played,matches_won,match_win_rate,average_shot_time,breaks_50_plus,breaks_100_plus,highest_break,season_147s,average_break&season_start_year=eq.2026"),
+      rest<DbOfficialRanking[]>("snooker_latest_rankings?select=player_id,rank,points,ranking_money,list_key&list_key=eq.world_official&order=rank.asc&limit=256"),
       eventUuids.length ? rest<DbPrize[]>(`snooker_event_prizes?select=event_id,prize_key,label_zh,label_en,amount,currency,sort_order,is_total&event_id=in.${inFilter(eventUuids)}&order=sort_order.asc`) : Promise.resolve([]),
       matchUuids.length ? rest<DbMatchStat[]>(`snooker_match_statistics?select=match_id,player_id,total_points,average_shot_time_seconds,pot_rate,breaks_50_plus,breaks_100_plus,highest_break,average_break,shots_taken,time_on_table_pct&match_id=in.${inFilter(matchUuids)}`) : Promise.resolve([]),
       matchUuids.length ? rest<DbHeadToHead[]>(`snooker_match_head_to_head?select=match_id,meetings_before,player1_wins,player2_wins,player1_frames,player2_frames,recent_meetings,source_updated_at&match_id=in.${inFilter(matchUuids)}`) : Promise.resolve([]),
@@ -197,6 +207,18 @@ export async function loadSnookerDatabaseViewV2(): Promise<SnookerDatabaseView> 
       const canonical = playerCanonicalByUuid.get(row.player_id);
       if (canonical) seasonByPlayer.set(canonical, mapSeason(row));
     }
+
+    const officialByPlayer = new Map<string, { rank: number; money: number }>();
+    const rankings: SnookerRankingRow[] = [];
+    for (const row of officialRanking) {
+      if (row.list_key !== "world_official") continue;
+      const canonical = playerCanonicalByUuid.get(row.player_id);
+      if (!canonical) continue;
+      const money = Number(row.ranking_money ?? row.points ?? 0);
+      officialByPlayer.set(canonical, { rank: row.rank, money });
+      if (row.rank <= 16) rankings.push({ rank: row.rank, playerId: canonical, points: money });
+    }
+    rankings.sort((a, b) => a.rank - b.rank);
 
     const prizesByEvent = new Map<string, SnookerPrizeRow[]>();
     for (const row of prizes) {
@@ -240,16 +262,25 @@ export async function loadSnookerDatabaseViewV2(): Promise<SnookerDatabaseView> 
     const primary = eventDetails.find((event) => event.slug === base.snapshot.event.slug) ?? eventDetails[0] ?? base.snapshot.event;
     const players = base.snapshot.players.map((player) => {
       const season = seasonByPlayer.get(player.id);
-      return season ? { ...player, seasonStatistics: season } : player;
+      const official = officialByPlayer.get(player.id);
+      const currentSeason = season
+        ? { ...season, ...(official ? { ranking: official.rank } : {}) }
+        : undefined;
+      return {
+        ...player,
+        ...(official ? { currentRank: official.rank, rankingPoints: official.money } : {}),
+        ...(currentSeason ? { seasonStatistics: currentSeason } : {}),
+      };
     });
 
     return {
       ...base,
       snapshot: {
         ...base.snapshot,
-        version: "0.8.0-ui-performance",
+        version: "0.9.0-official-ranking",
         event: primary,
         players,
+        rankings: rankings.length ? rankings : base.snapshot.rankings,
       },
       eventDetails,
     };

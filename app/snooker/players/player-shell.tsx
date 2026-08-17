@@ -10,7 +10,7 @@ type Theme = "green" | "red";
 const navItems = [
   { label: "首页", icon: "⌂", href: "/snooker" },
   { label: "赛事", icon: "◫", href: "/snooker?view=matches" },
-  { label: "球员", icon: "◎", href: "/snooker/players" },
+  { label: "球员", icon: "◎", href: "/snooker?view=players" },
   { label: "数据", icon: "▥", href: "/snooker?view=data" },
 ] as const;
 
@@ -21,7 +21,7 @@ export default function PlayerShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       for (const item of navItems) router.prefetch(item.href);
-    }, 250);
+    }, 120);
     return () => window.clearTimeout(timer);
   }, [router]);
 

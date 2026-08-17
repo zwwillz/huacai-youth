@@ -39,20 +39,48 @@ test("home result winner is a small badge and compact names do not add English s
   assert.doesNotMatch(homeScore, /\.nameEn/);
 });
 
-test("match detail switches Match Season and H2H and removes the old metadata card", async () => {
-  const [ui, dbV2] = await Promise.all([
+test("match detail presents Match Season and H2H inside one roomy matchup card", async () => {
+  const [ui, css, dbV2] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
+    read("app/snooker/snooker-ui-polish.module.css"),
     read("lib/snooker/database-public-v2.ts"),
   ]);
 
   assert.match(ui, /type MatchDataTab = "match" \| "season" \| "h2h"/);
+  assert.match(ui, /MATCHUP DATA/);
+  assert.match(ui, /<h2>对阵数据<\/h2>/);
+  assert.match(ui, /<MatchupPlayer player=\{p1\}/);
+  assert.match(ui, /<MatchupPlayer player=\{p2\}/);
   assert.match(ui, />本场<\/span><small>MATCH<\/small>/);
   assert.match(ui, />赛季<\/span><small>SEASON<\/small>/);
   assert.match(ui, />交手<\/span><small>H2H<\/small>/);
-  assert.match(ui, /title="赛季数据对比"/);
+  assert.match(ui, /赛季数据对比/);
+  assert.match(css, /\.matchupCard\{/);
+  assert.match(css, /\.matchupPortrait img\{[^}]*object-fit:contain/);
+  assert.match(css, /\.matchupCard \.compareGrid>div\{[^}]*min-height:48px/);
   assert.doesNotMatch(ui, /styles\.detailInfoCard/);
   assert.match(dbV2, /snooker_player_season_stats\?select=/);
   assert.match(dbV2, /season_start_year=eq\.2026/);
+});
+
+test("official world ranking is explicit, top three on home, euro-prefixed and avatar-only clickable", async () => {
+  const [ui, css, dbV2, playerData] = await Promise.all([
+    read("app/snooker/snooker-data-center-v2.tsx"),
+    read("app/snooker/snooker-ui-polish.module.css"),
+    read("lib/snooker/database-public-v2.ts"),
+    read("lib/snooker/player-data.ts"),
+  ]);
+
+  assert.match(ui, /eyebrow="Official World Ranking" title="世界排名" action="TOP 3"/);
+  assert.match(ui, /rankingRows\.slice\(0, 3\)/);
+  assert.match(ui, /return `€\$\{value\.toLocaleString/);
+  assert.match(ui, /className=\{polish\.rankingStaticRow\}/);
+  assert.match(ui, /className=\{polish\.rankingAvatarButton\} onClick=\{\(\) => openPlayer/);
+  assert.match(css, /\.rankingStaticRow\{/);
+  assert.match(dbV2, /list_key=eq\.world_official/);
+  assert.match(dbV2, /rankings: rankings\.length \? rankings/);
+  assert.match(playerData, /list_key: "eq\.world_official"/);
+  assert.match(ui, /eyebrow="Official World Ranking" title="中国球员"/);
 });
 
 test("event overview typography and public source wording are consistent", async () => {
@@ -67,17 +95,21 @@ test("event overview typography and public source wording are consistent", async
   assert.doesNotMatch(ui, /WST Match Centre/);
 });
 
-test("bottom navigation avoids smooth-scroll delay and prefetches routed player pages", async () => {
-  const [ui, shell, db] = await Promise.all([
+test("bottom navigation keeps all four main tabs local and root data is short cached", async () => {
+  const [ui, shell, db, page] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
     read("app/snooker/players/player-shell.tsx"),
     read("lib/snooker/database-public.ts"),
+    read("app/snooker/page.tsx"),
   ]);
 
-  assert.match(ui, /window\.scrollTo\(\{ top: 0, behavior: "auto" \}\)/);
-  assert.match(ui, /router\.prefetch\("\/snooker\/players"\)/);
-  assert.match(shell, /router\.prefetch\(item\.href\)/);
-  assert.match(shell, /onPointerDown=\{\(\) => router\.prefetch\(item\.href\)\}/);
+  assert.match(ui, /type MainView = "home" \| "matches" \| "players" \| "data"/);
+  assert.match(ui, /activeView === "players" \? <PlayerDirectoryContent/);
+  assert.match(ui, /const changeView = \(view: NavId\) => \{[\s\S]*?setActiveView\(view\)/);
+  assert.doesNotMatch(ui, /router\.push\("\/snooker\/players"\)/);
+  assert.match(shell, /href: "\/snooker\?view=players"/);
   assert.match(db, /next: \{ revalidate \}/);
+  assert.match(page, /export const revalidate = 30/);
+  assert.doesNotMatch(page, /force-dynamic/);
   assert.doesNotMatch(ui, /behavior: "smooth"/);
 });
