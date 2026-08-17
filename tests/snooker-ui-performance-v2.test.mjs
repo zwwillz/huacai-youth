@@ -40,9 +40,10 @@ test("home result winner is a small badge and compact names do not add English s
 });
 
 test("match detail presents Match Season and H2H inside one roomy matchup card", async () => {
-  const [ui, css, dbV2] = await Promise.all([
+  const [ui, css, insights, dbV2] = await Promise.all([
     read("app/snooker/snooker-data-center-v2.tsx"),
     read("app/snooker/snooker-ui-polish.module.css"),
+    read("app/snooker/snooker-insights.module.css"),
     read("lib/snooker/database-public-v2.ts"),
   ]);
 
@@ -54,10 +55,15 @@ test("match detail presents Match Season and H2H inside one roomy matchup card",
   assert.match(ui, />本场<\/span><small>MATCH<\/small>/);
   assert.match(ui, />赛季<\/span><small>SEASON<\/small>/);
   assert.match(ui, />交手<\/span><small>H2H<\/small>/);
-  assert.match(ui, /赛季数据对比/);
-  assert.match(css, /\.matchupCard\{/);
-  assert.match(css, /\.matchupPortrait img\{[^}]*object-fit:contain/);
-  assert.match(css, /\.matchupCard \.compareGrid>div\{[^}]*min-height:48px/);
+  assert.match(css, /\.matchupCard\{[^}]*display:flex;flex-direction:column/);
+  assert.match(css, /\.matchupCard \.dataTabs\{[^}]*order:1/);
+  assert.match(css, /\.matchupPlayers\{[^}]*order:2/);
+  assert.match(css, /\.matchupPortrait\{[^}]*width:76px;height:94px/);
+  assert.match(css, /\.panelMeta\{display:none\}/);
+  assert.match(css, /\.matchupCard \.compareGrid>div\{[^}]*min-height:54px/);
+  assert.match(insights, /\.h2hMiddle strong\{display:none\}/);
+  assert.match(insights, /content:"历史对阵"/);
+  assert.match(ui, /localizedTournamentLabel\(item\.tournament, snapshot\.calendar\)/);
   assert.doesNotMatch(ui, /styles\.detailInfoCard/);
   assert.match(dbV2, /snooker_player_season_stats\?select=/);
   assert.match(dbV2, /season_start_year=eq\.2026/);
@@ -93,6 +99,20 @@ test("event overview typography and public source wording are consistent", async
   assert.match(ui, /官方比赛中心/);
   assert.doesNotMatch(ui, /WST 当前/);
   assert.doesNotMatch(ui, /WST Match Centre/);
+});
+
+test("recent events retain the featured event and use semantic status labels", async () => {
+  const [ui, css] = await Promise.all([
+    read("app/snooker/snooker-data-center-v2.tsx"),
+    read("app/snooker/snooker-ui-polish.module.css"),
+  ]);
+
+  assert.match(ui, /item\.id === featuredEventCard\?\.id/);
+  assert.doesNotMatch(ui, /item\.id !== featuredEventCard\?\.id/);
+  assert.match(ui, /item\.status === "live" \? "进行中" : item\.status === "upcoming" \? "即将开始" : "已结束"/);
+  assert.match(css, /\.eventStatusLive>span\{background:#eaf3ff!important;color:#2465a8!important\}/);
+  assert.match(css, /\.eventStatusUpcoming>span\{background:#fff0e6!important;color:#bd5615!important\}/);
+  assert.match(css, /\.eventStatusCompleted>span\{background:#f0f2f1!important;color:#737b77!important\}/);
 });
 
 test("bottom navigation keeps all four main tabs local and root data is short cached", async () => {

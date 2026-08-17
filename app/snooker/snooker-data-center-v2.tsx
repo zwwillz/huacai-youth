@@ -93,6 +93,61 @@ function isActiveOn(item: SnookerCalendarEvent, today: string) {
   return item.startDate <= today && item.endDate >= today;
 }
 
+function eventStatusLabel(item: SnookerCalendarEvent) {
+  return item.status === "live" ? "进行中" : item.status === "upcoming" ? "即将开始" : "已结束";
+}
+
+function eventStatusClass(status: SnookerCalendarEvent["status"]) {
+  return status === "live" ? polish.eventStatusLive : status === "upcoming" ? polish.eventStatusUpcoming : polish.eventStatusCompleted;
+}
+
+function localizedRoundLabel(value?: string) {
+  const source = String(value ?? "").trim();
+  const key = source.toLowerCase();
+  if (!source) return "";
+  if (/semi[- ]?final/.test(key)) return "半决赛";
+  if (/quarter[- ]?final/.test(key)) return "1/4决赛";
+  if (key === "final") return "决赛";
+  if (/league phase.*stage two/.test(key)) return "第二阶段循环赛";
+  if (/league phase/.test(key)) return "循环赛";
+  const round = key.match(/^round\s+(\d+)$/);
+  if (round) return `第${round[1]}轮`;
+  return source;
+}
+
+function localizedTournamentLabel(value: string | undefined, calendar: SnookerCalendarEvent[]) {
+  const source = String(value ?? "").trim();
+  if (!source) return "官方赛事";
+  const key = source.toLowerCase();
+  const calendarMatch = calendar.find((item) => {
+    const english = item.nameEn.toLowerCase();
+    return english.length > 5 && (key.includes(english) || english.includes(key));
+  });
+  if (calendarMatch) return calendarMatch.nameZh;
+  const known: Array<[RegExp, string]> = [
+    [/saudi arabia snooker masters/i, "沙特阿拉伯斯诺克大师赛"],
+    [/shanghai masters/i, "上海大师赛"],
+    [/german masters/i, "德国大师赛"],
+    [/uk championship/i, "英国锦标赛"],
+    [/international championship/i, "国际锦标赛"],
+    [/world championship/i, "世界锦标赛"],
+    [/world grand prix/i, "世界大奖赛"],
+    [/players championship/i, "球员锦标赛"],
+    [/tour championship/i, "巡回锦标赛"],
+    [/championship league/i, "冠军联赛"],
+    [/scottish open/i, "苏格兰公开赛"],
+    [/english open/i, "英格兰公开赛"],
+    [/british open/i, "英国公开赛"],
+    [/northern ireland open/i, "北爱尔兰公开赛"],
+    [/welsh open/i, "威尔士公开赛"],
+    [/wuhan open/i, "武汉公开赛"],
+    [/china open/i, "中国公开赛"],
+    [/shoot out/i, "单局限时赛"],
+    [/\bmasters\b/i, "大师赛"],
+  ];
+  return known.find(([pattern]) => pattern.test(source))?.[1] ?? source;
+}
+
 function allMatches(event: SnookerEvent) {
   return event.rounds.flatMap((round) => round.matches);
 }
@@ -214,8 +269,8 @@ function MatchListRow({ match, players, onOpen }: { match: SnookerMatch; players
 
 function CalendarCard({ item, onOpen, interactive = true }: { item: SnookerCalendarEvent; onOpen?: () => void; interactive?: boolean }) {
   const content = <>
-    <div className={styles.calendarDate}><b>{new Date(`${item.startDate}T00:00:00+08:00`).getMonth() + 1}/{new Date(`${item.startDate}T00:00:00+08:00`).getDate()}</b><small>{item.statusLabelZh}</small></div>
-    <div><span><StatusPill status={item.status} label={item.typeZh} /></span><strong>{item.nameZh}</strong><small>{item.nameEn}</small><p>{formatDateRange(item.startDate, item.endDate)} · {item.countryZh} {item.cityZh}{item.winnerZh ? ` · 冠军 ${item.winnerZh}` : ""}</p></div>
+    <div className={styles.calendarDate}><b>{new Date(`${item.startDate}T00:00:00+08:00`).getMonth() + 1}/{new Date(`${item.startDate}T00:00:00+08:00`).getDate()}</b><small>{item.typeZh}</small></div>
+    <div><span className={eventStatusClass(item.status)}><StatusPill status={item.status} label={eventStatusLabel(item)} /></span><strong>{item.nameZh}</strong><small>{item.nameEn}</small><p>{formatDateRange(item.startDate, item.endDate)} · {item.countryZh} {item.cityZh}{item.winnerZh ? ` · 冠军 ${item.winnerZh}` : ""}</p></div>
     {interactive ? <em>›</em> : null}
   </>;
   if (!interactive) return <article className={`${priority.calendarStaticCard} ${item.current ? priority.calendarStaticCurrent : ""}`}>{content}</article>;
@@ -337,8 +392,7 @@ export default function SnookerDataCenterV2({
   const nextEventCard = featuredEventCard ? mainSeasonEvents.find((item) => item.startDate > featuredEventCard.startDate) : firstUpcomingMain;
   const firstUpcomingAny = seasonCalendar.find((item) => item.startDate > today);
   const recentEvents = seasonCalendar
-    .filter((item) => item.endDate < today || isActiveOn(item, today) || item.id === firstUpcomingAny?.id)
-    .filter((item) => item.id !== featuredEventCard?.id)
+    .filter((item) => item.endDate < today || isActiveOn(item, today) || item.id === firstUpcomingAny?.id || item.id === featuredEventCard?.id)
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
   const rankingRows = useMemo(() => snapshot.rankings
@@ -469,7 +523,7 @@ export default function SnookerDataCenterV2({
         {selectedDataTab === "h2h" && h2h ? <div className={`${polish.dataPanel} ${polish.h2hPanel}`}>
           <div className={polish.h2hPanelHeader}><span>历史对阵</span><b>赛前 {h2h.meetings} 次</b></div>
           <div className={insight.h2hSummary}><div className={insight.h2hSide}><strong>{h2h.player1Wins}</strong><span>{p1.nameZh} 胜</span></div><div className={insight.h2hMiddle}><strong>{h2h.player1Frames} : {h2h.player2Frames}</strong><small>历史局分</small></div><div className={insight.h2hSide}><strong>{h2h.player2Wins}</strong><span>{p2.nameZh} 胜</span></div></div>
-          {h2h.recentMeetings.length ? <div className={insight.h2hHistory}>{h2h.recentMeetings.map((item, index) => <div className={insight.h2hMeeting} key={`${item.date}-${index}`}><time>{meetingDate(item)}</time><div><small>{item.tournament ?? "官方赛事"}{item.round ? ` · ${item.round}` : ""}</small><strong>{localized(item.homePlayerName)} {item.homeScore ?? "-"} : {item.awayScore ?? "-"} {localized(item.awayPlayerName)}</strong></div></div>)}</div> : <div className={insight.noHistory}>此前没有官方可识别的正式交手记录。</div>}
+          {h2h.recentMeetings.length ? <div className={insight.h2hHistory}>{h2h.recentMeetings.map((item, index) => <div className={insight.h2hMeeting} key={`${item.date}-${index}`}><time>{meetingDate(item)}</time><div><small>{localizedTournamentLabel(item.tournament, snapshot.calendar)}{item.round ? ` · ${localizedRoundLabel(item.round)}` : ""}</small><strong>{localized(item.homePlayerName)} {item.homeScore ?? "-"} : {item.awayScore ?? "-"} {localized(item.awayPlayerName)}</strong></div></div>)}</div> : <div className={insight.noHistory}>此前没有官方可识别的正式交手记录。</div>}
         </div> : null}
       </section> : null}
 
@@ -526,7 +580,7 @@ export default function SnookerDataCenterV2({
     <header className={styles.header}><button className={styles.brand} onClick={() => changeView("home")}><span>S</span><div><strong>世界斯诺克数据中心</strong><small>WORLD SNOOKER DATA</small></div></button><div className={styles.headerRight}><span className={styles.versionBadge}>DATA v0.9</span><div className={styles.themeSwitch}><button className={theme === "green" ? styles.themeActive : ""} onClick={() => setTheme("green")}>绿</button><button className={theme === "red" ? styles.themeActive : ""} onClick={() => setTheme("red")}>红</button></div></div></header>
     <div className={styles.content}>
       {activeView === "home" ? <>
-        {featuredEventCard ? <section className={styles.hero}><div className={styles.heroTop}><StatusPill status={featuredEventCard.status} label={activeEventCard ? "当前赛事" : graceEventCard ? "刚刚结束" : "下一站"} /><span>{featuredEventCard.typeZh}</span></div><small>{activeEventCard ? "CURRENT TOURNAMENT" : graceEventCard ? "JUST FINISHED" : "NEXT TOURNAMENT"}</small><h1>{featuredEventCard.nameZh}</h1><p>{formatDateRange(featuredEventCard.startDate, featuredEventCard.endDate)} · {featuredEventCard.countryZh} {featuredEventCard.cityZh}</p><div className={styles.heroActions}><button onClick={() => openEvent(featuredEventCard.slug, featuredDetail?.rounds.length ? "schedule" : "overview")}>查看赛事</button><button className={styles.secondaryButton} onClick={() => changeView("matches")}>赛事列表</button></div></section> : null}
+        {featuredEventCard ? <section className={styles.hero}><div className={styles.heroTop}><span className={eventStatusClass(featuredEventCard.status)}><StatusPill status={featuredEventCard.status} label={activeEventCard ? "当前赛事" : graceEventCard ? "刚刚结束" : "下一站"} /></span><span>{featuredEventCard.typeZh}</span></div><small>{activeEventCard ? "CURRENT TOURNAMENT" : graceEventCard ? "JUST FINISHED" : "NEXT TOURNAMENT"}</small><h1>{featuredEventCard.nameZh}</h1><p>{formatDateRange(featuredEventCard.startDate, featuredEventCard.endDate)} · {featuredEventCard.countryZh} {featuredEventCard.cityZh}</p><div className={styles.heroActions}><button onClick={() => openEvent(featuredEventCard.slug, featuredDetail?.rounds.length ? "schedule" : "overview")}>查看赛事</button><button className={styles.secondaryButton} onClick={() => changeView("matches")}>赛事列表</button></div></section> : null}
 
         {headlineMatch && headlineEvent && players.get(headlineMatch.player1Id) && players.get(headlineMatch.player2Id) ? <section className={styles.card}>
           <div className={styles.liveHeader}><div><small>{headlineMatch.roundLabelZh} · {headlineMatch.timeLabelZh ?? ""}</small><h2>{headlineEvent.nameZh} · {headlineMatch.roundLabelZh}</h2></div><StatusPill status={headlineMatch.status} label={headlineMatch.status === "completed" ? "已结束" : "进行中"} /></div>
@@ -539,7 +593,7 @@ export default function SnookerDataCenterV2({
           <div className={styles.sourceLine}><i className={sourceHealth?.accepted ? styles.liveOk : styles.liveWait} /><b>官方比赛数据</b><small>{headlineMatch.status === "completed" ? "已冻结保存" : "30秒同步"}</small></div>
         </section> : null}
 
-        {nextEventCard ? <section className={styles.card}><SectionHeader eyebrow="NEXT EVENT" title="下一站" action={nextEventCard.statusLabelZh} /><button className={styles.nextEvent} onClick={() => openEvent(nextEventCard.slug)}><span>{nextEventCard.cityZh?.slice(0, 1) || "赛"}</span><div><strong>{nextEventCard.nameZh}</strong><small>{nextEventCard.nameEn}</small><p>{formatDateRange(nextEventCard.startDate, nextEventCard.endDate)} · {nextEventCard.cityZh}</p></div><em>›</em></button></section> : null}
+        {nextEventCard ? <section className={styles.card}><SectionHeader eyebrow="NEXT EVENT" title="下一站" action={eventStatusLabel(nextEventCard)} /><button className={styles.nextEvent} onClick={() => openEvent(nextEventCard.slug)}><span>{nextEventCard.cityZh?.slice(0, 1) || "赛"}</span><div><strong>{nextEventCard.nameZh}</strong><small>{nextEventCard.nameEn}</small><p>{formatDateRange(nextEventCard.startDate, nextEventCard.endDate)} · {nextEventCard.cityZh}</p></div><em>›</em></button></section> : null}
         <section className={styles.card}><SectionHeader eyebrow="Official World Ranking" title="世界排名" action="TOP 3" /><div className={styles.rankingList}>{rankingRows.slice(0, 3).map((row) => <div className={polish.rankingStaticRow} key={row.rank}><strong>{row.rank}</strong><button className={polish.rankingAvatarButton} onClick={() => openPlayer(row.player.id)} aria-label={`查看${row.player.nameZh}球员详情`}><PlayerAvatar player={row.player} size="sm" /></button><span><b>{row.player.nameZh}</b><small>{row.player.nameEn}</small></span><em>{rankingMoney(row.points)}</em></div>)}</div><button className={styles.fullButton} onClick={() => changeView("data")}>查看完整世界排名</button></section>
         <section className={styles.card}><SectionHeader eyebrow="Official World Ranking" title="中国球员" action={`${chinaTop16.length} 人进入 TOP16`} /><div className={styles.chinaTopGrid}>{chinaTop16.map((row) => <button key={row.player.id} onClick={() => openPlayer(row.player.id)}><span>{row.rank}</span><strong>{row.player.nameZh}</strong><small>世界第 {row.rank}</small></button>)}</div></section>
       </> : null}
@@ -547,7 +601,7 @@ export default function SnookerDataCenterV2({
       {activeView === "matches" ? <>
         <section className={styles.pageIntro}><small>TOURNAMENTS</small><h1>赛事</h1><p>近期赛事展示本赛季已完成赛事、当前赛事和即将开始的一站；赛季赛历展示完整 2026/27 赛程。</p></section>
         <div className={priority.eventModeTabs}><button className={eventListMode === "recent" ? priority.eventModeActive : ""} onClick={() => setEventListMode("recent")}>近期赛事</button><button className={eventListMode === "calendar" ? priority.eventModeActive : ""} onClick={() => setEventListMode("calendar")}>赛季赛历</button></div>
-        {eventListMode === "recent" ? <>{featuredEventCard ? <section className={styles.currentEventBanner} onClick={() => openEvent(featuredEventCard.slug, featuredDetail?.rounds.length ? "schedule" : "overview")}><div><StatusPill status={featuredEventCard.status} label={activeEventCard ? "当前赛事" : graceEventCard ? "刚刚结束" : "下一站"} /><small>{featuredEventCard.typeZh}</small></div><h2>{featuredEventCard.nameZh}</h2><p>{formatDateRange(featuredEventCard.startDate, featuredEventCard.endDate)} · {featuredEventCard.cityZh}</p><span>查看赛事 ›</span></section> : null}<section className={styles.card}><SectionHeader title="近期赛事" action="本赛季" /><div className={styles.calendarList}>{recentEvents.map((item) => <CalendarCard key={item.id} item={item} onOpen={() => openEvent(item.slug)} />)}</div></section></> : <section className={styles.card}><SectionHeader eyebrow="2026/27 SEASON" title="赛季赛历" action="按时间顺序" /><div className={priority.calendarStaticList}>{seasonCalendar.map((item) => <CalendarCard key={item.id} item={item} interactive={false} />)}</div></section>}
+        {eventListMode === "recent" ? <>{featuredEventCard ? <section className={styles.currentEventBanner} onClick={() => openEvent(featuredEventCard.slug, featuredDetail?.rounds.length ? "schedule" : "overview")}><div><span className={eventStatusClass(featuredEventCard.status)}><StatusPill status={featuredEventCard.status} label={activeEventCard ? "当前赛事" : graceEventCard ? "刚刚结束" : "下一站"} /></span><small>{featuredEventCard.typeZh}</small></div><h2>{featuredEventCard.nameZh}</h2><p>{formatDateRange(featuredEventCard.startDate, featuredEventCard.endDate)} · {featuredEventCard.cityZh}</p><span>查看赛事 ›</span></section> : null}<section className={styles.card}><SectionHeader title="近期赛事" action="本赛季" /><div className={styles.calendarList}>{recentEvents.map((item) => <CalendarCard key={item.id} item={item} onOpen={() => openEvent(item.slug)} />)}</div></section></> : <section className={styles.card}><SectionHeader eyebrow="2026/27 SEASON" title="赛季赛历" action="按时间顺序" /><div className={priority.calendarStaticList}>{seasonCalendar.map((item) => <CalendarCard key={item.id} item={item} interactive={false} />)}</div></section>}
       </> : null}
 
       {activeView === "players" ? <PlayerDirectoryContent players={directoryPlayers} /> : null}
