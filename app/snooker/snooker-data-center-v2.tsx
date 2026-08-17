@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import type {
   PlayerEventStats,
   SnookerCalendarEvent,
@@ -14,7 +13,9 @@ import type {
   SnookerSeasonStatistics,
 } from "@/lib/snooker/domain";
 import type { SnookerPlayerListItem } from "@/lib/snooker/player-data";
-import { PlayerDirectoryContent } from "./players/player-directory";
+import { PlayerDirectoryContent, type PlayerFilter } from "./players/player-directory";
+import PlayerDetailInline from "./players/player-detail-inline";
+import { prefetchPlayerDetail } from "./players/player-detail-client";
 import styles from "./snooker-data-center.module.css";
 import priority from "./snooker-priority.module.css";
 import insight from "./snooker-insights.module.css";
@@ -28,7 +29,8 @@ type EventListMode = "recent" | "calendar";
 type MatchDataTab = "match" | "season" | "h2h";
 type DetailState =
   | { type: "event"; slug: string; tab: EventTab }
-  | { type: "match"; matchId: string; eventSlug: string };
+  | { type: "match"; matchId: string; eventSlug: string }
+  | { type: "player"; slug: string; returnView: MainView };
 
 type SourceHealth = {
   online: boolean;
@@ -304,25 +306,29 @@ export default function SnookerDataCenterV2({
   initialSourceHealth,
   buildMark,
   initialView = "home",
+  initialPlayerSlug,
 }: {
   initialSnapshot: SnookerDashboardSnapshot;
   initialDatabaseEvents: SnookerEvent[];
   initialSourceHealth?: SourceHealth | null;
   buildMark: string;
   initialView?: MainView;
+  initialPlayerSlug?: string | null;
 }) {
-  const router = useRouter();
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [databaseEvents, setDatabaseEvents] = useState(initialDatabaseEvents);
-  const [activeView, setActiveView] = useState<MainView>(initialView);
-  const [detail, setDetail] = useState<DetailState | null>(null);
+  const [activeView, setActiveView] = useState<MainView>(initialPlayerSlug ? "players" : initialView);
+  const [detail, setDetail] = useState<DetailState | null>(() => initialPlayerSlug ? { type: "player", slug: initialPlayerSlug, returnView: "players" } : null);
   const [theme, setTheme] = useState<Theme>("green");
   const [sourceHealth, setSourceHealth] = useState<SourceHealth | null>(initialSourceHealth ?? null);
   const [refreshing, setRefreshing] = useState(false);
   const [eventListMode, setEventListMode] = useState<EventListMode>("recent");
+  const [playerQuery, setPlayerQuery] = useState("");
+  const [playerFilter, setPlayerFilter] = useState<PlayerFilter>("all");
   const [matchDataTab, setMatchDataTab] = useState<MatchDataTab>("match");
   const [matchUpdatedAt, setMatchUpdatedAt] = useState<Record<string, string>>({});
   const signatures = useRef(new Map(initialDatabaseEvents.flatMap((event) => allMatches(event)).map((match) => [match.id, matchSignature(match)])));
+  const playerDirectoryScrollY = useRef(0);
 
   const players = useMemo(() => playerMap(snapshot), [snapshot]);
   const directoryPlayers = useMemo<SnookerPlayerListItem[]>(() => snapshot.players
@@ -383,6 +389,39 @@ export default function SnookerDataCenterV2({
     };
   }, [hasLiveMatch, refresh]);
 
+  useEffect(() => {
+    const onPopState = (event: PopStateEvent) => {
+      const params = new URLSearchParams(window.location.search);
+      const playerSlug = params.get("player")?.trim();
+      const viewParam = params.get("view");
+      const urlView: MainView = viewParam === "matches" || viewParam === "players" || viewParam === "data" ? viewParam : "home";
+      const state = event.state as { snookerReturnView?: MainView; snookerReturnDetail?: DetailState | null } | null;
+
+      if (playerSlug) {
+        setActiveView("players");
+        setDetail({ type: "player", slug: playerSlug, returnView: "players" });
+        window.scrollTo({ top: 0, behavior: "auto" });
+        return;
+      }
+
+      if (state?.snookerReturnDetail && state.snookerReturnDetail.type !== "player") {
+        setActiveView(state.snookerReturnView ?? urlView);
+        setDetail(state.snookerReturnDetail);
+        window.scrollTo({ top: 0, behavior: "auto" });
+        return;
+      }
+
+      setDetail((current) => current?.type === "player" ? null : current);
+      setActiveView(state?.snookerReturnView ?? urlView);
+      if ((state?.snookerReturnView ?? urlView) === "players") {
+        window.requestAnimationFrame(() => window.scrollTo({ top: playerDirectoryScrollY.current, behavior: "auto" }));
+      }
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   const today = chinaToday();
   const seasonCalendar = useMemo(() => [...snapshot.calendar].filter((item) => item.season === "2026/27").sort((a, b) => a.startDate.localeCompare(b.startDate)), [snapshot.calendar]);
   const mainSeasonEvents = useMemo(() => seasonCalendar.filter((item) => item.typeZh !== "资格赛"), [seasonCalendar]);
@@ -413,15 +452,59 @@ export default function SnookerDataCenterV2({
   };
   const openPlayer = (playerId: string) => {
     const target = players.get(playerId);
-    const href = target?.slug ? `/snooker/players/${target.slug}` : "/snooker?view=players";
-    router.prefetch(href);
-    router.push(href);
+    if (!target?.slug) {
+      setDetail(null);
+      setActiveView("players");
+      return;
+    }
+
+    if (activeView === "players" && detail === null) playerDirectoryScrollY.current = window.scrollY;
+    prefetchPlayerDetail(target.slug);
+
+    const returnDetail = detail;
+    const returnView = activeView;
+    const currentState = { ...(window.history.state ?? {}), snookerReturnView: returnView, snookerReturnDetail: returnDetail };
+    window.history.replaceState(currentState, "", window.location.href);
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "players");
+    url.searchParams.set("player", target.slug);
+    const nextUrl = url.pathname + url.search + url.hash;
+    window.history.pushState({ ...currentState, snookerPlayerDetail: target.slug }, "", nextUrl);
+
+    setActiveView("players");
+    setDetail({ type: "player", slug: target.slug, returnView });
+    window.scrollTo({ top: 0, behavior: "auto" });
+  };
+  const closePlayer = () => {
+    if (detail?.type !== "player") return;
+    const state = window.history.state as { snookerPlayerDetail?: string } | null;
+    if (state?.snookerPlayerDetail === detail.slug && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "players");
+    url.searchParams.delete("player");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    setDetail(null);
+    setActiveView("players");
+    window.requestAnimationFrame(() => window.scrollTo({ top: playerDirectoryScrollY.current, behavior: "auto" }));
   };
   const changeView = (view: NavId) => {
     setDetail(null);
     setActiveView(view);
     window.scrollTo({ top: 0, behavior: "auto" });
   };
+
+  if (detail?.type === "player") {
+    const summaryPlayer = snapshot.players.find((player) => player.slug === detail.slug);
+    return <main className={styles.appRoot} data-theme={theme}><div className={styles.detailShell}>
+      <header className={styles.detailHeader}><button onClick={closePlayer}>‹</button><strong>{summaryPlayer?.nameZh ?? "球员详情"}</strong><span>PLAYER</span></header>
+      <PlayerDetailInline key={detail.slug} summaryPlayer={summaryPlayer} slug={detail.slug} />
+    </div></main>;
+  }
 
   if (detail?.type === "match") {
     const selectedEvent = eventBySlug.get(detail.eventSlug) ?? snapshot.event;
@@ -605,7 +688,7 @@ export default function SnookerDataCenterV2({
         {eventListMode === "recent" ? <>{featuredEventCard ? <section className={styles.currentEventBanner} onClick={() => openEvent(featuredEventCard.slug, featuredDetail?.rounds.length ? "schedule" : "overview")}><div><span className={eventStatusClass(featuredEventCard.status)}><StatusPill status={featuredEventCard.status} label={activeEventCard ? "当前赛事" : graceEventCard ? "刚刚结束" : "下一站"} /></span><small>{featuredEventCard.typeZh}</small></div><h2>{featuredEventCard.nameZh}</h2><p>{formatDateRange(featuredEventCard.startDate, featuredEventCard.endDate)} · {featuredEventCard.cityZh}</p><span>查看赛事 ›</span></section> : null}<section className={styles.card}><SectionHeader eyebrow="RECENT TOURNAMENTS" title="近期赛事" action="本赛季" /><div className={styles.calendarList}>{recentEvents.map((item) => <CalendarCard key={item.id} item={item} onOpen={() => openEvent(item.slug)} />)}</div></section></> : <section className={styles.card}><SectionHeader eyebrow="2026/27 SEASON" title="赛季赛历" action="按时间顺序" /><div className={priority.calendarStaticList}>{seasonCalendar.map((item) => <CalendarCard key={item.id} item={item} interactive={false} />)}</div></section>}
       </> : null}
 
-      {activeView === "players" ? <PlayerDirectoryContent players={directoryPlayers} /> : null}
+      {activeView === "players" ? <PlayerDirectoryContent players={directoryPlayers} query={playerQuery} filter={playerFilter} onQueryChange={setPlayerQuery} onFilterChange={setPlayerFilter} onOpenPlayer={(player) => openPlayer(player.id)} onPrefetchPlayer={(player) => prefetchPlayerDetail(player.slug)} /> : null}
 
       {activeView === "data" ? <>
         <section className={styles.pageIntro}><small>GLOBAL DATA</small><h1>数据</h1><p>跨赛事、跨赛季数据；单站数据仍放在各赛事自己的“赛事数据”页。</p></section>

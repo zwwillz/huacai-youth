@@ -7,9 +7,14 @@ export const revalidate = 30;
 
 type SnookerRootView = "home" | "matches" | "players" | "data";
 
-export default async function SnookerPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function SnookerPage({ searchParams }: { searchParams: Promise<{ view?: string; player?: string }> }) {
   const [database, query] = await Promise.all([loadSnookerDatabaseViewV2(), searchParams]);
-  const initialView: SnookerRootView = query.view === "matches" || query.view === "players" || query.view === "data" ? query.view : "home";
+  const requestedPlayer = query.player?.trim() || null;
+  const initialView: SnookerRootView = requestedPlayer
+    ? "players"
+    : query.view === "matches" || query.view === "players" || query.view === "data"
+      ? query.view
+      : "home";
   const sourceHealth = {
     online: database.databaseOnline,
     accepted: database.databaseOnline,
@@ -28,6 +33,7 @@ export default async function SnookerPage({ searchParams }: { searchParams: Prom
         initialSourceHealth={sourceHealth}
         buildMark={`${SNOOKER_BUILD_MARK}-DB09`}
         initialView={initialView}
+        initialPlayerSlug={requestedPlayer}
       />
     </>
   );
