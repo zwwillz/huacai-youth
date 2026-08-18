@@ -167,7 +167,6 @@ export function DataHubContent({
 
   useEffect(() => {
     let cancelled = false;
-    if (technicalCache) setTechnicalHub(technicalCache);
     void loadTechnicalHubClient().then((nextHub) => {
       if (!cancelled && nextHub) setTechnicalHub(nextHub);
     });
@@ -179,9 +178,12 @@ export function DataHubContent({
       const params = new URLSearchParams(window.location.search);
       setTechnicalKey(params.get("view") === "data" && params.get("section") === "technical" ? technicalMetricKey(params.get("metric")) : null);
     };
-    syncTechnicalFromUrl();
+    const frame = window.requestAnimationFrame(syncTechnicalFromUrl);
     window.addEventListener("popstate", syncTechnicalFromUrl);
-    return () => window.removeEventListener("popstate", syncTechnicalFromUrl);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("popstate", syncTechnicalFromUrl);
+    };
   }, []);
 
   const openTechnical = (key: SnookerTechnicalMetricKey) => {
