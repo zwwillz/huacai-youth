@@ -10,6 +10,15 @@ type PlayerDetailResponse = {
 const detailCache = new Map<string, SnookerPlayerDetail>();
 const inflightCache = new Map<string, Promise<SnookerPlayerDetail | null>>();
 
+function detailAvatarUrl(value: string | null) {
+  if (!value) return null;
+  return value.includes("/wst/256/") ? value.replace("/wst/256/", "/wst/512/") : value;
+}
+
+function normalizePlayerDetail(player: SnookerPlayerDetail) {
+  return { ...player, avatarUrl: detailAvatarUrl(player.avatarUrl) };
+}
+
 export function getCachedPlayerDetail(slug: string) {
   return detailCache.get(slug) ?? null;
 }
@@ -27,7 +36,7 @@ export async function loadPlayerDetail(slug: string): Promise<SnookerPlayerDetai
     .then(async (response) => {
       if (!response.ok) return null;
       const payload = await response.json() as PlayerDetailResponse;
-      const player = payload.ok && payload.player ? payload.player : null;
+      const player = payload.ok && payload.player ? normalizePlayerDetail(payload.player) : null;
       if (player) detailCache.set(slug, player);
       return player;
     })
