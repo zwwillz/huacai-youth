@@ -13,7 +13,9 @@ test("phase 1b exposes the planned current-season technical metrics", () => {
   for (const key of ["centuries", "fifties", "win_rate", "shot_time", "highest_break", "maximums", "average_break", "matches_won", "points_scored"]) {
     assert.match(hub, new RegExp(`"${key}"`));
   }
-  assert.match(hub, /minMatches: 5/);
+  assert.match(hub, /key: "win_rate"[^\n]+minMatches: 5/);
+  assert.match(hub, /key: "shot_time"[^\n]+minMatches: 5/);
+  assert.match(hub, /key: "average_break"[^\n]+minMatches: 5/);
   assert.match(hub, /is_current_tour: "eq\.true"/);
   assert.match(hub, /previousValue !== null && item\.value === previousValue \? previousRank : index \+ 1/);
 });
@@ -59,5 +61,6 @@ test("technical detail supports URL/back navigation and player drill-down withou
 test("technical list exposes its statistical eligibility rules at the bottom", () => {
   assert.match(technical, /口径：至少完成 \{selected\.minMatches\} 场比赛/);
   assert.match(technical, /仅统计当前职业巡回赛球员/);
-  assert.match(technical, /WST 官方赛季统计/);
+  assert.match(technical, /hub\.sourceName/);
+  assert.match(hub, /WST 官方赛季统计/);
 });
