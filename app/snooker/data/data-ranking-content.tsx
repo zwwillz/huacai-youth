@@ -7,6 +7,8 @@ import type {
   SnookerRankingHub,
   SnookerRankingSection,
 } from "@/lib/snooker/ranking-hub";
+import type { SnookerTechnicalHub, SnookerTechnicalMetricKey } from "@/lib/snooker/technical-hub";
+import { SeasonLeadersSection } from "./data-technical-content";
 import styles from "./data.module.css";
 
 const currentKeyOrder: SnookerCurrentRankingKey[] = [
@@ -125,17 +127,21 @@ function RankingInfoModal({ hub, onClose }: { hub: SnookerRankingHub; onClose: (
 
 export function DataHubContent({
   hub,
+  technicalHub,
   players,
   selectedKey,
   onSelectKey,
   onOpenRankings,
+  onOpenTechnical,
   onOpenPlayer,
 }: {
   hub: SnookerRankingHub;
+  technicalHub: SnookerTechnicalHub;
   players: SnookerPlayerListItem[];
   selectedKey: SnookerCurrentRankingKey;
   onSelectKey: (key: SnookerCurrentRankingKey) => void;
   onOpenRankings: (key: SnookerCurrentRankingKey) => void;
+  onOpenTechnical: (key: SnookerTechnicalMetricKey) => void;
   onOpenPlayer: (slug: string) => void;
 }) {
   const [infoOpen, setInfoOpen] = useState(false);
@@ -147,7 +153,7 @@ export function DataHubContent({
     <section className={styles.pageIntro}>
       <small>DATA CENTER</small>
       <h1>数据</h1>
-      <p>世界斯诺克排名、赛季表现与历史纪录的数据入口。第一阶段先建立排名中心，后续技术榜、荣誉榜和资格数据沿用同一框架接入。</p>
+      <p>世界斯诺克排名、赛季表现与历史纪录的数据入口。排名与技术数据优先使用官方数据，专题模块按统一结构逐步扩展。</p>
     </section>
 
     <section className={`${styles.card} ${styles.rankingCard}`}>
@@ -175,12 +181,12 @@ export function DataHubContent({
       </> : <div className={styles.emptyState}>排名数据正在准备中。</div>}
     </section>
 
+    <SeasonLeadersSection hub={technicalHub} players={players} onOpenTechnical={onOpenTechnical} onOpenPlayer={onOpenPlayer} />
+
     <section className={styles.card}>
-      <div className={styles.sectionHeader}><div><small>NEXT MODULES</small><h2>数据专题</h2></div><span>框架已预留</span></div>
+      <div className={styles.sectionHeader}><div><small>MORE DATA</small><h2>更多数据</h2></div></div>
       <div className={styles.moduleGrid}>
-        <article><small>SEASON LEADERS</small><strong>本赛季领跑者</strong><p>破百、胜率、平均出杆、147</p><span>下一步接入</span></article>
-        <article><small>TECHNICAL</small><strong>技术榜</strong><p>50+、100+、最高单杆、比赛表现</p><span>下一步接入</span></article>
-        <article><small>HONOURS</small><strong>荣誉榜</strong><p>排名赛、三大赛、世锦赛、生涯147</p><span>下一步接入</span></article>
+        <article><small>HONOURS</small><strong>荣誉榜</strong><p>排名赛、三大赛、世锦赛、生涯147</p><span>下一阶段接入</span></article>
         <article><small>RACE & HISTORY</small><strong>资格与历史</strong><p>大师赛 / 世锦赛资格线、历史排名节点</p><span>排名页已预留入口</span></article>
       </div>
     </section>
