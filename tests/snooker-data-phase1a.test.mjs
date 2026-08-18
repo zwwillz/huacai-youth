@@ -6,6 +6,7 @@ const root = readFileSync(new URL("../app/snooker/snooker-data-center-v2.tsx", i
 const page = readFileSync(new URL("../app/snooker/page.tsx", import.meta.url), "utf8");
 const hub = readFileSync(new URL("../lib/snooker/ranking-hub.ts", import.meta.url), "utf8");
 const data = readFileSync(new URL("../app/snooker/data/data-ranking-content.tsx", import.meta.url), "utf8");
+const technical = readFileSync(new URL("../app/snooker/data/data-technical-content.tsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("../app/snooker/data/data.module.css", import.meta.url), "utf8");
 
 test("data phase 1a loads the four current ranking lists as one root data module", () => {
@@ -44,7 +45,7 @@ test("ranking hub keeps explanations behind an inline information modal", () => 
   assert.match(data, /Escape/);
   assert.match(data, /排名说明/);
   assert.doesNotMatch(data, /className=\{styles\.rankingSummary\}/);
-  assert.doesNotMatch(data, /官方数据/);
+  assert.doesNotMatch(data, /<span>官方数据<\/span>/);
   assert.doesNotMatch(data, /className=\{styles\.sourceMeta\}/);
 });
 
@@ -64,8 +65,9 @@ test("ranking detail uses a compact two-level navigation and direct list", () =>
 
 test("ranking detail preserves player drill-down and future data hub framework", () => {
   assert.match(data, /onOpenPlayer/);
-  assert.match(data, /本赛季领跑者/);
-  assert.match(data, /技术榜/);
+  assert.match(data, /SeasonLeadersSection/);
+  assert.match(technical, /本赛季领跑者/);
+  assert.match(technical, /技术榜/);
   assert.match(data, /荣誉榜/);
 });
 
