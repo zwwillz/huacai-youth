@@ -7,6 +7,11 @@ import { PlayerDetailContent } from "./player-detail-content";
 import { getCachedPlayerDetail, loadPlayerDetail } from "./player-detail-client";
 import styles from "./player.module.css";
 
+function detailAvatarUrl(value: string | null) {
+  if (!value) return null;
+  return value.includes("/wst/256/") ? value.replace("/wst/256/", "/wst/512/") : value;
+}
+
 function toSummary(player: SnookerPlayer): SnookerPlayerListItem {
   return {
     id: player.id,
@@ -20,7 +25,7 @@ function toSummary(player: SnookerPlayer): SnookerPlayerListItem {
     turnedPro: player.turnedPro ?? null,
     currentRank: player.currentRank,
     rankingPoints: player.rankingPoints,
-    avatarUrl: player.avatarUrl || player.avatar?.url || null,
+    avatarUrl: detailAvatarUrl(player.avatarUrl || player.avatar?.url || null),
     isCurrentTour: player.currentRank !== null,
     tourStatus: player.currentRank !== null ? "current" : "unknown",
   };
