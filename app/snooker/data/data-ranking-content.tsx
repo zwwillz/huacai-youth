@@ -7,8 +7,8 @@ import type {
   SnookerRankingHub,
   SnookerRankingSection,
 } from "@/lib/snooker/ranking-hub";
-import type { SnookerTechnicalHub, SnookerTechnicalMetricKey } from "@/lib/snooker/technical-hub";
-import { SeasonLeadersSection } from "./data-technical-content";
+import { technicalMetricKey, type SnookerTechnicalHub, type SnookerTechnicalMetricKey } from "@/lib/snooker/technical-hub";
+import { SeasonLeadersSection, TechnicalDetailOverlay } from "./data-technical-content";
 import styles from "./data.module.css";
 
 const currentKeyOrder: SnookerCurrentRankingKey[] = [
@@ -30,6 +30,24 @@ const sectionTabs: Array<{ id: SnookerRankingSection; label: string }> = [
   { id: "qualification", label: "资格竞争" },
   { id: "history", label: "历史排名" },
 ];
+
+let technicalCache: SnookerTechnicalHub | null = null;
+let technicalInflight: Promise<SnookerTechnicalHub | null> | null = null;
+
+async function loadTechnicalHubClient() {
+  if (technicalCache) return technicalCache;
+  if (technicalInflight) return technicalInflight;
+  technicalInflight = fetch("/api/snooker/v1/technical", { headers: { Accept: "application/json" } })
+    .then(async (response) => {
+      if (!response.ok) return null;
+      const data = await response.json() as { hub?: SnookerTechnicalHub };
+      if (data.hub?.online) technicalCache = data.hub;
+      return data.hub ?? null;
+    })
+    .catch(() => null)
+    .finally(() => { technicalInflight = null; });
+  return technicalInflight;
+}
 
 function initials(name: string) {
   return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
@@ -127,27 +145,81 @@ function RankingInfoModal({ hub, onClose }: { hub: SnookerRankingHub; onClose: (
 
 export function DataHubContent({
   hub,
-  technicalHub,
   players,
   selectedKey,
   onSelectKey,
   onOpenRankings,
-  onOpenTechnical,
   onOpenPlayer,
 }: {
   hub: SnookerRankingHub;
-  technicalHub: SnookerTechnicalHub;
   players: SnookerPlayerListItem[];
   selectedKey: SnookerCurrentRankingKey;
   onSelectKey: (key: SnookerCurrentRankingKey) => void;
   onOpenRankings: (key: SnookerCurrentRankingKey) => void;
-  onOpenTechnical: (key: SnookerTechnicalMetricKey) => void;
   onOpenPlayer: (slug: string) => void;
 }) {
   const [infoOpen, setInfoOpen] = useState(false);
+  const [technicalHub, setTechnicalHub] = useState<SnookerTechnicalHub | null>(() => technicalCache);
+  const [technicalKey, setTechnicalKey] = useState<SnookerTechnicalMetricKey | null>(null);
   const playerBySlug = useMemo(() => playerBySlugMap(players), [players]);
   const selected = listFor(hub, selectedKey);
   const top = selected?.rows.slice(0, 3) ?? [];
+
+  useEffect(() => {
+    let cancelled = false;
+    if (technicalCache) setTechnicalHub(technicalCache);
+    void loadTechnicalHubClient().then((nextHub) => {
+      if (!cancelled && nextHub) setTechnicalHub(nextHub);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const syncTechnicalFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      setTechnicalKey(params.get("view") === "data" && params.get("section") === "technical" ? technicalMetricKey(params.get("metric")) : null);
+    };
+    syncTechnicalFromUrl();
+    window.addEventListener("popstate", syncTechnicalFromUrl);
+    return () => window.removeEventListener("popstate", syncTechnicalFromUrl);
+  }, []);
+
+  const openTechnical = (key: SnookerTechnicalMetricKey) => {
+    const currentState = { ...(window.history.state ?? {}), snookerTechnicalReturn: true };
+    window.history.replaceState(currentState, "", window.location.href);
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "data");
+    url.searchParams.delete("player");
+    url.searchParams.set("section", "technical");
+    url.searchParams.set("metric", key);
+    url.searchParams.delete("list");
+    url.searchParams.delete("group");
+    window.history.pushState({ ...currentState, snookerTechnicalDetail: key }, "", url.pathname + url.search + url.hash);
+    setTechnicalKey(key);
+  };
+
+  const selectTechnical = (key: SnookerTechnicalMetricKey) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "data");
+    url.searchParams.set("section", "technical");
+    url.searchParams.set("metric", key);
+    window.history.replaceState({ ...(window.history.state ?? {}), snookerTechnicalDetail: key }, "", url.pathname + url.search + url.hash);
+    setTechnicalKey(key);
+  };
+
+  const closeTechnical = () => {
+    const state = window.history.state as { snookerTechnicalDetail?: string } | null;
+    if (state?.snookerTechnicalDetail && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "data");
+    url.searchParams.delete("section");
+    url.searchParams.delete("metric");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    setTechnicalKey(null);
+  };
 
   return <>
     <section className={styles.pageIntro}>
@@ -181,7 +253,10 @@ export function DataHubContent({
       </> : <div className={styles.emptyState}>排名数据正在准备中。</div>}
     </section>
 
-    <SeasonLeadersSection hub={technicalHub} players={players} onOpenTechnical={onOpenTechnical} onOpenPlayer={onOpenPlayer} />
+    {technicalHub?.online ? <SeasonLeadersSection hub={technicalHub} players={players} onOpenTechnical={openTechnical} /> : <section className={styles.card}>
+      <div className={styles.sectionHeader}><div><small>SEASON LEADERS</small><h2>本赛季领跑者</h2></div></div>
+      <div className={styles.technicalLoading}>正在加载赛季技术数据…</div>
+    </section>}
 
     <section className={styles.card}>
       <div className={styles.sectionHeader}><div><small>MORE DATA</small><h2>更多数据</h2></div></div>
@@ -192,6 +267,7 @@ export function DataHubContent({
     </section>
 
     {infoOpen ? <RankingInfoModal hub={hub} onClose={() => setInfoOpen(false)} /> : null}
+    {technicalHub?.online && technicalKey ? <TechnicalDetailOverlay hub={technicalHub} players={players} selectedKey={technicalKey} onSelectKey={selectTechnical} onOpenPlayer={onOpenPlayer} onClose={closeTechnical} /> : null}
   </>;
 }
 
