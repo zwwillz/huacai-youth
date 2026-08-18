@@ -10,6 +10,7 @@ import type {
   SnookerRound,
 } from "./domain";
 import { dashboardSnapshot } from "./foundation";
+import { compactEventTypeLabel, normalizeEventTaxonomy, normalizePlayerStatus } from "./taxonomy";
 
 const DEFAULT_SUPABASE_URL = "https://rtlvncsmbueatdzqvhbn.supabase.co";
 const DEFAULT_PUBLISHABLE_KEY = "sb_publishable_SR0NVsqpSBGBMP3xg9utvQ_jywPEUNP";
@@ -34,6 +35,9 @@ type DbEvent = {
   name_zh: string;
   sponsor_name: string | null;
   type_zh: string | null;
+  event_type: string | null;
+  event_stage: string | null;
+  ranking_status: string | null;
   status: string;
   start_date: string | null;
   end_date: string | null;
@@ -67,6 +71,9 @@ type DbPlayer = {
   ranking_points: number | null;
   avatar_url: string | null;
   profile_source: string | null;
+  is_current_tour: boolean;
+  tour_status: string;
+  player_status: string;
 };
 
 type DbRound = {
@@ -150,11 +157,6 @@ function matchStatusLabel(status: SnookerMatchStatus) {
   if (status === "session-break") return "进行中 · 阶段休息";
   if (status === "live") return "进行中";
   return "待开始";
-}
-
-function typeZh(value: string | null): SnookerCalendarEvent["typeZh"] {
-  if (value === "非排名赛" || value === "资格赛") return value;
-  return "排名赛";
 }
 
 function playerId(slug: string) {
@@ -241,6 +243,9 @@ function mapPlayers(rows: DbPlayer[]) {
       ...(row.turned_pro ? { turnedPro: row.turned_pro } : {}),
       ...(row.avatar_url ? { avatarUrl: row.avatar_url } : {}),
       profileSource: row.profile_source === "WST" || row.profile_source === "snooker.org" ? row.profile_source : "curated",
+      isCurrentTour: row.is_current_tour,
+      tourStatus: row.tour_status,
+      playerStatus: normalizePlayerStatus(row.player_status, row.is_current_tour, row.turned_pro),
     };
   });
   return { players, uuidToCanonical };
@@ -333,6 +338,8 @@ function buildEventDetails(
         };
       });
 
+    const taxonomy = normalizeEventTaxonomy(eventRow.event_type, eventRow.event_stage, eventRow.ranking_status, eventRow.type_zh);
+
     return {
       id: `db-event-${eventRow.id}`,
       sourceEventId: eventRow.source_event_id || "",
@@ -341,7 +348,10 @@ function buildEventDetails(
       nameEn: eventRow.name_en,
       ...(eventRow.sponsor_name ? { sponsorName: eventRow.sponsor_name } : {}),
       season: eventRow.season,
-      typeZh: typeZh(eventRow.type_zh),
+      typeZh: compactEventTypeLabel(taxonomy),
+      eventType: taxonomy.eventType,
+      eventStage: taxonomy.eventStage,
+      rankingStatus: taxonomy.rankingStatus,
       status,
       statusLabelZh: statusLabel(status),
       startDate,
@@ -371,8 +381,8 @@ export async function loadSnookerDatabaseView(): Promise<SnookerDatabaseView> {
   const loadedAt = new Date().toISOString();
   try {
     const [eventRows, playerRows, rankingRows] = await Promise.all([
-      rest<DbEvent[]>("snooker_events?select=id,slug,season,name_en,name_zh,sponsor_name,type_zh,status,start_date,end_date,country_zh,city_zh,venue_zh,venue_en,winner_prize,runner_up_prize,currency,source_name,source_event_id,source_url,source_updated_at,referee_zh,data_ready&season=eq.2026%2F27&order=start_date.asc"),
-      rest<DbPlayer[]>("snooker_players?select=id,slug,name_en,name_zh,short_name_en,short_name_zh,nationality_zh,country_code,date_of_birth,turned_pro,current_rank,ranking_points,avatar_url,profile_source&order=current_rank.asc.nullslast,name_en.asc"),
+      rest<DbEvent[]>("snooker_events?select=id,slug,season,name_en,name_zh,sponsor_name,type_zh,event_type,event_stage,ranking_status,status,start_date,end_date,country_zh,city_zh,venue_zh,venue_en,winner_prize,runner_up_prize,currency,source_name,source_event_id,source_url,source_updated_at,referee_zh,data_ready&season=eq.2026%2F27&order=start_date.asc"),
+      rest<DbPlayer[]>("snooker_players?select=id,slug,name_en,name_zh,short_name_en,short_name_zh,nationality_zh,country_code,date_of_birth,turned_pro,current_rank,ranking_points,avatar_url,profile_source,is_current_tour,tour_status,player_status&order=current_rank.asc.nullslast,name_en.asc"),
       rest<DbRanking[]>("snooker_ranking_snapshots?select=captured_at,player_id,rank,points&season=eq.2026%2F27&order=captured_at.desc,rank.asc&limit=200"),
     ]);
 
@@ -403,13 +413,17 @@ export async function loadSnookerDatabaseView(): Promise<SnookerDatabaseView> {
       const endDate = row.end_date || startDate;
       const status = statusFromDates(startDate, endDate);
       const detail = detailsBySlug.get(row.slug);
+      const taxonomy = normalizeEventTaxonomy(row.event_type, row.event_stage, row.ranking_status, row.type_zh);
       return {
         id: `db-calendar-${row.id}`,
         slug: row.slug,
         nameZh: row.name_zh,
         nameEn: row.name_en,
         season: row.season,
-        typeZh: typeZh(row.type_zh),
+        typeZh: compactEventTypeLabel(taxonomy),
+        eventType: taxonomy.eventType,
+        eventStage: taxonomy.eventStage,
+        rankingStatus: taxonomy.rankingStatus,
         status,
         statusLabelZh: statusLabel(status),
         startDate,

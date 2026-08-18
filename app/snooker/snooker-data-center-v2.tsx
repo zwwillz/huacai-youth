@@ -17,7 +17,8 @@ import { CURRENT_RANKING_KEYS, type SnookerCurrentRankingKey, type SnookerRankin
 import { DataHubContent, RankingDetailContent } from "./data/data-ranking-content";
 import { PlayerDirectoryContent, type PlayerFilter } from "./players/player-directory";
 import PlayerDetailInline from "./players/player-detail-inline";
-import { prefetchPlayerDetail } from "./players/player-detail-client";
+import { prefetchPlayerDetail, prefetchPlayerExperience } from "./players/player-detail-client";
+import { eventDetailTypeLabel } from "@/lib/snooker/taxonomy";
 import styles from "./snooker-data-center.module.css";
 import priority from "./snooker-priority.module.css";
 import insight from "./snooker-insights.module.css";
@@ -372,8 +373,9 @@ export default function SnookerDataCenterV2({
       currentRank: player.currentRank,
       rankingPoints: player.rankingPoints,
       avatarUrl: player.avatarUrl || player.avatar?.url || null,
-      isCurrentTour: player.currentRank !== null,
-      tourStatus: player.currentRank !== null ? "current" : "unknown",
+      isCurrentTour: player.isCurrentTour ?? player.currentRank !== null,
+      tourStatus: player.tourStatus ?? (player.currentRank !== null ? "professional" : "unknown"),
+      playerStatus: player.playerStatus ?? (player.currentRank !== null ? "tour" : player.turnedPro ? "former_pro" : "amateur"),
     }))
     .sort((a, b) => (a.currentRank ?? 9999) - (b.currentRank ?? 9999) || a.nameEn.localeCompare(b.nameEn)), [snapshot.players]);
   const eventBySlug = useMemo(() => new Map(databaseEvents.map((event) => [event.slug, event])), [databaseEvents]);
@@ -462,7 +464,7 @@ export default function SnookerDataCenterV2({
 
   const today = chinaToday();
   const seasonCalendar = useMemo(() => [...snapshot.calendar].filter((item) => item.season === "2026/27").sort((a, b) => a.startDate.localeCompare(b.startDate)), [snapshot.calendar]);
-  const mainSeasonEvents = useMemo(() => seasonCalendar.filter((item) => item.typeZh !== "资格赛"), [seasonCalendar]);
+  const mainSeasonEvents = useMemo(() => seasonCalendar.filter((item) => item.eventStage !== "qualifier" && item.eventType !== "pro_qualifier" && item.typeZh !== "资格赛"), [seasonCalendar]);
   const activeEventCard = mainSeasonEvents.find((item) => isActiveOn(item, today));
   const graceEventCard = [...mainSeasonEvents].reverse().find((item) => item.endDate < today && addDateDays(item.endDate, 1) === today);
   const firstUpcomingMain = mainSeasonEvents.find((item) => item.startDate > today);
@@ -497,7 +499,7 @@ export default function SnookerDataCenterV2({
     }
 
     if (activeView === "players" && detail === null) playerDirectoryScrollY.current = window.scrollY;
-    prefetchPlayerDetail(target.slug);
+    prefetchPlayerExperience(target.slug, target.avatarUrl || target.avatar?.url || null, "high");
 
     const returnDetail = detail;
     const returnView = activeView;
@@ -733,12 +735,12 @@ export default function SnookerDataCenterV2({
 
     return <main className={styles.appRoot} data-theme={theme}><div className={styles.detailShell}>
       <header className={`${styles.detailHeader} ${priority.eventNameHeader}`}><button onClick={() => setDetail(null)}>‹</button><strong>{calendarEvent.nameZh}</strong><span>{calendarEvent.season}</span></header>
-      <section className={styles.eventDetailHero}><div className={styles.eventDetailTop}><StatusPill status={calendarEvent.status} label={calendarEvent.statusLabelZh} /><span>{calendarEvent.typeZh}</span></div><h1>{calendarEvent.nameZh}</h1><p>{calendarEvent.nameEn}</p><div className={styles.eventDetailMeta}><span>{formatDateRange(calendarEvent.startDate, calendarEvent.endDate)}</span><span>{calendarEvent.countryZh} · {calendarEvent.cityZh}</span></div></section>
+      <section className={styles.eventDetailHero}><div className={styles.eventDetailTop}><StatusPill status={calendarEvent.status} label={calendarEvent.statusLabelZh} /><span>{eventDetailTypeLabel(calendarEvent)}</span></div><h1>{calendarEvent.nameZh}</h1><p>{calendarEvent.nameEn}</p><div className={styles.eventDetailMeta}><span>{formatDateRange(calendarEvent.startDate, calendarEvent.endDate)}</span><span>{calendarEvent.countryZh} · {calendarEvent.cityZh}</span></div></section>
       <div className={styles.eventTabs}><button className={detail.tab === "overview" ? styles.tabActive : ""} onClick={() => setDetail({ ...detail, tab: "overview" })}>赛事介绍</button><button className={detail.tab === "schedule" ? styles.tabActive : ""} onClick={() => setDetail({ ...detail, tab: "schedule" })}>赛程</button><button className={detail.tab === "data" ? styles.tabActive : ""} onClick={() => setDetail({ ...detail, tab: "data" })}>赛事数据</button></div>
 
       {detail.tab === "overview" ? <>
         {full?.status === "completed" && champion ? <section className={polish.championCard}><div className={polish.championAvatar}><PlayerAvatar player={champion} size="md" /><span>冠</span></div><div className={polish.championText}><small>CHAMPION · 本届冠军</small><strong>{champion.nameZh}</strong><span>{champion.nameEn}</span></div>{final ? <div className={polish.championScore}><small>FINAL</small><b>{final.score1}:{final.score2}</b></div> : null}</section> : null}
-        <section className={styles.card}><SectionHeader eyebrow="TOURNAMENT OVERVIEW" title="赛事概览" /><div className={insight.eventOverviewGrid}><article><span>赛季</span><b>{calendarEvent.season}</b></article><article><span>赛事类型</span><b>{calendarEvent.typeZh}</b></article><article><span>比赛时间</span><b>{formatDateRange(calendarEvent.startDate, calendarEvent.endDate)}</b></article><article><span>举办地</span><b>{calendarEvent.countryZh} · {calendarEvent.cityZh}</b></article>{full?.previousChampionZh ? <article><span>上届冠军{full.previousChampionYear ? ` · ${full.previousChampionYear}` : ""}</span><b>{full.previousChampionZh}</b></article> : null}{calendarEvent.venueZh ? <article><span>场馆</span><b>{calendarEvent.venueZh}</b></article> : null}</div></section>
+        <section className={styles.card}><SectionHeader eyebrow="TOURNAMENT OVERVIEW" title="赛事概览" /><div className={insight.eventOverviewGrid}><article><span>赛季</span><b>{calendarEvent.season}</b></article><article><span>赛事类型</span><b>{eventDetailTypeLabel(calendarEvent)}</b></article><article><span>比赛时间</span><b>{formatDateRange(calendarEvent.startDate, calendarEvent.endDate)}</b></article><article><span>举办地</span><b>{calendarEvent.countryZh} · {calendarEvent.cityZh}</b></article>{full?.previousChampionZh ? <article><span>上届冠军{full.previousChampionYear ? ` · ${full.previousChampionYear}` : ""}</span><b>{full.previousChampionZh}</b></article> : null}{calendarEvent.venueZh ? <article><span>场馆</span><b>{calendarEvent.venueZh}</b></article> : null}</div></section>
         {full?.prizes?.length ? <section className={styles.card}><SectionHeader eyebrow="PRIZE MONEY" title="奖金分配" action={totalPrize ? `总奖金 ${money(totalPrize.amount)}` : undefined} /><div className={polish.prizeTable}>{[...full.prizes].sort((a, b) => a.sortOrder - b.sortOrder).map((row) => <div className={`${polish.prizeRow} ${row.isTotal ? polish.prizeTotal : ""}`} key={row.key}><span>{row.labelZh}</span><b>{money(row.amount)}</b></div>)}</div></section> : null}
       </> : null}
 
