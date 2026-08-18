@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SnookerPlayerListItem } from "@/lib/snooker/player-data";
 import type {
   SnookerCurrentRankingKey,
   SnookerRankingHub,
-  SnookerRankingHubList,
   SnookerRankingSection,
 } from "@/lib/snooker/ranking-hub";
 import styles from "./data.module.css";
@@ -24,10 +23,10 @@ const shortLabels: Record<SnookerCurrentRankingKey, string> = {
   provisional_eos: "赛季末预测",
 };
 
-const sectionTabs: Array<{ id: SnookerRankingSection; label: string; hint: string }> = [
-  { id: "current", label: "当前排名", hint: "4 个榜单" },
-  { id: "qualification", label: "资格竞争", hint: "下一阶段" },
-  { id: "history", label: "历史排名", hint: "下一阶段" },
+const sectionTabs: Array<{ id: SnookerRankingSection; label: string }> = [
+  { id: "current", label: "当前排名" },
+  { id: "qualification", label: "资格竞争" },
+  { id: "history", label: "历史排名" },
 ];
 
 function initials(name: string) {
@@ -44,6 +43,7 @@ function capturedLabel(value: string | null) {
   if (Number.isNaN(date.getTime())) return "更新时间待同步";
   return new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
+    year: "numeric",
     month: "numeric",
     day: "numeric",
     hour: "2-digit",
@@ -93,6 +93,36 @@ function RankingListTabs({
   </div>;
 }
 
+function RankingInfoModal({ hub, onClose }: { hub: SnookerRankingHub; onClose: () => void }) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => {
+    if (event.currentTarget === event.target) onClose();
+  }}>
+    <section className={styles.infoModal} role="dialog" aria-modal="true" aria-labelledby="ranking-info-title">
+      <div className={styles.infoModalHeader}>
+        <div><small>RANKING GUIDE</small><h2 id="ranking-info-title">排名说明</h2></div>
+        <button type="button" onClick={onClose} aria-label="关闭排名说明">×</button>
+      </div>
+      <div className={styles.infoList}>
+        {currentKeyOrder.map((key) => {
+          const list = listFor(hub, key);
+          return <article key={key}>
+            <strong>{shortLabels[key]}</strong>
+            <p>{list?.descriptionZh ?? "说明待同步。"}</p>
+          </article>;
+        })}
+      </div>
+    </section>
+  </div>;
+}
+
 export function DataHubContent({
   hub,
   players,
@@ -108,6 +138,7 @@ export function DataHubContent({
   onOpenRankings: (key: SnookerCurrentRankingKey) => void;
   onOpenPlayer: (slug: string) => void;
 }) {
+  const [infoOpen, setInfoOpen] = useState(false);
   const playerBySlug = useMemo(() => playerBySlugMap(players), [players]);
   const selected = listFor(hub, selectedKey);
   const top = selected?.rows.slice(0, 3) ?? [];
@@ -121,16 +152,14 @@ export function DataHubContent({
 
     <section className={`${styles.card} ${styles.rankingCard}`}>
       <div className={styles.sectionHeader}>
-        <div><small>RANKINGS</small><h2>排名中心</h2></div>
-        <span>{hub.online ? "官方数据" : "数据暂不可用"}</span>
+        <div>
+          <small>RANKINGS</small>
+          <div className={styles.titleWithInfo}><h2>排名中心</h2><button type="button" className={styles.infoButton} onClick={() => setInfoOpen(true)} aria-label="查看四种排名说明">i</button></div>
+        </div>
       </div>
       <RankingListTabs hub={hub} selectedKey={selectedKey} onSelectKey={onSelectKey} />
 
       {selected ? <>
-        <div className={styles.rankingSummary}>
-          <div><strong>{selected.titleZh}</strong><small>{selected.titleEn}</small></div>
-          <p>{selected.descriptionZh}</p>
-        </div>
         <div className={styles.topRankingList}>
           {top.map((row) => {
             const player = row.playerSlug ? playerBySlug.get(row.playerSlug) : undefined;
@@ -141,10 +170,6 @@ export function DataHubContent({
               <em>{rankingMoney(row.money)}</em>
             </button>;
           })}
-        </div>
-        <div className={styles.sourceMeta}>
-          <span><i />{selected.sourceName || "WPBSA"}</span>
-          <small>{capturedLabel(selected.capturedAt)}</small>
         </div>
         <button className={styles.primaryAction} type="button" onClick={() => onOpenRankings(selected.key)}>查看完整排名 <span>›</span></button>
       </> : <div className={styles.emptyState}>排名数据正在准备中。</div>}
@@ -159,6 +184,8 @@ export function DataHubContent({
         <article><small>RACE & HISTORY</small><strong>资格与历史</strong><p>大师赛 / 世锦赛资格线、历史排名节点</p><span>排名页已预留入口</span></article>
       </div>
     </section>
+
+    {infoOpen ? <RankingInfoModal hub={hub} onClose={() => setInfoOpen(false)} /> : null}
   </>;
 }
 
@@ -179,65 +206,40 @@ export function RankingDetailContent({
   onSelectSection: (section: SnookerRankingSection) => void;
   onOpenPlayer: (slug: string) => void;
 }) {
-  const [query, setQuery] = useState("");
   const playerBySlug = useMemo(() => playerBySlugMap(players), [players]);
   const selected = listFor(hub, selectedKey);
-  const needle = query.trim().toLocaleLowerCase("zh-CN");
-  const rows = useMemo(() => {
-    if (!selected) return [];
-    if (!needle) return selected.rows;
-    return selected.rows.filter((row) => {
-      const player = row.playerSlug ? playerBySlug.get(row.playerSlug) : undefined;
-      const haystack = `${player?.nameZh ?? ""} ${player?.shortNameZh ?? ""} ${player?.nameEn ?? ""} ${player?.nationalityZh ?? ""} ${row.sourcePlayerName}`.toLocaleLowerCase("zh-CN");
-      return haystack.includes(needle);
-    });
-  }, [needle, playerBySlug, selected]);
+  const rows = selected?.rows ?? [];
 
   return <div className={styles.detailContent}>
-    <div className={styles.sectionTabs} role="tablist" aria-label="排名栏目">
-      {sectionTabs.map((item) => <button type="button" role="tab" aria-selected={section === item.id} className={section === item.id ? styles.sectionActive : ""} onClick={() => onSelectSection(item.id)} key={item.id}><span>{item.label}</span><small>{item.hint}</small></button>)}
+    <div className={styles.detailNavStack}>
+      <div className={styles.sectionTabs} role="tablist" aria-label="排名栏目">
+        {sectionTabs.map((item) => <button type="button" role="tab" aria-selected={section === item.id} className={section === item.id ? styles.sectionActive : ""} onClick={() => onSelectSection(item.id)} key={item.id}>{item.label}</button>)}
+      </div>
+      {section === "current" ? <RankingListTabs hub={hub} selectedKey={selectedKey} onSelectKey={onSelectKey} compact /> : null}
     </div>
 
-    {section === "current" ? <>
-      <section className={styles.detailIntro}>
-        <small>RANKINGS</small>
-        <h1>排名</h1>
-        <p>当前排名集中展示官方世界排名、单赛季排名、临时排名和赛季末预测。点击球员可直接进入球员详情。</p>
-      </section>
-      <RankingListTabs hub={hub} selectedKey={selectedKey} onSelectKey={onSelectKey} compact />
-
-      {selected ? <>
-        <section className={`${styles.card} ${styles.detailSummaryCard}`}>
-          <div><small>{selected.titleEn}</small><h2>{selected.titleZh}</h2><p>{selected.descriptionZh}</p></div>
-          <div className={styles.detailMeta}><span>{selected.rows.length} 位球员</span><span>{capturedLabel(selected.capturedAt)}</span><span>{selected.sourceName || "WPBSA"}</span></div>
-        </section>
-
-        <div className={styles.searchWrap}>
-          <label className={styles.searchBox}><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索中文名 / 英文名 / 国家" aria-label="搜索排名球员" /></label>
-          <small>{needle ? `找到 ${rows.length} 名球员` : `共 ${rows.length} 名球员`}</small>
-        </div>
-
-        <section className={styles.card}>
-          <div className={styles.rankingTableHeader}><span>排名</span><span>球员</span><span>排名金额</span></div>
-          <div className={styles.fullRankingList}>
-            {rows.map((row) => {
-              const player = row.playerSlug ? playerBySlug.get(row.playerSlug) : undefined;
-              return <button type="button" onClick={() => row.playerSlug && onOpenPlayer(row.playerSlug)} disabled={!row.playerSlug} key={`${selected.key}-${row.rank}-${row.playerUuid}`}>
-                <strong>{row.rank}</strong>
-                <RankingAvatar player={player} />
-                <span><b>{player?.nameZh ?? row.sourcePlayerName}</b><small>{player?.nameEn ?? row.sourcePlayerName}{player?.nationalityZh ? ` · ${player.nationalityZh}` : ""}</small></span>
-                <em>{rankingMoney(row.money)}</em>
-                <i>›</i>
-              </button>;
-            })}
-            {!rows.length ? <div className={styles.emptyState}>没有找到匹配的球员。</div> : null}
-          </div>
-        </section>
-      </> : <section className={styles.card}><div className={styles.emptyState}>当前排名数据暂不可用。</div></section>}
-    </> : <section className={`${styles.card} ${styles.reservedCard}`}>
+    {section === "current" ? selected ? <section className={`${styles.card} ${styles.rankingTableCard}`}>
+      <div className={styles.rankingTableHeader}><span>排名</span><span>球员</span><span>排名金额</span></div>
+      <div className={styles.fullRankingList}>
+        {rows.map((row) => {
+          const player = row.playerSlug ? playerBySlug.get(row.playerSlug) : undefined;
+          return <button type="button" onClick={() => row.playerSlug && onOpenPlayer(row.playerSlug)} disabled={!row.playerSlug} key={`${selected.key}-${row.rank}-${row.playerUuid}`}>
+            <strong>{row.rank}</strong>
+            <RankingAvatar player={player} />
+            <span><b>{player?.nameZh ?? row.sourcePlayerName}</b><small>{player?.nameEn ?? row.sourcePlayerName}{player?.nationalityZh ? ` · ${player.nationalityZh}` : ""}</small></span>
+            <em>{rankingMoney(row.money)}</em>
+            <i>›</i>
+          </button>;
+        })}
+      </div>
+      <div className={styles.rankingFooterMeta}>
+        <span>来源：{selected.sourceName || "WPBSA"}</span>
+        <span>更新：{capturedLabel(selected.capturedAt)}</span>
+      </div>
+    </section> : <section className={styles.card}><div className={styles.emptyState}>当前排名数据暂不可用。</div></section> : <section className={`${styles.card} ${styles.reservedCard}`}>
       <small>{section === "qualification" ? "QUALIFICATION RACES" : "HISTORICAL RANKINGS"}</small>
       <h2>{section === "qualification" ? "资格竞争" : "历史排名"}</h2>
-      <p>{section === "qualification" ? "这里已为大师赛、世锦赛、球员锦标赛和巡回锦标赛资格排名预留统一入口。下一阶段接入资格线、距离差和 Cut-off 信息。" : "这里已为赛季末排名、历史排名节点和球员排名走势预留入口。历史数据补齐后直接沿用当前排名的列表与筛选框架。"}</p>
+      <p>{section === "qualification" ? "这里已为大师赛、世锦赛、球员锦标赛和巡回锦标赛资格排名预留统一入口。下一阶段接入资格线、距离差和 Cut-off 信息。" : "这里已为赛季末排名、历史排名节点和球员排名走势预留入口。历史数据补齐后直接沿用当前排名的列表框架。"}</p>
       <span>Phase 1A · 框架已就绪</span>
     </section>}
   </div>;
