@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { SnookerPlayerListItem } from "@/lib/snooker/player-data";
 import type { SnookerTechnicalHub, SnookerTechnicalList, SnookerTechnicalMetricKey } from "@/lib/snooker/technical-hub";
+import shellStyles from "../snooker-data-center.module.css";
 import styles from "./data.module.css";
 
 const leaderKeys: SnookerTechnicalMetricKey[] = ["centuries", "win_rate", "shot_time", "maximums"];
@@ -27,6 +28,21 @@ function formatMetricValue(list: SnookerTechnicalList, value: number) {
   return Math.round(value).toLocaleString("en-GB");
 }
 
+function capturedLabel(value: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
 function eligibilityLabel(list: SnookerTechnicalList) {
   return list.minMatches > 0 ? `至少 ${list.minMatches} 场` : null;
 }
@@ -41,12 +57,10 @@ export function SeasonLeadersSection({
   hub,
   players,
   onOpenTechnical,
-  onOpenPlayer,
 }: {
   hub: SnookerTechnicalHub;
   players: SnookerPlayerListItem[];
   onOpenTechnical: (key: SnookerTechnicalMetricKey) => void;
-  onOpenPlayer: (slug: string) => void;
 }) {
   const bySlug = useMemo(() => playerMap(players), [players]);
 
@@ -91,6 +105,7 @@ export function TechnicalDetailContent({
 }) {
   const bySlug = useMemo(() => playerMap(players), [players]);
   const selected = metricFor(hub, selectedKey) ?? hub.lists[0] ?? null;
+  const updated = capturedLabel(hub.capturedAt);
 
   return <div className={styles.detailContent}>
     <div className={styles.technicalMetricNav} role="tablist" aria-label="技术榜指标">
@@ -120,9 +135,38 @@ export function TechnicalDetailContent({
         {!selected.rows.length ? <div className={styles.emptyState}>当前赛季暂无该项数据。</div> : null}
       </div>
       <div className={styles.rankingFooterMeta}>
-        <span>{hub.seasonLabel} · {hub.sourceName}</span>
+        <span>{hub.seasonLabel} · {hub.sourceName}{updated ? ` · 更新 ${updated}` : ""}</span>
         {selected.minMatches > 0 ? <span>口径：至少完成 {selected.minMatches} 场比赛</span> : <span>仅统计当前职业巡回赛球员</span>}
       </div>
     </section> : <section className={styles.card}><div className={styles.emptyState}>技术榜数据正在准备中。</div></section>}
+  </div>;
+}
+
+export function TechnicalDetailOverlay({
+  hub,
+  players,
+  selectedKey,
+  onSelectKey,
+  onOpenPlayer,
+  onClose,
+}: {
+  hub: SnookerTechnicalHub;
+  players: SnookerPlayerListItem[];
+  selectedKey: SnookerTechnicalMetricKey;
+  onSelectKey: (key: SnookerTechnicalMetricKey) => void;
+  onOpenPlayer: (slug: string) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, []);
+
+  return <div className={styles.technicalOverlay}>
+    <div className={styles.technicalOverlayScroll}>
+      <header className={shellStyles.detailHeader}><button onClick={onClose}>‹</button><strong>技术榜</strong><span>DATA</span></header>
+      <TechnicalDetailContent hub={hub} players={players} selectedKey={selectedKey} onSelectKey={onSelectKey} onOpenPlayer={onOpenPlayer} />
+    </div>
   </div>;
 }
