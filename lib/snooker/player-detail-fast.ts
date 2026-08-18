@@ -106,6 +106,11 @@ function decodeEntities(value: string) {
     .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)));
 }
 
+function detailAvatarUrl(value: string | null) {
+  if (!value) return null;
+  return value.includes("/wst/256/") ? value.replace("/wst/256/", "/wst/512/") : value;
+}
+
 function htmlToText(html: string | null) {
   if (!html) return null;
   const text = decodeEntities(
@@ -140,7 +145,7 @@ function mapPayload(payload: RpcPayload): SnookerPlayerDetail {
     turnedPro: p.turned_pro,
     currentRank: ranking?.rank ?? p.current_rank,
     rankingPoints: rankingPoints === null || rankingPoints === undefined ? null : Number(rankingPoints),
-    avatarUrl: p.avatar_url,
+    avatarUrl: detailAvatarUrl(p.avatar_url),
     isCurrentTour: p.is_current_tour,
     tourStatus: p.tour_status,
     nicknameEn: payload.profile?.nickname_en ?? null,
