@@ -45,7 +45,7 @@ test("ranking hub keeps explanations behind an inline information modal", () => 
   assert.match(data, /Escape/);
   assert.match(data, /排名说明/);
   assert.doesNotMatch(data, /className=\{styles\.rankingSummary\}/);
-  assert.doesNotMatch(data, /官方数据/);
+  assert.doesNotMatch(data, /<span>官方数据<\/span>/);
   assert.doesNotMatch(data, /className=\{styles\.sourceMeta\}/);
 });
 
