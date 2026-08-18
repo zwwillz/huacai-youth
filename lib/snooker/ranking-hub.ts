@@ -19,6 +19,7 @@ export type SnookerRankingHubRow = {
   listKey: SnookerCurrentRankingKey;
   playerUuid: string;
   playerSlug: string | null;
+  sourcePlayerName: string;
   rank: number;
   money: number;
   previousRank: number | null;
@@ -46,6 +47,7 @@ export type SnookerRankingHub = {
 type RankingRow = {
   list_key: string;
   player_id: string;
+  source_player_name: string | null;
   rank: number;
   points: number | string | null;
   ranking_money: number | string | null;
@@ -102,7 +104,7 @@ export async function loadSnookerRankingHub(): Promise<SnookerRankingHub> {
     const keys = `(${CURRENT_RANKING_KEYS.join(",")})`;
     const [rankingRows, playerRows, metaRows] = await Promise.all([
       rest<RankingRow[]>("snooker_latest_rankings", new URLSearchParams({
-        select: "list_key,player_id,rank,points,ranking_money,previous_rank,rank_change,captured_at,title_zh,title_en,source_name,source_url",
+        select: "list_key,player_id,source_player_name,rank,points,ranking_money,previous_rank,rank_change,captured_at,title_zh,title_en,source_name,source_url",
         list_key: `in.${keys}`,
         order: "list_key.asc,rank.asc",
       }), 300),
@@ -124,6 +126,7 @@ export async function loadSnookerRankingHub(): Promise<SnookerRankingHub> {
         listKey: row.list_key,
         playerUuid: row.player_id,
         playerSlug: slugByUuid.get(row.player_id) ?? null,
+        sourcePlayerName: row.source_player_name ?? "",
         rank: row.rank,
         money: moneyOf(row),
         previousRank: row.previous_rank,
