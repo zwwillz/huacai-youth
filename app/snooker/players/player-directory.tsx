@@ -20,6 +20,21 @@ function points(value: number | null) {
   return value === null ? "—" : `€${value.toLocaleString("en-GB")}`;
 }
 
+function isConcretePlayer(player: SnookerPlayerListItem) {
+  const slug = player.slug.trim().toLowerCase();
+  const nameEn = player.nameEn.trim();
+  const nameZh = player.nameZh.trim();
+
+  return !(
+    /^china-wildcard-\d+(?:-|$)/i.test(slug) ||
+    /(?:^|-)winner-(?:of-)?match-\d+(?:-|$)/i.test(slug) ||
+    /^China Wildcard #?\d+$/i.test(nameEn) ||
+    /^Winner of Match \d+$/i.test(nameEn) ||
+    /^中国外卡\d+号$/.test(nameZh) ||
+    /^第\d+场胜者$/.test(nameZh)
+  );
+}
+
 export function PlayerDirectoryContent({
   players,
   query,
@@ -38,7 +53,7 @@ export function PlayerDirectoryContent({
   onPrefetchPlayer?: (player: SnookerPlayerListItem) => void;
 }) {
   const needle = query.trim().toLocaleLowerCase("zh-CN");
-  const filtered = players.filter((player) => {
+  const filtered = players.filter(isConcretePlayer).filter((player) => {
     if (filter === "china" && player.countryCode !== "CHN" && player.countryCode !== "CN") return false;
     if (filter === "top16" && (player.currentRank === null || player.currentRank > 16)) return false;
     if (filter === "current" && !player.isCurrentTour) return false;
