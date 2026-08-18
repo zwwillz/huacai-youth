@@ -13,6 +13,8 @@ import type {
   SnookerSeasonStatistics,
 } from "@/lib/snooker/domain";
 import type { SnookerPlayerListItem } from "@/lib/snooker/player-data";
+import { CURRENT_RANKING_KEYS, type SnookerCurrentRankingKey, type SnookerRankingHub, type SnookerRankingSection } from "@/lib/snooker/ranking-hub";
+import { DataHubContent, RankingDetailContent } from "./data/data-ranking-content";
 import { PlayerDirectoryContent, type PlayerFilter } from "./players/player-directory";
 import PlayerDetailInline from "./players/player-detail-inline";
 import { prefetchPlayerDetail } from "./players/player-detail-client";
@@ -30,7 +32,8 @@ type MatchDataTab = "match" | "season" | "h2h";
 type DetailState =
   | { type: "event"; slug: string; tab: EventTab }
   | { type: "match"; matchId: string; eventSlug: string }
-  | { type: "player"; slug: string; returnView: MainView };
+  | { type: "player"; slug: string; returnView: MainView }
+  | { type: "ranking"; section: SnookerRankingSection; key: SnookerCurrentRankingKey };
 
 type SourceHealth = {
   online: boolean;
@@ -52,6 +55,14 @@ const navItems: Array<{ id: NavId; label: string; icon: string }> = [
   { id: "players", label: "球员", icon: "◎" },
   { id: "data", label: "数据", icon: "▥" },
 ];
+
+function rankingKeyFromParam(value: string | null | undefined): SnookerCurrentRankingKey {
+  return CURRENT_RANKING_KEYS.find((key) => key === value) ?? "world_official";
+}
+
+function rankingSectionFromParam(value: string | null | undefined): SnookerRankingSection {
+  return value === "qualification" || value === "history" ? value : "current";
+}
 
 function initials(name: string) {
   return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
@@ -303,22 +314,36 @@ function meetingDate(item: SnookerHeadToHeadMeeting) {
 export default function SnookerDataCenterV2({
   initialSnapshot,
   initialDatabaseEvents,
+  initialRankingHub,
   initialSourceHealth,
   buildMark,
   initialView = "home",
   initialPlayerSlug,
+  initialDataSection,
+  initialRankingKey,
+  initialRankingSection = "current",
 }: {
   initialSnapshot: SnookerDashboardSnapshot;
   initialDatabaseEvents: SnookerEvent[];
+  initialRankingHub: SnookerRankingHub;
   initialSourceHealth?: SourceHealth | null;
   buildMark: string;
   initialView?: MainView;
   initialPlayerSlug?: string | null;
+  initialDataSection?: "rankings" | null;
+  initialRankingKey?: SnookerCurrentRankingKey | null;
+  initialRankingSection?: SnookerRankingSection;
 }) {
+  const initialKey = initialRankingKey ?? "world_official";
+  const initialDetail: DetailState | null = initialPlayerSlug
+    ? { type: "player", slug: initialPlayerSlug, returnView: "players" }
+    : initialDataSection === "rankings"
+      ? { type: "ranking", section: initialRankingSection, key: initialKey }
+      : null;
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [databaseEvents, setDatabaseEvents] = useState(initialDatabaseEvents);
-  const [activeView, setActiveView] = useState<MainView>(initialPlayerSlug ? "players" : initialView);
-  const [detail, setDetail] = useState<DetailState | null>(() => initialPlayerSlug ? { type: "player", slug: initialPlayerSlug, returnView: "players" } : null);
+  const [activeView, setActiveView] = useState<MainView>(initialPlayerSlug ? "players" : initialDataSection === "rankings" ? "data" : initialView);
+  const [detail, setDetail] = useState<DetailState | null>(initialDetail);
   const [theme, setTheme] = useState<Theme>("green");
   const [sourceHealth, setSourceHealth] = useState<SourceHealth | null>(initialSourceHealth ?? null);
   const [refreshing, setRefreshing] = useState(false);
@@ -327,6 +352,8 @@ export default function SnookerDataCenterV2({
   const [playerFilter, setPlayerFilter] = useState<PlayerFilter>("all");
   const [matchDataTab, setMatchDataTab] = useState<MatchDataTab>("match");
   const [matchUpdatedAt, setMatchUpdatedAt] = useState<Record<string, string>>({});
+  const [selectedRankingKey, setSelectedRankingKey] = useState<SnookerCurrentRankingKey>(initialKey);
+  const [rankingSection, setRankingSection] = useState<SnookerRankingSection>(initialRankingSection);
   const signatures = useRef(new Map(initialDatabaseEvents.flatMap((event) => allMatches(event)).map((match) => [match.id, matchSignature(match)])));
   const playerDirectoryScrollY = useRef(0);
 
@@ -404,6 +431,17 @@ export default function SnookerDataCenterV2({
         return;
       }
 
+      if (urlView === "data" && params.get("section") === "rankings") {
+        const key = rankingKeyFromParam(params.get("list"));
+        const section = rankingSectionFromParam(params.get("group"));
+        setSelectedRankingKey(key);
+        setRankingSection(section);
+        setActiveView("data");
+        setDetail({ type: "ranking", section, key });
+        window.scrollTo({ top: 0, behavior: "auto" });
+        return;
+      }
+
       if (state?.snookerReturnDetail && state.snookerReturnDetail.type !== "player") {
         setActiveView(state.snookerReturnView ?? urlView);
         setDetail(state.snookerReturnDetail);
@@ -411,7 +449,7 @@ export default function SnookerDataCenterV2({
         return;
       }
 
-      setDetail((current) => current?.type === "player" ? null : current);
+      setDetail((current) => current?.type === "player" || current?.type === "ranking" ? null : current);
       setActiveView(state?.snookerReturnView ?? urlView);
       if ((state?.snookerReturnView ?? urlView) === "players") {
         window.requestAnimationFrame(() => window.scrollTo({ top: playerDirectoryScrollY.current, behavior: "auto" }));
@@ -476,6 +514,10 @@ export default function SnookerDataCenterV2({
     setDetail({ type: "player", slug: target.slug, returnView });
     window.scrollTo({ top: 0, behavior: "auto" });
   };
+  const openPlayerBySlug = (slug: string) => {
+    const target = snapshot.players.find((player) => player.slug === slug);
+    if (target) openPlayer(target.id);
+  };
   const closePlayer = () => {
     if (detail?.type !== "player") return;
     const state = window.history.state as { snookerPlayerDetail?: string } | null;
@@ -492,6 +534,49 @@ export default function SnookerDataCenterV2({
     setActiveView("players");
     window.requestAnimationFrame(() => window.scrollTo({ top: playerDirectoryScrollY.current, behavior: "auto" }));
   };
+  const openRankings = (key: SnookerCurrentRankingKey) => {
+    setSelectedRankingKey(key);
+    setRankingSection("current");
+    const currentState = { ...(window.history.state ?? {}), snookerReturnView: "data" as MainView, snookerReturnDetail: null };
+    window.history.replaceState(currentState, "", window.location.href);
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "data");
+    url.searchParams.delete("player");
+    url.searchParams.set("section", "rankings");
+    url.searchParams.set("list", key);
+    url.searchParams.set("group", "current");
+    window.history.pushState({ ...currentState, snookerRankingDetail: true }, "", url.pathname + url.search + url.hash);
+    setActiveView("data");
+    setDetail({ type: "ranking", section: "current", key });
+    window.scrollTo({ top: 0, behavior: "auto" });
+  };
+  const updateRankingDetail = (section: SnookerRankingSection, key: SnookerCurrentRankingKey = selectedRankingKey) => {
+    setSelectedRankingKey(key);
+    setRankingSection(section);
+    setDetail({ type: "ranking", section, key });
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "data");
+    url.searchParams.set("section", "rankings");
+    url.searchParams.set("list", key);
+    url.searchParams.set("group", section);
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    window.scrollTo({ top: 0, behavior: "auto" });
+  };
+  const closeRankings = () => {
+    const state = window.history.state as { snookerRankingDetail?: boolean } | null;
+    if (state?.snookerRankingDetail && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "data");
+    url.searchParams.delete("section");
+    url.searchParams.delete("list");
+    url.searchParams.delete("group");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    setDetail(null);
+    setActiveView("data");
+  };
   const changeView = (view: NavId) => {
     setDetail(null);
     setActiveView(view);
@@ -503,6 +588,21 @@ export default function SnookerDataCenterV2({
     return <main className={styles.appRoot} data-theme={theme}><div className={styles.detailShell}>
       <header className={styles.detailHeader}><button onClick={closePlayer}>‹</button><strong>{summaryPlayer?.nameZh ?? "球员详情"}</strong><span>PLAYER</span></header>
       <PlayerDetailInline key={detail.slug} summaryPlayer={summaryPlayer} slug={detail.slug} />
+    </div></main>;
+  }
+
+  if (detail?.type === "ranking") {
+    return <main className={styles.appRoot} data-theme={theme}><div className={styles.detailShell}>
+      <header className={styles.detailHeader}><button onClick={closeRankings}>‹</button><strong>排名</strong><span>DATA</span></header>
+      <RankingDetailContent
+        hub={initialRankingHub}
+        players={directoryPlayers}
+        selectedKey={selectedRankingKey}
+        section={rankingSection}
+        onSelectKey={(key) => updateRankingDetail(rankingSection, key)}
+        onSelectSection={(section) => updateRankingDetail(section)}
+        onOpenPlayer={openPlayerBySlug}
+      />
     </div></main>;
   }
 
@@ -690,11 +790,7 @@ export default function SnookerDataCenterV2({
 
       {activeView === "players" ? <PlayerDirectoryContent players={directoryPlayers} query={playerQuery} filter={playerFilter} onQueryChange={setPlayerQuery} onFilterChange={setPlayerFilter} onOpenPlayer={(player) => openPlayer(player.id)} onPrefetchPlayer={(player) => prefetchPlayerDetail(player.slug)} /> : null}
 
-      {activeView === "data" ? <>
-        <section className={styles.pageIntro}><small>GLOBAL DATA</small><h1>数据</h1><p>跨赛事、跨赛季数据；单站数据仍放在各赛事自己的“赛事数据”页。</p></section>
-        <section className={styles.card}><SectionHeader eyebrow="Official World Ranking" title="世界排名 TOP16" /><div className={styles.rankingList}>{rankingRows.map((row) => <div className={polish.rankingStaticRow} key={row.rank}><strong>{row.rank}</strong><button className={polish.rankingAvatarButton} onClick={() => openPlayer(row.player.id)} aria-label={`查看${row.player.nameZh}球员详情`}><PlayerAvatar player={row.player} size="sm" /></button><span><b>{row.player.nameZh}</b><small>{row.player.nameEn} · {row.player.nationalityZh}</small></span><em>{rankingMoney(row.points)}</em></div>)}</div></section>
-        <section className={styles.card}><SectionHeader eyebrow="COMING NEXT" title="数据专题" /><div className={styles.futureGrid}><article><small>HEAD TO HEAD</small><strong>交手记录</strong><span>已进入比赛详情</span></article><article><small>CENTURIES</small><strong>破百榜</strong><span>正在接入</span></article><article><small>DECIDERS</small><strong>决胜局</strong><span>正在接入</span></article><article><small>TITLES</small><strong>冠军榜</strong><span>正在接入</span></article></div></section>
-      </> : null}
+      {activeView === "data" ? <DataHubContent hub={initialRankingHub} players={directoryPlayers} selectedKey={selectedRankingKey} onSelectKey={setSelectedRankingKey} onOpenRankings={openRankings} onOpenPlayer={openPlayerBySlug} /> : null}
     </div>
     <nav className={`${styles.bottomNav} ${polish.fastNav}`}>{navItems.map((item) => <button key={item.id} className={item.id === activeView ? styles.activeNav : ""} onClick={() => changeView(item.id)}><span>{item.icon}</span><b>{item.label}</b></button>)}</nav>
     <span className={styles.buildMark}>{buildMark}</span>
