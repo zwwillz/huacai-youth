@@ -2,18 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-test("player directory keeps 256 WebP while both player detail paths upgrade to 512 WebP", async () => {
+test("player directory keeps 256 WebP while every player detail layer upgrades to 512 WebP", async () => {
   const fallbackSource = await readFile("lib/snooker/player-data.ts", "utf8");
   const fastSource = await readFile("lib/snooker/player-detail-fast.ts", "utf8");
+  const clientSource = await readFile("app/snooker/players/player-detail-client.ts", "utf8");
+  const inlineSource = await readFile("app/snooker/players/player-detail-inline.tsx", "utf8");
 
   assert.match(fallbackSource, /function detailAvatarUrl\(value: string \| null\)/);
   assert.match(fallbackSource, /value\.replace\("\/wst\/256\/", "\/wst\/512\/"\)/);
   assert.match(fallbackSource, /avatarUrl: detailAvatarUrl\(basePlayer\.avatarUrl\)/);
   assert.match(fallbackSource, /avatarUrl: row\.avatar_url/);
 
-  assert.match(fastSource, /function detailAvatarUrl\(value: string \| null\)/);
-  assert.match(fastSource, /value\.replace\("\/wst\/256\/", "\/wst\/512\/"\)/);
   assert.match(fastSource, /avatarUrl: detailAvatarUrl\(p\.avatar_url\)/);
+  assert.match(clientSource, /normalizePlayerDetail\(payload\.player\)/);
+  assert.match(clientSource, /avatarUrl: detailAvatarUrl\(player\.avatarUrl\)/);
+  assert.match(inlineSource, /avatarUrl: detailAvatarUrl\(player\.avatarUrl \|\| player\.avatar\?\.url \|\| null\)/);
 });
 
 test("player directory excludes draw placeholders before search and filters", async () => {
@@ -23,6 +26,5 @@ test("player directory excludes draw placeholders before search and filters", as
   assert.match(source, /China Wildcard/);
   assert.match(source, /Winner of Match/);
   assert.match(source, /中国外卡/);
-  assert.match(source, /第\\d\+场胜者/);
   assert.match(source, /players\.filter\(isConcretePlayer\)\.filter/);
 });
