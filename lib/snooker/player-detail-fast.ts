@@ -1,4 +1,4 @@
-import type { SnookerPlayerDetail } from "./player-data";
+import type { SnookerPlayerDetail, SnookerPlayerStatus } from "./player-data";
 import { getSnookerPlayerDetail } from "./player-data";
 
 const DEFAULT_SUPABASE_URL = "https://rtlvncsmbueatdzqvhbn.supabase.co";
@@ -23,6 +23,7 @@ type RpcPlayer = {
   avatar_url: string | null;
   is_current_tour: boolean;
   tour_status: string;
+  player_status: SnookerPlayerStatus;
 };
 
 type RpcProfile = {
@@ -148,6 +149,7 @@ function mapPayload(payload: RpcPayload): SnookerPlayerDetail {
     avatarUrl: detailAvatarUrl(p.avatar_url),
     isCurrentTour: p.is_current_tour,
     tourStatus: p.tour_status,
+    playerStatus: p.player_status,
     nicknameEn: payload.profile?.nickname_en ?? null,
     nicknameZh: payload.profile?.nickname_zh ?? payload.profile?.nickname_en ?? null,
     biographyEn: htmlToText(payload.profile?.biography_html_en ?? null),

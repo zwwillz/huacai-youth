@@ -1,3 +1,7 @@
+import type { SnookerPlayerStatus } from "./domain";
+import { normalizePlayerStatus } from "./taxonomy";
+export type { SnookerPlayerStatus } from "./domain";
+
 const DEFAULT_SUPABASE_URL = "https://rtlvncsmbueatdzqvhbn.supabase.co";
 const DEFAULT_PUBLISHABLE_KEY = "sb_publishable_SR0NVsqpSBGBMP3xg9utvQ_jywPEUNP";
 
@@ -20,6 +24,7 @@ export type SnookerPlayerListItem = {
   avatarUrl: string | null;
   isCurrentTour: boolean;
   tourStatus: string;
+  playerStatus: SnookerPlayerStatus;
 };
 
 export type SnookerPlayerCareerStats = {
@@ -87,6 +92,7 @@ type PlayerRow = {
   avatar_url: string | null;
   is_current_tour: boolean;
   tour_status: string;
+  player_status: string;
 };
 
 type OfficialRankingRow = {
@@ -216,6 +222,7 @@ function mapPlayer(row: PlayerRow): SnookerPlayerListItem {
     avatarUrl: row.avatar_url,
     isCurrentTour: row.is_current_tour,
     tourStatus: row.tour_status,
+    playerStatus: normalizePlayerStatus(row.player_status, row.is_current_tour, row.turned_pro),
   };
 }
 
@@ -259,6 +266,7 @@ const PLAYER_SELECT = [
   "avatar_url",
   "is_current_tour",
   "tour_status",
+  "player_status",
 ].join(",");
 
 function officialRankingParams(extra: Record<string, string> = {}) {

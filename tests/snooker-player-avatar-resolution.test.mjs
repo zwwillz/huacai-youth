@@ -15,8 +15,11 @@ test("player directory keeps 256 WebP while every player detail layer upgrades t
 
   assert.match(fastSource, /avatarUrl: detailAvatarUrl\(p\.avatar_url\)/);
   assert.match(clientSource, /normalizePlayerDetail\(payload\.player\)/);
-  assert.match(clientSource, /avatarUrl: detailAvatarUrl\(player\.avatarUrl\)/);
-  assert.match(inlineSource, /avatarUrl: detailAvatarUrl\(player\.avatarUrl \|\| player\.avatar\?\.url \|\| null\)/);
+  assert.match(clientSource, /preloadPlayerDetailAvatar/);
+  assert.match(clientSource, /fetchPriority/);
+  assert.match(inlineSource, /displayAvatarUrl/);
+  assert.match(inlineSource, /preloadPlayerDetailAvatar\(candidate, \"high\"\)/);
+  assert.match(inlineSource, /avatarUrl: player\.avatarUrl \|\| player\.avatar\?\.url \|\| null/);
 });
 
 test("player directory excludes draw placeholders before search and filters", async () => {
