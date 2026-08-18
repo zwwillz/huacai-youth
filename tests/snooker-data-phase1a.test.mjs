@@ -18,6 +18,14 @@ test("data phase 1a loads the four current ranking lists as one root data module
   assert.match(root, /initialRankingHub: SnookerRankingHub/);
 });
 
+test("ranking rows stay available when optional mapping or metadata reads fail", () => {
+  assert.match(hub, /Promise\.allSettled/);
+  assert.match(hub, /if \(rankingResult\.status !== "fulfilled"\) throw rankingResult\.reason/);
+  assert.match(hub, /playerResult\.status === "fulfilled" \? playerResult\.value : \[\]/);
+  assert.match(hub, /metaResult\.status === "fulfilled" \? metaResult\.value : \[\]/);
+  assert.match(hub, /sourcePlayerName: row\.source_player_name \?\? ""/);
+});
+
 test("data view keeps the existing root shell and opens rankings as a root detail state", () => {
   assert.match(root, /\{ type: "ranking"; section: SnookerRankingSection; key: SnookerCurrentRankingKey \}/);
   assert.match(root, /<DataHubContent hub=\{initialRankingHub\}/);
