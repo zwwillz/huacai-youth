@@ -1,4 +1,8 @@
 export type SnookerMatchStatus = "upcoming" | "live" | "session-break" | "completed" | "walkover";
+export type SnookerPlayerStatus = "tour" | "former_pro" | "amateur" | "unknown";
+export type SnookerEventType = "ranking" | "invitational" | "exhibition" | "pro_qualifier";
+export type SnookerEventStage = "main" | "qualifier" | "finals";
+export type SnookerRankingStatus = "ranking" | "non_ranking" | "not_applicable";
 
 export type SnookerPlayerCareerStats = {
   tripleCrownTitles: number;
@@ -54,6 +58,9 @@ export type SnookerPlayer = {
   avatar?: SnookerPlayerAvatar;
   avatarUrl?: string;
   profileSource?: "WST" | "snooker.org" | "curated";
+  isCurrentTour?: boolean;
+  tourStatus?: string;
+  playerStatus?: SnookerPlayerStatus;
 };
 
 export type SnookerFrame = {
@@ -150,6 +157,9 @@ export type SnookerEvent = {
   sponsorName?: string;
   season: string;
   typeZh: string;
+  eventType?: SnookerEventType;
+  eventStage?: SnookerEventStage;
+  rankingStatus?: SnookerRankingStatus;
   status: "upcoming" | "live" | "completed";
   statusLabelZh: string;
   startDate: string;
@@ -179,7 +189,10 @@ export type SnookerCalendarEvent = {
   nameZh: string;
   nameEn: string;
   season: string;
-  typeZh: "排名赛" | "非排名赛" | "资格赛";
+  typeZh: "排名赛" | "非排名赛" | "资格赛" | "邀请赛" | "表演赛" | "选拔赛";
+  eventType?: SnookerEventType;
+  eventStage?: SnookerEventStage;
+  rankingStatus?: SnookerRankingStatus;
   status: "upcoming" | "live" | "completed";
   statusLabelZh: string;
   startDate: string;
