@@ -4,13 +4,8 @@ import { useEffect, useState } from "react";
 import type { SnookerPlayer } from "@/lib/snooker/domain";
 import type { SnookerPlayerDetail, SnookerPlayerListItem } from "@/lib/snooker/player-data";
 import { PlayerDetailContent } from "./player-detail-content";
-import { getCachedPlayerDetail, loadPlayerDetail } from "./player-detail-client";
+import { getCachedPlayerDetail, loadPlayerDetail, preloadPlayerDetailAvatar } from "./player-detail-client";
 import styles from "./player.module.css";
-
-function detailAvatarUrl(value: string | null) {
-  if (!value) return null;
-  return value.includes("/wst/256/") ? value.replace("/wst/256/", "/wst/512/") : value;
-}
 
 function toSummary(player: SnookerPlayer): SnookerPlayerListItem {
   return {
@@ -25,9 +20,10 @@ function toSummary(player: SnookerPlayer): SnookerPlayerListItem {
     turnedPro: player.turnedPro ?? null,
     currentRank: player.currentRank,
     rankingPoints: player.rankingPoints,
-    avatarUrl: detailAvatarUrl(player.avatarUrl || player.avatar?.url || null),
-    isCurrentTour: player.currentRank !== null,
-    tourStatus: player.currentRank !== null ? "current" : "unknown",
+    avatarUrl: player.avatarUrl || player.avatar?.url || null,
+    isCurrentTour: player.isCurrentTour ?? player.currentRank !== null,
+    tourStatus: player.tourStatus ?? (player.currentRank !== null ? "professional" : "unknown"),
+    playerStatus: player.playerStatus ?? (player.currentRank !== null ? "tour" : player.turnedPro ? "former_pro" : "amateur"),
   };
 }
 
@@ -54,7 +50,9 @@ export default function PlayerDetailInline({
   slug: string;
 }) {
   const summary = summaryPlayer ? toSummary(summaryPlayer) : null;
-  const [loadedPlayer, setLoadedPlayer] = useState<SnookerPlayerDetail | null>(() => getCachedPlayerDetail(slug));
+  const cached = getCachedPlayerDetail(slug);
+  const [loadedPlayer, setLoadedPlayer] = useState<SnookerPlayerDetail | null>(() => cached);
+  const [displayAvatarUrl, setDisplayAvatarUrl] = useState<string | null>(() => cached?.avatarUrl ?? summary?.avatarUrl ?? null);
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
@@ -72,9 +70,20 @@ export default function PlayerDetailInline({
   }, [slug]);
 
   const basePlayer = loadedPlayer ?? (summary ? partialDetail(summary) : null);
-  const player = basePlayer && summary?.avatarUrl && !basePlayer.avatarUrl
-    ? { ...basePlayer, avatarUrl: summary.avatarUrl }
-    : basePlayer;
+
+  useEffect(() => {
+    const candidate = basePlayer?.avatarUrl ?? null;
+    if (!candidate || candidate === displayAvatarUrl) return;
+    let cancelled = false;
+    void preloadPlayerDetailAvatar(candidate, "high").then(() => {
+      if (!cancelled) setDisplayAvatarUrl(candidate);
+    });
+    return () => { cancelled = true; };
+  }, [basePlayer?.avatarUrl, displayAvatarUrl]);
+
+  const player = basePlayer
+    ? { ...basePlayer, avatarUrl: displayAvatarUrl ?? basePlayer.avatarUrl }
+    : null;
 
   return (
     <div className={styles.content}>
