@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { SnookerPlayerDetail, SnookerPlayerSeasonStats } from "@/lib/snooker/player-data";
 import styles from "./player.module.css";
+import detailUi from "./player-detail-refresh.module.css";
 
 function initials(name: string) {
   return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
@@ -10,6 +11,10 @@ function initials(name: string) {
 
 function integer(value: number | null) {
   return value === null ? "—" : value.toLocaleString("en-GB");
+}
+
+function count(value: number | null | undefined) {
+  return (value ?? 0).toLocaleString("en-GB");
 }
 
 function oneDecimal(value: number | null, suffix = "") {
@@ -22,10 +27,6 @@ function winRate(value: number | null) {
 
 function ranking(value: number | null) {
   return value === null || value <= 0 ? "—" : `#${value}`;
-}
-
-function tripleValue(value: number | null) {
-  return value === null || value === 0 ? "—" : value.toLocaleString("en-GB");
 }
 
 function birthLabel(value: string | null) {
@@ -49,8 +50,55 @@ function seasonMetric(season: SnookerPlayerSeasonStats, key: "matches" | "wins")
   return key === "matches" ? integer(season.matchesPlayed) : integer(season.matchesWon);
 }
 
+type TrendMetricKey = "winRate" | "shotTime" | "averageBreak" | "centuries";
+
+type TrendMetricDefinition = {
+  key: TrendMetricKey;
+  tabZh: string;
+  labelZh: string;
+  labelEn: string;
+  read: (season: SnookerPlayerSeasonStats) => number | null;
+  format: (value: number) => string;
+};
+
+const TREND_METRICS: TrendMetricDefinition[] = [
+  {
+    key: "winRate",
+    tabZh: "胜率",
+    labelZh: "比赛胜率",
+    labelEn: "WIN RATE",
+    read: (season) => season.matchWinRate,
+    format: (value) => `${value.toFixed(1)}%`,
+  },
+  {
+    key: "shotTime",
+    tabZh: "出杆时间",
+    labelZh: "平均出杆时间",
+    labelEn: "SHOT TIME",
+    read: (season) => season.averageShotTime,
+    format: (value) => `${value.toFixed(1)}s`,
+  },
+  {
+    key: "averageBreak",
+    tabZh: "平均单杆",
+    labelZh: "平均单杆",
+    labelEn: "AVG BREAK",
+    read: (season) => season.averageBreak,
+    format: (value) => value.toFixed(1),
+  },
+  {
+    key: "centuries",
+    tabZh: "百杆数",
+    labelZh: "赛季百杆数",
+    labelEn: "100+ BREAKS",
+    read: (season) => season.breaks100Plus,
+    format: (value) => Math.round(value).toLocaleString("en-GB"),
+  },
+];
+
 export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail }) {
   const [seasonYear, setSeasonYear] = useState(player.seasons[0]?.seasonStartYear ?? null);
+  const [trendMetric, setTrendMetric] = useState<TrendMetricKey>("winRate");
   const [bioExpanded, setBioExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const age = ageFromDob(player.dateOfBirth);
@@ -60,10 +108,56 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
     [player.seasons, seasonYear],
   );
 
+  const trendOptions = useMemo(
+    () => TREND_METRICS.map((metric) => ({
+      ...metric,
+      rows: player.seasons.flatMap((item) => {
+        const value = metric.read(item);
+        return value === null ? [] : [{ season: item, value }];
+      }),
+    })).filter((metric) => metric.rows.length > 0),
+    [player.seasons],
+  );
+
+  const activeTrend = trendOptions.find((metric) => metric.key === trendMetric) ?? trendOptions[0] ?? null;
+  const trendScaleMax = activeTrend
+    ? activeTrend.key === "winRate"
+      ? 100
+      : Math.max(1, ...activeTrend.rows.map((row) => row.value))
+    : 1;
+
   const bio = player.biographyZh ?? "暂无球员简介。";
   const visibleBio = bioExpanded || bio.length <= 520 ? bio : `${bio.slice(0, 520).trimEnd()}…`;
   const highlights = historyExpanded ? player.highlights : player.highlights.slice(0, 6);
   const career = player.career;
+
+  const careerCards = [
+    { en: "RANKING TITLES", zh: "排名赛冠军", value: count(career?.rankingTitles) },
+    { en: "RANKING FINALS", zh: "排名赛决赛", value: count(career?.rankingFinals) },
+    { en: "TRIPLE CROWN", zh: "三大赛冠军", value: count(career?.tripleCrownTitles) },
+    { en: "CAREER 147s", zh: "生涯147", value: count(career?.career147s) },
+  ];
+
+  const tripleCards = [
+    {
+      en: "WORLD CHAMPIONSHIP",
+      zh: "世锦赛",
+      value: count(career?.worldChampionshipTitles),
+      logo: "/snooker/triple-crown/world-championship.webp",
+    },
+    {
+      en: "UK CHAMPIONSHIP",
+      zh: "英锦赛",
+      value: count(career?.ukChampionshipTitles),
+      logo: "/snooker/triple-crown/uk-championship.webp",
+    },
+    {
+      en: "MASTERS",
+      zh: "大师赛",
+      value: count(career?.mastersTitles),
+      logo: "/snooker/triple-crown/masters.webp",
+    },
+  ];
 
   return (
     <>
@@ -92,11 +186,14 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
 
       <section className={styles.card}>
         <div className={styles.sectionHeader}><div><small>CAREER STATS</small><h2>生涯数据</h2></div></div>
-        <div className={styles.careerGrid}>
-          <article><strong>{integer(career?.rankingTitles ?? null)}</strong><span>排名赛冠军</span></article>
-          <article><strong>{integer(career?.rankingFinals ?? null)}</strong><span>排名赛决赛</span></article>
-          <article><strong>{integer(career?.tripleCrownTitles ?? null)}</strong><span>三大赛冠军</span></article>
-          <article><strong>{integer(career?.career147s ?? null)}</strong><span>职业生涯 147</span></article>
+        <div className={`${styles.careerGrid} ${detailUi.careerGridFour}`}>
+          {careerCards.map((item) => (
+            <article key={item.en}>
+              <small>{item.en}</small>
+              <strong>{item.value}</strong>
+              <span>{item.zh}</span>
+            </article>
+          ))}
         </div>
         <div className={styles.careerRows}>
           <div><span>历史最高世界排名</span><b>{ranking(career?.highestRanking ?? null)}</b></div>
@@ -106,10 +203,15 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
 
       <section className={styles.card}>
         <div className={styles.sectionHeader}><div><small>TRIPLE CROWN</small><h2>三大赛</h2></div><span>职业生涯冠军数</span></div>
-        <div className={styles.tripleGrid}>
-          <article><span className={styles.trophy}>♛</span><strong>{tripleValue(career?.worldChampionshipTitles ?? null)}</strong><span>世界锦标赛</span></article>
-          <article><span className={styles.trophy}>◆</span><strong>{tripleValue(career?.ukChampionshipTitles ?? null)}</strong><span>英国锦标赛</span></article>
-          <article><span className={styles.trophy}>★</span><strong>{tripleValue(career?.mastersTitles ?? null)}</strong><span>大师赛</span></article>
+        <div className={`${styles.tripleGrid} ${detailUi.tripleGridRefined}`}>
+          {tripleCards.map((item) => (
+            <article key={item.en}>
+              <img className={detailUi.tripleLogo} src={item.logo} alt="" aria-hidden="true" />
+              <strong>{item.value}</strong>
+              <small>{item.en}</small>
+              <span>{item.zh}</span>
+            </article>
+          ))}
         </div>
       </section>
 
@@ -124,13 +226,13 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
             </div>
             {season ? (
               <>
-                <div className={styles.seasonPrimary}>
+                <div className={`${styles.seasonPrimary} ${detailUi.metricCardGrid}`}>
                   <article><small>MATCH WIN RATE</small><strong>{winRate(season.matchWinRate)}</strong><span>比赛胜率</span></article>
                   <article><small>TOURNAMENTS WON</small><strong>{integer(season.tournamentsWon)}</strong><span>赛事冠军</span></article>
                   <article><small>POINTS SCORED</small><strong>{integer(season.pointsScored)}</strong><span>总得分</span></article>
                   <article><small>AVG SHOT TIME</small><strong>{oneDecimal(season.averageShotTime, "s")}</strong><span>平均出杆时间</span></article>
                 </div>
-                <div className={styles.statList}>
+                <div className={`${styles.statList} ${detailUi.statListTwoColumn}`}>
                   <div><span>赛季排名</span><b>{ranking(season.ranking)}</b></div>
                   <div><span>比赛场次</span><b>{seasonMetric(season, "matches")}</b></div>
                   <div><span>获胜场次</span><b>{seasonMetric(season, "wins")}</b></div>
@@ -146,19 +248,40 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
         ) : <div className={styles.emptyState}>当前暂无赛季统计。</div>}
       </section>
 
-      {player.seasons.some((item) => item.matchWinRate !== null) ? (
+      {activeTrend ? (
         <section className={styles.card}>
-          <div className={styles.sectionHeader}><div><small>SEASON TREND</small><h2>赛季趋势</h2></div><span>比赛胜率</span></div>
-          <div className={styles.trendRows}>
-            {player.seasons.filter((item) => item.matchWinRate !== null).map((item) => (
-              <div className={styles.trendRow} key={item.seasonStartYear}>
-                <span>{item.seasonLabel}</span>
-                <div className={styles.trendBar}><i style={{ width: `${Math.max(0, Math.min(100, item.matchWinRate ?? 0))}%` }} /></div>
-                <b>{winRate(item.matchWinRate)}</b>
-              </div>
+          <div className={`${styles.sectionHeader} ${detailUi.trendHeader}`}>
+            <div><small>SEASON TREND</small><h2>赛季趋势</h2></div>
+            <span>{activeTrend.labelZh}</span>
+          </div>
+          <div className={detailUi.trendTabs} aria-label="切换赛季趋势指标">
+            {trendOptions.map((metric) => (
+              <button
+                type="button"
+                className={activeTrend.key === metric.key ? detailUi.trendTabActive : ""}
+                onClick={() => setTrendMetric(metric.key)}
+                key={metric.key}
+              >
+                {metric.tabZh}
+              </button>
             ))}
           </div>
-          <div className={styles.trendLegend}><span>最新赛季优先</span><span>当前赛季数据会随比赛结果更新</span></div>
+          <div className={detailUi.trendChart}>
+            {activeTrend.rows.map((row) => {
+              const width = Math.max(0, Math.min(100, (row.value / trendScaleMax) * 100));
+              return (
+                <div className={detailUi.trendRowRefined} key={`${activeTrend.key}-${row.season.seasonStartYear}`}>
+                  <span>{row.season.seasonLabel}</span>
+                  <div className={detailUi.trendBarRefined}><i style={{ width: `${width}%` }} /></div>
+                  <b>{activeTrend.format(row.value)}</b>
+                </div>
+              );
+            })}
+          </div>
+          <div className={detailUi.trendLegendRefined}>
+            <span>{activeTrend.labelEn} · 最新赛季优先</span>
+            <span>柱长表示数值变化，不代表优劣</span>
+          </div>
         </section>
       ) : null}
 
