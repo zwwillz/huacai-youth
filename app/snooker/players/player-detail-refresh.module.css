@@ -1,3 +1,12 @@
+.heroCompact{
+  min-height:289px!important;
+}
+.heroCopyCompact{
+  min-height:289px!important;
+  padding-top:23px!important;
+  padding-bottom:22px!important;
+}
+
 .careerGridFour{
   grid-template-columns:repeat(4,minmax(0,1fr))!important;
   gap:6px!important;
@@ -13,11 +22,11 @@
 .metricCardGrid article small,
 .tripleGridRefined article small{
   display:block;
-  color:var(--muted);
+  color:#929895;
   font-size:7px;
-  font-weight:800;
+  font-weight:400;
   line-height:1.2;
-  letter-spacing:.035em;
+  letter-spacing:.025em;
   text-transform:uppercase;
 }
 .careerGridFour article strong{
@@ -26,13 +35,11 @@
   line-height:1;
   font-variant-numeric:tabular-nums;
 }
-.careerGridFour article span,
-.metricCardGrid article span,
-.tripleGridRefined article>span:last-child{
+.careerGridFour article span{
   margin-top:0;
-  color:#727a76;
+  color:var(--muted);
   font-size:9.5px;
-  font-weight:750;
+  font-weight:400;
   line-height:1.3;
 }
 
@@ -52,16 +59,9 @@
 .tripleLogo{
   width:42px;
   height:38px;
-  margin:0 auto 5px;
+  margin:0 auto 4px;
   object-fit:contain;
   object-position:center;
-}
-.tripleGridRefined article strong{
-  margin:1px 0 4px;
-  font-size:23px;
-  line-height:1;
-  letter-spacing:-.04em;
-  font-variant-numeric:tabular-nums;
 }
 .tripleGridRefined article small{
   min-height:17px;
@@ -71,8 +71,19 @@
   font-size:6.6px;
   line-height:1.15;
 }
+.tripleGridRefined article strong{
+  margin:6px 0 2px;
+  font-size:23px;
+  line-height:1;
+  letter-spacing:-.04em;
+  font-variant-numeric:tabular-nums;
+}
 .tripleGridRefined article>span:last-child{
-  margin-top:4px;
+  margin-top:0;
+  color:var(--muted);
+  font-size:9.5px;
+  font-weight:400;
+  line-height:1.3;
 }
 
 .metricCardGrid article{
@@ -90,7 +101,11 @@
   font-variant-numeric:tabular-nums;
 }
 .metricCardGrid article span{
+  margin-top:0;
+  color:#929895;
   font-size:9.5px;
+  font-weight:400;
+  line-height:1.3;
 }
 
 .statListTwoColumn{
@@ -195,12 +210,22 @@
 }
 .trendLegendRefined span:last-child{text-align:right}
 
+@media (min-width:560px){
+  .heroCompact{min-height:315px!important}
+  .heroCopyCompact{min-height:315px!important;padding-top:28px!important;padding-bottom:22px!important}
+}
+
 @media (min-width:431px){
   .careerGridFour{gap:8px!important}
   .careerGridFour article{padding-left:8px;padding-right:8px}
   .careerGridFour article span,
   .metricCardGrid article span,
   .tripleGridRefined article>span:last-child{font-size:10px}
+}
+
+@media (max-width:430px){
+  .heroCompact{min-height:272px!important}
+  .heroCopyCompact{min-height:272px!important;padding-top:20px!important;padding-bottom:18px!important}
 }
 
 @media (max-width:360px){

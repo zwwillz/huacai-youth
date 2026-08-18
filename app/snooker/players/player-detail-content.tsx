@@ -152,7 +152,7 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
       logo: "/snooker/triple-crown/uk-championship.webp",
     },
     {
-      en: "MASTERS",
+      en: "THE MASTERS",
       zh: "大师赛",
       value: count(career?.mastersTitles),
       logo: "/snooker/triple-crown/masters.webp",
@@ -161,9 +161,9 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
 
   return (
     <>
-      <section className={styles.playerHero}>
+      <section className={`${styles.playerHero} ${detailUi.heroCompact}`}>
         <span className={styles.heroGhost}>147</span>
-        <div className={styles.heroCopy}>
+        <div className={`${styles.heroCopy} ${detailUi.heroCopyCompact}`}>
           <small>PLAYER PROFILE</small>
           <h1>{player.nameZh}</h1>
           <p>{player.nameEn}</p>
@@ -207,8 +207,8 @@ export function PlayerDetailContent({ player }: { player: SnookerPlayerDetail })
           {tripleCards.map((item) => (
             <article key={item.en}>
               <img className={detailUi.tripleLogo} src={item.logo} alt="" aria-hidden="true" />
-              <strong>{item.value}</strong>
               <small>{item.en}</small>
+              <strong>{item.value}</strong>
               <span>{item.zh}</span>
             </article>
           ))}
