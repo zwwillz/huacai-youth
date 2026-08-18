@@ -8,7 +8,9 @@ import type {
   SnookerRankingSection,
 } from "@/lib/snooker/ranking-hub";
 import { technicalMetricKey, type SnookerTechnicalHub, type SnookerTechnicalMetricKey } from "@/lib/snooker/technical-hub";
+import { honoursMetricKey, type SnookerHonoursHub, type SnookerHonoursMetricKey } from "@/lib/snooker/honours-hub";
 import { SeasonLeadersSection, TechnicalDetailOverlay } from "./data-technical-content";
+import { HonoursDetailOverlay, HonoursLeadersSection } from "./data-honours-content";
 import styles from "./data.module.css";
 
 const currentKeyOrder: SnookerCurrentRankingKey[] = [
@@ -33,6 +35,8 @@ const sectionTabs: Array<{ id: SnookerRankingSection; label: string }> = [
 
 let technicalCache: SnookerTechnicalHub | null = null;
 let technicalInflight: Promise<SnookerTechnicalHub | null> | null = null;
+let honoursCache: SnookerHonoursHub | null = null;
+let honoursInflight: Promise<SnookerHonoursHub | null> | null = null;
 
 async function loadTechnicalHubClient() {
   if (technicalCache) return technicalCache;
@@ -47,6 +51,21 @@ async function loadTechnicalHubClient() {
     .catch(() => null)
     .finally(() => { technicalInflight = null; });
   return technicalInflight;
+}
+
+async function loadHonoursHubClient() {
+  if (honoursCache) return honoursCache;
+  if (honoursInflight) return honoursInflight;
+  honoursInflight = fetch("/api/snooker/v1/honours", { headers: { Accept: "application/json" } })
+    .then(async (response) => {
+      if (!response.ok) return null;
+      const data = await response.json() as { hub?: SnookerHonoursHub };
+      if (data.hub?.online) honoursCache = data.hub;
+      return data.hub ?? null;
+    })
+    .catch(() => null)
+    .finally(() => { honoursInflight = null; });
+  return honoursInflight;
 }
 
 function initials(name: string) {
@@ -161,6 +180,8 @@ export function DataHubContent({
   const [infoOpen, setInfoOpen] = useState(false);
   const [technicalHub, setTechnicalHub] = useState<SnookerTechnicalHub | null>(() => technicalCache);
   const [technicalKey, setTechnicalKey] = useState<SnookerTechnicalMetricKey | null>(null);
+  const [honoursHub, setHonoursHub] = useState<SnookerHonoursHub | null>(() => honoursCache);
+  const [honoursKey, setHonoursKey] = useState<SnookerHonoursMetricKey | null>(null);
   const playerBySlug = useMemo(() => playerBySlugMap(players), [players]);
   const selected = listFor(hub, selectedKey);
   const top = selected?.rows.slice(0, 3) ?? [];
@@ -169,6 +190,9 @@ export function DataHubContent({
     let cancelled = false;
     void loadTechnicalHubClient().then((nextHub) => {
       if (!cancelled && nextHub) setTechnicalHub(nextHub);
+    });
+    void loadHonoursHubClient().then((nextHub) => {
+      if (!cancelled && nextHub) setHonoursHub(nextHub);
     });
     return () => { cancelled = true; };
   }, []);
@@ -186,6 +210,19 @@ export function DataHubContent({
     };
   }, []);
 
+  useEffect(() => {
+    const syncHonoursFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      setHonoursKey(params.get("view") === "data" && params.get("section") === "honours" ? honoursMetricKey(params.get("honour")) : null);
+    };
+    const frame = window.requestAnimationFrame(syncHonoursFromUrl);
+    window.addEventListener("popstate", syncHonoursFromUrl);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("popstate", syncHonoursFromUrl);
+    };
+  }, []);
+
   const openTechnical = (key: SnookerTechnicalMetricKey) => {
     const currentState = { ...(window.history.state ?? {}), snookerTechnicalReturn: true };
     window.history.replaceState(currentState, "", window.location.href);
@@ -194,6 +231,7 @@ export function DataHubContent({
     url.searchParams.delete("player");
     url.searchParams.set("section", "technical");
     url.searchParams.set("metric", key);
+    url.searchParams.delete("honour");
     url.searchParams.delete("list");
     url.searchParams.delete("group");
     window.history.pushState({ ...currentState, snookerTechnicalDetail: key }, "", url.pathname + url.search + url.hash);
@@ -223,11 +261,49 @@ export function DataHubContent({
     setTechnicalKey(null);
   };
 
+  const openHonours = (key: SnookerHonoursMetricKey) => {
+    const currentState = { ...(window.history.state ?? {}), snookerHonoursReturn: true };
+    window.history.replaceState(currentState, "", window.location.href);
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "data");
+    url.searchParams.delete("player");
+    url.searchParams.set("section", "honours");
+    url.searchParams.set("honour", key);
+    url.searchParams.delete("metric");
+    url.searchParams.delete("list");
+    url.searchParams.delete("group");
+    window.history.pushState({ ...currentState, snookerHonoursDetail: key }, "", url.pathname + url.search + url.hash);
+    setHonoursKey(key);
+  };
+
+  const selectHonours = (key: SnookerHonoursMetricKey) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "data");
+    url.searchParams.set("section", "honours");
+    url.searchParams.set("honour", key);
+    window.history.replaceState({ ...(window.history.state ?? {}), snookerHonoursDetail: key }, "", url.pathname + url.search + url.hash);
+    setHonoursKey(key);
+  };
+
+  const closeHonours = () => {
+    const state = window.history.state as { snookerHonoursDetail?: string } | null;
+    if (state?.snookerHonoursDetail && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "data");
+    url.searchParams.delete("section");
+    url.searchParams.delete("honour");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    setHonoursKey(null);
+  };
+
   return <>
     <section className={styles.pageIntro}>
       <small>DATA CENTER</small>
       <h1>数据</h1>
-      <p>世界斯诺克排名、赛季表现与历史纪录的数据入口。排名与技术数据优先使用官方数据，专题模块按统一结构逐步扩展。</p>
+      <p>世界斯诺克排名、赛季表现与历史纪录的数据入口。排名、技术与荣誉数据按统一结构逐步扩展。</p>
     </section>
 
     <section className={`${styles.card} ${styles.rankingCard}`}>
@@ -260,16 +336,22 @@ export function DataHubContent({
       <div className={styles.technicalLoading}>正在加载赛季技术数据…</div>
     </section>}
 
+    {honoursHub?.online ? <HonoursLeadersSection hub={honoursHub} players={players} onOpenHonours={openHonours} /> : <section className={styles.card}>
+      <div className={styles.sectionHeader}><div><small>CAREER HONOURS</small><h2>荣誉榜</h2></div></div>
+      <div className={styles.technicalLoading}>正在加载职业生涯荣誉数据…</div>
+    </section>}
+
     <section className={styles.card}>
       <div className={styles.sectionHeader}><div><small>MORE DATA</small><h2>更多数据</h2></div></div>
       <div className={styles.moduleGrid}>
-        <article><small>HONOURS</small><strong>荣誉榜</strong><p>排名赛、三大赛、世锦赛、生涯147</p><span>下一阶段接入</span></article>
         <article><small>RACE & HISTORY</small><strong>资格与历史</strong><p>大师赛 / 世锦赛资格线、历史排名节点</p><span>排名页已预留入口</span></article>
+        <article><small>MORE RECORDS</small><strong>更多纪录</strong><p>奖金、年龄、连续纪录与历史专题</p><span>后续阶段接入</span></article>
       </div>
     </section>
 
     {infoOpen ? <RankingInfoModal hub={hub} onClose={() => setInfoOpen(false)} /> : null}
     {technicalHub?.online && technicalKey ? <TechnicalDetailOverlay hub={technicalHub} players={players} selectedKey={technicalKey} onSelectKey={selectTechnical} onOpenPlayer={onOpenPlayer} onClose={closeTechnical} /> : null}
+    {honoursHub?.online && honoursKey ? <HonoursDetailOverlay hub={honoursHub} players={players} selectedKey={honoursKey} onSelectKey={selectHonours} onOpenPlayer={onOpenPlayer} onClose={closeHonours} /> : null}
   </>;
 }
 
