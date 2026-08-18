@@ -161,6 +161,11 @@ function decodeEntities(value: string) {
     .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)));
 }
 
+function detailAvatarUrl(value: string | null) {
+  if (!value) return null;
+  return value.includes("/wst/256/") ? value.replace("/wst/256/", "/wst/512/") : value;
+}
+
 function htmlToText(html: string | null) {
   if (!html) return null;
   const text = decodeEntities(
@@ -325,6 +330,7 @@ export async function getSnookerPlayerDetail(slug: string): Promise<SnookerPlaye
 
   return {
     ...basePlayer,
+    avatarUrl: detailAvatarUrl(basePlayer.avatarUrl),
     nicknameEn: profile?.nickname_en ?? null,
     nicknameZh: profile?.nickname_zh ?? profile?.nickname_en ?? null,
     biographyEn: htmlToText(profile?.biography_html_en ?? null),
