@@ -57,16 +57,17 @@ export default function SnookerVisitMonitor() {
     if (typeof document !== "undefined" && document.hidden) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        range,
-        page: String(page),
-      });
+      const params = new URLSearchParams({ range, page: String(page) });
       if (appliedQuery) params.set("q", appliedQuery);
       const response = await fetch(`/api/snooker/v1/visits?${params.toString()}`, {
         cache: "no-store",
         headers: { "cache-control": "no-cache" },
       });
       const data = await response.json() as VisitResponse;
+      if (response.status === 401 || response.status === 428) {
+        window.location.href = "/snooker/data-ops";
+        return;
+      }
       if (!response.ok || !data.ok || !Array.isArray(data.rows)) {
         throw new Error(data.message || "访问监测接口返回异常");
       }
@@ -110,10 +111,11 @@ export default function SnookerVisitMonitor() {
         <header className={styles.header}>
           <div>
             <h1>用户访问监测</h1>
-            <p>只记录世界斯诺克数据中心前台访问；访问日志异步写入，不阻塞用户页面加载。</p>
+            <p>管理员专用访问日志。只记录世界斯诺克数据中心前台访问；日志异步写入，不阻塞用户页面加载。</p>
           </div>
           <div className={styles.headerActions}>
             <button onClick={() => void refresh()} disabled={loading}>{loading ? "刷新中…" : "刷新"}</button>
+            <Link href="/snooker/data-ops">数据运维中心</Link>
             <Link href="/snooker">返回斯诺克首页</Link>
           </div>
         </header>
@@ -121,16 +123,7 @@ export default function SnookerVisitMonitor() {
         <div className={styles.toolbar}>
           <div className={styles.ranges}>
             {rangeItems.map((item) => (
-              <button
-                key={item.id}
-                className={range === item.id ? styles.rangeActive : ""}
-                onClick={() => {
-                  setRange(item.id);
-                  setPage(1);
-                }}
-              >
-                {item.label}
-              </button>
+              <button key={item.id} className={range === item.id ? styles.rangeActive : ""} onClick={() => { setRange(item.id); setPage(1); }}>{item.label}</button>
             ))}
           </div>
           <form className={styles.search} onSubmit={submitSearch}>
@@ -143,7 +136,7 @@ export default function SnookerVisitMonitor() {
         <div className={styles.refreshMeta}>
           <span>每 2 分钟刷新一次，仅在监测页打开且可见时运行</span>
           <span>最近检查：{formatChinaTime(checkedAt)}</span>
-          <span>POC 公开监测页仅展示脱敏 IP</span>
+          <span>管理员权限页 · IP 完整展示</span>
         </div>
 
         {error ? <div className={styles.error}>访问监测读取失败：{error}。已保留当前页面数据，可点击“刷新”重试。</div> : null}
@@ -151,19 +144,7 @@ export default function SnookerVisitMonitor() {
         <section className={styles.panel}>
           <div className={styles.tableWrap}>
             <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>时间</th>
-                  <th>类型</th>
-                  <th>用户 / 访客</th>
-                  <th>IP</th>
-                  <th>地区</th>
-                  <th>设备</th>
-                  <th>页面 / 模块</th>
-                  <th>赛事</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
+              <thead><tr><th>时间</th><th>类型</th><th>用户 / 访客</th><th>IP</th><th>地区</th><th>设备</th><th>页面 / 模块</th><th>赛事</th><th>操作</th></tr></thead>
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id}>
@@ -178,12 +159,8 @@ export default function SnookerVisitMonitor() {
                     <td>{row.action}</td>
                   </tr>
                 ))}
-                {!loading && rows.length === 0 ? (
-                  <tr><td colSpan={9} className={styles.empty}>当前筛选范围内还没有斯诺克前台访问记录。</td></tr>
-                ) : null}
-                {loading && rows.length === 0 ? (
-                  <tr><td colSpan={9} className={styles.empty}>正在读取访问记录…</td></tr>
-                ) : null}
+                {!loading && rows.length === 0 ? <tr><td colSpan={9} className={styles.empty}>当前筛选范围内还没有斯诺克前台访问记录。</td></tr> : null}
+                {loading && rows.length === 0 ? <tr><td colSpan={9} className={styles.empty}>正在读取访问记录…</td></tr> : null}
               </tbody>
             </table>
           </div>
@@ -195,7 +172,7 @@ export default function SnookerVisitMonitor() {
           <button disabled={!hasNext || loading} onClick={() => setPage((current) => current + 1)}>下一页</button>
         </div>
 
-        <footer className={styles.footer}>访问监测不会记录 `/snooker/site-monitor` 本身，避免监测页访问污染真实前台数据。</footer>
+        <footer className={styles.footer}>本页面与访问日志 API 均受 Snooker Admin 登录保护；监测页自身访问不会计入前台访问数据。</footer>
       </div>
     </main>
   );
