@@ -151,7 +151,7 @@ export function QualificationDetailContent({
 
     <section className={`${styles.card} ${styles.technicalTableCard}`}>
       <div className={styles.technicalTableHeader}><span>排名</span><span>球员</span><span>排名金额</span></div>
-      <div className={styles.technicalRankingList}>
+      <div className={`${styles.technicalRankingList} ${qualificationStyles.qualificationRows}`}>
         {selected.rows.map((row) => {
           const player = row.playerSlug ? bySlug.get(row.playerSlug) : undefined;
           const gap = cutMoney === null || row.rank <= (limit ?? 0) ? null : Math.max(0, cutMoney - row.money);
