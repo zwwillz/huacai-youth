@@ -11,6 +11,12 @@ const eslintConfig = defineConfig([
     // public tab changes. The async loaders own that transient loading state.
     rules: { "react-hooks/set-state-in-effect": "off" },
   },
+  {
+    files: ["app/snooker/data-ops/data-ops-client.tsx"],
+    // The protected Data Ops console hydrates its private database snapshot
+    // only after the server-side admin session has been resolved.
+    rules: { "react-hooks/set-state-in-effect": "off" },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
