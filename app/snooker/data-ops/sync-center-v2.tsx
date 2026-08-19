@@ -1,6 +1,6 @@
 "use client";
 
-import styles from "./data-ops.module.css";
+import styles from "./sync-center-v2.module.css";
 
 export type SyncTask = {
   jobKey: string;
@@ -111,7 +111,8 @@ function rankingPolicyKey(row: RankingRow) {
 export default function SyncCenterV2({ tasks, rankings, cronJobs, pendingAction, runAction }: Props) {
   const scheduled = tasks.filter((task) => task.enabled && ["interval", "adaptive"].includes(task.scheduleMode)).length;
   const failed = tasks.filter((task) => task.lastStatus === "failed").length;
-  const lastChange = tasks.map((task) => task.lastChangeAt).filter(Boolean).sort().at(-1) || null;
+  const changes = tasks.map((task) => task.lastChangeAt).filter((value): value is string => Boolean(value)).sort();
+  const lastChange = changes.length ? changes[changes.length - 1] : null;
   const liveCron = cronJobs.find((job) => job.jobName === "snooker-live-sync-v2");
   const supervisorCron = cronJobs.find((job) => job.jobName === "snooker-sync-supervisor-v2");
 
@@ -129,7 +130,6 @@ export default function SyncCenterV2({ tasks, rankings, cronJobs, pendingAction,
     </section>
 
     {(["events", "players"] as const).map((groupKey) => <SyncGroup key={groupKey} groupKey={groupKey} tasks={tasks.filter((task) => task.groupKey === groupKey)} pendingAction={pendingAction} runAction={runAction} />)}
-
     <RankingGroup tasks={tasks} rankings={rankings.filter((row) => row.isCurrent)} pendingAction={pendingAction} runAction={runAction} />
     <SyncGroup groupKey="analytics" tasks={tasks.filter((task) => task.groupKey === "analytics")} pendingAction={pendingAction} runAction={runAction} />
     <SyncGroup groupKey="system" tasks={tasks.filter((task) => task.groupKey === "system")} pendingAction={pendingAction} runAction={runAction} />
@@ -140,12 +140,12 @@ function SyncGroup({ groupKey, tasks, pendingAction, runAction }: { groupKey: st
   const meta = groupMeta[groupKey] || { label: groupKey, eyebrow: "SYNC", text: "" };
   return <section className={styles.syncGroup}>
     <header className={styles.syncGroupHead}><div><small>{meta.eyebrow}</small><h2>{meta.label}</h2><p>{meta.text}</p></div><span>{tasks.filter((task) => task.enabled).length}/{tasks.length} 已启用</span></header>
-    <div className={styles.syncTaskList}>{tasks.sort((a, b) => a.sortOrder - b.sortOrder).map((task) => <SyncTaskRow key={task.jobKey} task={task} pendingAction={pendingAction} runAction={runAction} />)}</div>
+    <div className={styles.syncTaskList}>{[...tasks].sort((a, b) => a.sortOrder - b.sortOrder).map((task) => <SyncTaskRow key={task.jobKey} task={task} pendingAction={pendingAction} runAction={runAction} />)}</div>
   </section>;
 }
 
 function SyncTaskRow({ task, pendingAction, runAction }: { task: SyncTask; pendingAction: string | null; runAction: Props["runAction"] }) {
-  const canRun = !["client"].includes(task.scheduleMode);
+  const canRun = task.scheduleMode !== "client";
   const inherited = task.scheduleMode === "covered_by_parent";
   const child = task.scheduleMode === "child";
   const busy = pendingAction === "sync_task" || pendingAction === "sync_policy_update";
@@ -189,18 +189,19 @@ function RankingGroup({ tasks, rankings, pendingAction, runAction }: { tasks: Sy
   const allTask = tasks.find((task) => task.jobKey === "rankings_all");
   const busy = pendingAction === "sync_task" || pendingAction === "sync_policy_update";
   return <section className={styles.syncGroup}>
-    <header className={styles.syncGroupHead}><div><small>RANKINGS</small><h2>排名数据</h2><p>“全部排名”是组级 Orchestrator：每天检查所有已启用榜单。直接榜单来自 WPBSA，Players/Tour 资格榜从 One-Year Ranking 派生。</p></div><span>WPBSA 优先</span></header>
+    <header className={styles.syncGroupHead}><div><small>RANKINGS</small><h2>排名数据</h2><p>“全部排名”是组级 Orchestrator：按配置频率检查所有已启用榜单。直接榜单来自 WPBSA，Players/Tour 资格榜从 One-Year Ranking 派生。</p></div><span>WPBSA 优先</span></header>
     {allTask && <div className={styles.rankingsMaster}><div><span className={`${styles.dot} ${allTask.enabled ? styles.dotGood : styles.dotMuted}`} /><div><b>全部排名</b><small>rankings_all · 上次成功 {fmtTime(allTask.lastSuccessAt)} · 上次变化 {fmtTime(allTask.lastChangeAt)}</small></div></div><div className={styles.rankingsMasterActions}><select value={String(allTask.intervalSeconds)} disabled={busy || !allTask.enabled} onChange={(event) => void runAction("sync_policy_update", { jobKey: allTask.jobKey, enabled: allTask.enabled, intervalSeconds: Number(event.target.value) })}>{allTask.allowedIntervals.map((seconds) => <option key={seconds} value={seconds}>{fmtInterval(seconds)}</option>)}</select><label className={styles.switchLabel}><input type="checkbox" checked={allTask.enabled} disabled={busy} onChange={(event) => void runAction("sync_policy_update", { jobKey: allTask.jobKey, enabled: event.target.checked })} /><span />{allTask.enabled ? "自动" : "仅手动"}</label><button disabled={busy} onClick={() => void runAction("sync_task", { jobKey: "rankings_all" })}>同步全部排名</button></div></div>}
 
     <div className={styles.rankingV2Rows}>{rankings.map((row) => {
       const key = rankingPolicyKey(row); const task = tasks.find((item) => item.jobKey === key);
+      const sourceUnavailable = row.isLive && row.syncStatus === "unavailable";
       return <article key={row.listKey}>
         <div><b>{row.titleZh}</b><small>{row.listKey}</small></div>
         <div><small>来源</small><span>{row.sourceName}</span></div>
         <div><small>最后快照</small><span>{fmtTime(row.latestCapturedAt)}</span></div>
         <span className={`${styles.badge} ${tone(row.syncStatus)}`}>{row.syncStatus}</span>
-        {task ? <label className={styles.switchLabel}><input type="checkbox" checked={task.enabled} disabled={busy || row.isLive && row.syncStatus === "unavailable"} onChange={(event) => void runAction("sync_policy_update", { jobKey: task.jobKey, enabled: event.target.checked })} /><span />{task.enabled ? "启用" : "停用"}</label> : <span />}
-        {task && <button disabled={busy || row.isLive && row.syncStatus === "unavailable"} onClick={() => void runAction("sync_task", { jobKey: task.jobKey })}>{row.isLive && row.syncStatus === "unavailable" ? "源暂不可用" : "立即同步"}</button>}
+        {task ? <label className={styles.switchLabel}><input type="checkbox" checked={task.enabled} disabled={busy || sourceUnavailable} onChange={(event) => void runAction("sync_policy_update", { jobKey: task.jobKey, enabled: event.target.checked })} /><span />{task.enabled ? "启用" : "停用"}</label> : <span />}
+        {task && <button disabled={busy || sourceUnavailable} onClick={() => void runAction("sync_task", { jobKey: task.jobKey })}>{sourceUnavailable ? "源暂不可用" : "立即同步"}</button>}
       </article>;
     })}</div>
     <p className={styles.panelNote}>世界排名为 WPBSA 官方两年滚动榜；临时排名用于下一排名节点的种子预测；单赛季排名只统计本赛季排名赛奖金；Masters/Crucible 为对应资格 Race；Players/Tour 资格榜由 One-Year 数据派生。WST 即时排名源尚未稳定开放，因此默认停用。</p>
