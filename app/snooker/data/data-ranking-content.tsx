@@ -11,6 +11,7 @@ import { technicalMetricKey, type SnookerTechnicalHub, type SnookerTechnicalMetr
 import { honoursMetricKey, type SnookerHonoursHub, type SnookerHonoursMetricKey } from "@/lib/snooker/honours-hub";
 import { SeasonLeadersSection, TechnicalDetailOverlay } from "./data-technical-content";
 import { HonoursDetailOverlay, HonoursLeadersSection } from "./data-honours-content";
+import { QualificationDetailContent } from "./data-qualification-content";
 import styles from "./data.module.css";
 
 const currentKeyOrder: SnookerCurrentRankingKey[] = [
@@ -402,11 +403,13 @@ export function RankingDetailContent({
         <span>来源：{selected.sourceName || "WPBSA"}</span>
         <span>更新：{capturedLabel(selected.capturedAt)}</span>
       </div>
-    </section> : <section className={styles.card}><div className={styles.emptyState}>当前排名数据暂不可用。</div></section> : <section className={`${styles.card} ${styles.reservedCard}`}>
-      <small>{section === "qualification" ? "QUALIFICATION RACES" : "HISTORICAL RANKINGS"}</small>
-      <h2>{section === "qualification" ? "资格竞争" : "历史排名"}</h2>
-      <p>{section === "qualification" ? "这里已为大师赛、世锦赛、球员锦标赛和巡回锦标赛资格排名预留统一入口。下一阶段接入资格线、距离差和 Cut-off 信息。" : "这里已为赛季末排名、历史排名节点和球员排名走势预留入口。历史数据补齐后直接沿用当前排名的列表框架。"}</p>
-      <span>Phase 1A · 框架已就绪</span>
-    </section>}
+    </section> : <section className={styles.card}><div className={styles.emptyState}>当前排名数据暂不可用。</div></section>
+      : section === "qualification" ? <QualificationDetailContent players={players} onOpenPlayer={onOpenPlayer} />
+        : <section className={`${styles.card} ${styles.reservedCard}`}>
+          <small>HISTORICAL RANKINGS</small>
+          <h2>历史排名</h2>
+          <p>这里已为赛季末排名、历史排名节点和球员排名走势预留入口。历史数据补齐后直接沿用当前排名的列表框架。</p>
+          <span>历史数据源正在整理</span>
+        </section>}
   </div>;
 }
