@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import styles from "./sync-center-v2.module.css";
 
 export type SyncTask = {
@@ -57,7 +58,7 @@ const nf = new Intl.NumberFormat("zh-CN");
 const groupMeta: Record<string, { label: string; eyebrow: string; text: string }> = {
   events: { label: "赛事与比赛", eyebrow: "EVENTS & MATCHES", text: "WST 赛事目录、未来赛程、实时比赛与赛后最终确认。比赛 Finalize 后自动退出实时同步。" },
   players: { label: "球员数据", eyebrow: "PLAYERS", text: "WST 球员目录、个人资料，以及随资料同步的官方赛季和职业生涯统计。" },
-  rankings: { label: "排名数据", eyebrow: "RANKINGS", text: "WPBSA 为排名主源。全部排名任务统一调度，单榜可以独立开关和手动同步。" },
+  rankings: { label: "排名数据", eyebrow: "RANKINGS", text: "每个排名都是独立同步任务，可单独设置频率、自动开关和立即同步；“全部排名”只作为批量手动操作。" },
   analytics: { label: "Analytics", eyebrow: "CALCULATED DATA", text: "将事实仓库转换为产品统计。默认每天一次；事实层没有变化时自动跳过重算。" },
   system: { label: "系统监控", eyebrow: "SYSTEM", text: "控制台刷新和调度器运行状态。这一组不属于外部数据同步。" },
 };
@@ -80,15 +81,15 @@ function fmtDuration(ms: number | null | undefined) {
 }
 function tone(status: string | null | undefined) {
   if (["success", "synced", "completed"].includes(status || "")) return styles.toneGood;
-  if (["running", "partial", "pending", "skipped"].includes(status || "")) return styles.toneWarn;
+  if (["queued", "running", "partial", "pending", "skipped"].includes(status || "")) return styles.toneWarn;
   if (["failed", "unavailable"].includes(status || "")) return styles.toneBad;
   return styles.toneMuted;
 }
 function statusLabel(task: SyncTask) {
   if (!task.enabled) return "自动关闭";
   if (task.scheduleMode === "covered_by_parent") return "随父任务";
-  if (task.scheduleMode === "child") return "由组任务调度";
   if (task.scheduleMode === "client") return "页面级";
+  if (task.lastStatus === "queued") return "已排队";
   if (task.lastStatus === "failed") return "失败";
   if (task.lastStatus === "running") return "运行中";
   if (task.lastStatus === "skipped") return "已检查 · 无需更新";
@@ -115,18 +116,20 @@ export default function SyncCenterV2({ tasks, rankings, cronJobs, pendingAction,
   const lastChange = changes.length ? changes[changes.length - 1] : null;
   const liveCron = cronJobs.find((job) => job.jobName === "snooker-live-sync-v2");
   const supervisorCron = cronJobs.find((job) => job.jobName === "snooker-sync-supervisor-v2");
+  const manualWorker = cronJobs.find((job) => job.jobName === "snooker-manual-sync-worker-v2");
 
   return <div className={styles.stack}>
     <section className={styles.syncSummaryGrid}>
       <article><small>AUTO TASKS</small><strong>{scheduled}</strong><span>自动调度任务</span></article>
       <article><small>LAST DATA CHANGE</small><strong>{fmtTime(lastChange)}</strong><span>最近一次检测到数据变化</span></article>
       <article><small>FAILURES</small><strong>{failed}</strong><span>当前失败任务</span></article>
-      <article><small>SCHEDULER</small><strong>{liveCron?.active && supervisorCron?.active ? "正常" : "检查"}</strong><span>Live 30s + Supervisor 5m</span></article>
+      <article><small>SCHEDULER</small><strong>{liveCron?.active && supervisorCron?.active && manualWorker?.active ? "正常" : "检查"}</strong><span>Live + Supervisor + Manual Worker</span></article>
     </section>
 
     <section className={styles.schedulerInfo}>
       <div><span className={`${styles.dot} ${liveCron?.active ? styles.dotGood : styles.dotMuted}`} /><div><b>Live Scheduler</b><small>{liveCron?.schedule || "未启用"} · 只负责高频 Live tick</small></div></div>
       <div><span className={`${styles.dot} ${supervisorCron?.active ? styles.dotGood : styles.dotMuted}`} /><div><b>Sync Supervisor</b><small>{supervisorCron?.schedule || "未启用"} · 每5分钟检查低频任务是否到期，不代表每5分钟都抓数据</small></div></div>
+      <div><span className={`${styles.dot} ${manualWorker?.active ? styles.dotGood : styles.dotMuted}`} /><div><b>Manual Sync Worker</b><small>{manualWorker?.schedule || "未启用"} · 处理后台手动同步队列，避免网页请求等待和超时</small></div></div>
     </section>
 
     {(["events", "players"] as const).map((groupKey) => <SyncGroup key={groupKey} groupKey={groupKey} tasks={tasks.filter((task) => task.groupKey === groupKey)} pendingAction={pendingAction} runAction={runAction} />)}
@@ -144,41 +147,49 @@ function SyncGroup({ groupKey, tasks, pendingAction, runAction }: { groupKey: st
   </section>;
 }
 
-function SyncTaskRow({ task, pendingAction, runAction }: { task: SyncTask; pendingAction: string | null; runAction: Props["runAction"] }) {
+function SyncTaskRow({ task, pendingAction, runAction, ranking }: { task: SyncTask; pendingAction: string | null; runAction: Props["runAction"]; ranking?: RankingRow }) {
+  const [localBusy, setLocalBusy] = useState(false);
   const canRun = task.scheduleMode !== "client";
   const inherited = task.scheduleMode === "covered_by_parent";
-  const child = task.scheduleMode === "child";
-  const busy = pendingAction === "sync_task" || pendingAction === "sync_policy_update";
+  const configBusy = pendingAction === "sync_policy_update";
+  const sourceUnavailable = ranking?.syncStatus === "unavailable";
   const lastResult = task.lastResult || {};
-  const resultText = task.lastStatus === "failed" ? task.lastError || "执行失败" : task.lastStatus === "skipped" ? task.lastMessage || "无变化" : task.lastFinishedAt ? `读取 ${nf.format(task.lastFetchedCount || 0)} · 变化 ${nf.format(task.lastChangedCount || 0)}` : "尚未运行";
+  const resultText = task.lastStatus === "queued" ? "等待后台执行" : task.lastStatus === "failed" ? task.lastError || "执行失败" : task.lastStatus === "skipped" ? task.lastMessage || "无变化" : task.lastFinishedAt ? `读取 ${nf.format(task.lastFetchedCount || 0)} · 变化 ${nf.format(task.lastChangedCount || 0)}` : "尚未运行";
+  async function runNow() {
+    setLocalBusy(true);
+    try { await runAction("sync_task", { jobKey: task.jobKey }); }
+    finally { setLocalBusy(false); }
+  }
 
   return <article className={styles.syncTaskCard}>
     <div className={styles.syncTaskMain}>
       <div className={styles.syncTaskTitleLine}>
         <span className={`${styles.dot} ${task.enabled ? styles.dotGood : styles.dotMuted}`} />
-        <div><h3>{task.displayNameZh || task.jobKey}</h3><code>{task.jobKey}</code></div>
+        <div><h3>{task.displayNameZh || ranking?.titleZh || task.jobKey}</h3><code>{ranking?.listKey || task.jobKey}</code></div>
+        {ranking && <span className={`${styles.badge} ${tone(ranking.syncStatus)}`}>{ranking.syncStatus}</span>}
         <span className={`${styles.badge} ${task.enabled ? tone(task.lastStatus) : styles.toneMuted}`}>{statusLabel(task)}</span>
       </div>
       <p>{task.descriptionZh || "—"}</p>
       {task.scheduleMode === "adaptive" && <div className={styles.syncHint}>自适应：平时 {fmtInterval(task.intervalSeconds)}；开赛前 {task.prestartWindowMinutes || 120} 分钟自动提高到 {fmtInterval(task.prestartIntervalSeconds)}。</div>}
       {task.jobKey === "post_match_finalize" && <div className={styles.syncHint}>比赛结束后进入确认期；确认期内补齐 Frame / 50+ / Match Stats / H2H，Finalize 后永久退出自动同步。</div>}
       {inherited && <div className={styles.syncHint}>本项不单独请求 WST，随“球员资料”一次请求共同更新，减少 Free 版资源消耗。</div>}
-      {child && <div className={styles.syncHint}>本项由组级任务统一调度；仍可单独关闭或手动立即同步。</div>}
+      {ranking && <div className={styles.syncHint}>“上次成功”表示最近一次检查成功；“上次变化”表示最近一次发现榜单内容改变；“最新数据版本”是最近一次写入排名快照的时间。无变化时会检查成功，但不会重复写快照。</div>}
     </div>
 
     <div className={styles.syncTaskMeta}>
-      <div><small>来源</small><b>{task.sourceName || "—"}</b></div>
+      <div><small>来源</small><b>{ranking?.sourceName || task.sourceName || "—"}</b></div>
       <div><small>上次成功</small><b>{fmtTime(task.lastSuccessAt)}</b></div>
       <div><small>上次变化</small><b>{fmtTime(task.lastChangeAt)}</b></div>
+      {ranking && <div><small>最新数据版本</small><b>{fmtTime(ranking.latestCapturedAt)}</b></div>}
       <div><small>结果</small><b title={task.lastError || task.lastMessage || ""}>{resultText}</b></div>
       <div><small>耗时</small><b>{fmtDuration(task.lastDurationMs)}</b></div>
-      <div><small>下次执行</small><b>{task.enabled && !inherited && !child && task.scheduleMode !== "client" ? fmtTime(task.nextRunAt) : "—"}</b></div>
+      <div><small>下次执行</small><b>{task.enabled && !inherited && task.scheduleMode !== "client" && task.scheduleMode !== "manual" ? fmtTime(task.nextRunAt) : "—"}</b></div>
     </div>
 
     <div className={styles.syncTaskControls}>
-      {task.configurable ? <label>频率<select value={String(task.intervalSeconds)} disabled={busy || !task.enabled} onChange={(event) => void runAction("sync_policy_update", { jobKey: task.jobKey, enabled: task.enabled, intervalSeconds: Number(event.target.value) })}>{task.allowedIntervals.map((seconds) => <option key={seconds} value={seconds}>{fmtInterval(seconds)}</option>)}</select></label> : <div className={styles.coveredLabel}>{inherited ? "由父任务控制" : child ? "由组任务控制" : fmtInterval(task.intervalSeconds)}</div>}
-      <label className={styles.switchLabel}><input type="checkbox" checked={task.enabled} disabled={busy || inherited} onChange={(event) => void runAction("sync_policy_update", { jobKey: task.jobKey, enabled: event.target.checked })} /><span />{task.enabled ? "自动" : "仅手动"}</label>
-      {canRun && !inherited && <button disabled={busy} onClick={() => void runAction("sync_task", { jobKey: task.jobKey })}>{pendingAction === "sync_task" ? "执行中…" : "立即同步"}</button>}
+      {task.configurable ? <label>频率<select value={String(task.intervalSeconds)} disabled={configBusy || localBusy || !task.enabled} onChange={(event) => void runAction("sync_policy_update", { jobKey: task.jobKey, enabled: task.enabled, intervalSeconds: Number(event.target.value) })}>{task.allowedIntervals.map((seconds) => <option key={seconds} value={seconds}>{fmtInterval(seconds)}</option>)}</select></label> : <div className={styles.coveredLabel}>{inherited ? "由父任务控制" : task.scheduleMode === "manual" ? "仅手动" : fmtInterval(task.intervalSeconds)}</div>}
+      <label className={styles.switchLabel}><input type="checkbox" checked={task.enabled} disabled={configBusy || localBusy || inherited || sourceUnavailable} onChange={(event) => void runAction("sync_policy_update", { jobKey: task.jobKey, enabled: event.target.checked })} /><span />{task.enabled ? "自动" : "仅手动"}</label>
+      {canRun && !inherited && <button disabled={configBusy || localBusy || sourceUnavailable} onClick={() => void runNow()}>{sourceUnavailable ? "源暂不可用" : localBusy ? "提交中…" : task.lastStatus === "queued" ? "已排队" : "立即同步"}</button>}
     </div>
     {task.lastError && <div className={styles.syncTaskError}>{task.lastError}</div>}
     {Object.keys(lastResult).length > 0 && <details className={styles.syncDetails}><summary>查看最近一次详细结果</summary><pre>{JSON.stringify(lastResult, null, 2)}</pre></details>}
@@ -187,23 +198,22 @@ function SyncTaskRow({ task, pendingAction, runAction }: { task: SyncTask; pendi
 
 function RankingGroup({ tasks, rankings, pendingAction, runAction }: { tasks: SyncTask[]; rankings: RankingRow[]; pendingAction: string | null; runAction: Props["runAction"] }) {
   const allTask = tasks.find((task) => task.jobKey === "rankings_all");
-  const busy = pendingAction === "sync_task" || pendingAction === "sync_policy_update";
+  const [batchBusy, setBatchBusy] = useState(false);
+  const configBusy = pendingAction === "sync_policy_update";
+  async function runAll() {
+    setBatchBusy(true);
+    try { await runAction("sync_task", { jobKey: "rankings_all" }); }
+    finally { setBatchBusy(false); }
+  }
   return <section className={styles.syncGroup}>
-    <header className={styles.syncGroupHead}><div><small>RANKINGS</small><h2>排名数据</h2><p>“全部排名”是组级 Orchestrator：按配置频率检查所有已启用榜单。直接榜单来自 WPBSA，Players/Tour 资格榜从 One-Year Ranking 派生。</p></div><span>WPBSA 优先</span></header>
-    {allTask && <div className={styles.rankingsMaster}><div><span className={`${styles.dot} ${allTask.enabled ? styles.dotGood : styles.dotMuted}`} /><div><b>全部排名</b><small>rankings_all · 上次成功 {fmtTime(allTask.lastSuccessAt)} · 上次变化 {fmtTime(allTask.lastChangeAt)}</small></div></div><div className={styles.rankingsMasterActions}><select value={String(allTask.intervalSeconds)} disabled={busy || !allTask.enabled} onChange={(event) => void runAction("sync_policy_update", { jobKey: allTask.jobKey, enabled: allTask.enabled, intervalSeconds: Number(event.target.value) })}>{allTask.allowedIntervals.map((seconds) => <option key={seconds} value={seconds}>{fmtInterval(seconds)}</option>)}</select><label className={styles.switchLabel}><input type="checkbox" checked={allTask.enabled} disabled={busy} onChange={(event) => void runAction("sync_policy_update", { jobKey: allTask.jobKey, enabled: event.target.checked })} /><span />{allTask.enabled ? "自动" : "仅手动"}</label><button disabled={busy} onClick={() => void runAction("sync_task", { jobKey: "rankings_all" })}>同步全部排名</button></div></div>}
+    <header className={styles.syncGroupHead}><div><small>RANKINGS</small><h2>排名数据</h2><p>每个排名独立自动调度；“全部排名”只用于需要时一次性批量检查所有已启用榜单，不参与日常自动调度。</p></div><span>WPBSA 优先</span></header>
+    {allTask && <div className={styles.rankingsMaster}><div><span className={`${styles.dot} ${styles.dotGood}`} /><div><b>同步全部排名</b><small>批量手动任务 · 上次成功 {fmtTime(allTask.lastSuccessAt)} · 上次变化 {fmtTime(allTask.lastChangeAt)} · 耗时 {fmtDuration(allTask.lastDurationMs)}</small></div></div><div className={styles.rankingsMasterActions}><button disabled={configBusy || batchBusy} onClick={() => void runAll()}>{batchBusy ? "提交中…" : allTask.lastStatus === "queued" ? "已排队" : "同步全部排名"}</button></div></div>}
 
-    <div className={styles.rankingV2Rows}>{rankings.map((row) => {
-      const key = rankingPolicyKey(row); const task = tasks.find((item) => item.jobKey === key);
-      const sourceUnavailable = row.isLive && row.syncStatus === "unavailable";
-      return <article key={row.listKey}>
-        <div><b>{row.titleZh}</b><small>{row.listKey}</small></div>
-        <div><small>来源</small><span>{row.sourceName}</span></div>
-        <div><small>最后快照</small><span>{fmtTime(row.latestCapturedAt)}</span></div>
-        <span className={`${styles.badge} ${tone(row.syncStatus)}`}>{row.syncStatus}</span>
-        {task ? <label className={styles.switchLabel}><input type="checkbox" checked={task.enabled} disabled={busy || sourceUnavailable} onChange={(event) => void runAction("sync_policy_update", { jobKey: task.jobKey, enabled: event.target.checked })} /><span />{task.enabled ? "启用" : "停用"}</label> : <span />}
-        {task && <button disabled={busy || sourceUnavailable} onClick={() => void runAction("sync_task", { jobKey: task.jobKey })}>{sourceUnavailable ? "源暂不可用" : "立即同步"}</button>}
-      </article>;
+    <div className={styles.syncTaskList}>{rankings.map((row) => {
+      const key = rankingPolicyKey(row);
+      const task = tasks.find((item) => item.jobKey === key);
+      return task ? <SyncTaskRow key={row.listKey} task={task} ranking={row} pendingAction={pendingAction} runAction={runAction} /> : null;
     })}</div>
-    <p className={styles.panelNote}>世界排名为 WPBSA 官方两年滚动榜；临时排名用于下一排名节点的种子预测；单赛季排名只统计本赛季排名赛奖金；Masters/Crucible 为对应资格 Race；Players/Tour 资格榜由 One-Year 数据派生。WST 即时排名源尚未稳定开放，因此默认停用。</p>
+    <p className={styles.panelNote}><b>时间字段说明：</b>“上次成功”= 最近一次成功检查数据源；“上次变化”= 最近一次发现排名内容改变；“最新数据版本”= 最近一次实际写入快照。由于系统只在数据变化时创建新快照，所以没有变化时“上次成功”会更新，而“上次变化 / 最新数据版本”保持不变。世界排名为 WPBSA 官方两年滚动榜；Players/Tour 资格榜由 One-Year 数据派生；WST 即时排名源尚未稳定开放，因此默认停用。</p>
   </section>;
 }
