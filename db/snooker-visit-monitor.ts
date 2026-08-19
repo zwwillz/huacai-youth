@@ -85,17 +85,9 @@ function visitorLabel(visitorId: string | null) {
   return `游客 ${compact.slice(-4).toUpperCase() || "----"}`;
 }
 
-function maskIp(value: string | null) {
-  if (!value) return "未知";
-  if (value.includes(".")) {
-    const parts = value.split(".");
-    if (parts.length === 4) return `${parts[0]}.${parts[1]}.*.*`;
-  }
-  if (value.includes(":")) {
-    const parts = value.split(":").filter(Boolean);
-    return parts.length ? `${parts.slice(0, 3).join(":")}:*` : "已脱敏";
-  }
-  return "已脱敏";
+function fullIp(value: string | null) {
+  const ip = (value || "").trim();
+  return ip || "未知";
 }
 
 export async function getSnookerVisitMonitorData(input: {
@@ -145,7 +137,7 @@ export async function getSnookerVisitMonitorData(input: {
         id: row.id,
         time: row.createdAt,
         visitor: visitorLabel(row.visitorId),
-        ip: maskIp(row.ipAddress),
+        ip: fullIp(row.ipAddress),
         region: meta.region || "未知",
         device: meta.device || "未知",
         page: meta.pageLabel || meta.path || "世界斯诺克数据中心",

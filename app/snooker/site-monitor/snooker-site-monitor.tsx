@@ -116,42 +116,12 @@ export default function SnookerSiteMonitor({ initialSnapshot, initialSourceHealt
     : 0;
 
   const cards = [
-    {
-      label: "整体状态",
-      value: error ? "接口异常" : healthLabel(level),
-      note: error ?? "WST → 服务端 → 页面",
-      level,
-    },
-    {
-      label: "WST 数据源",
-      value: sourceHealth.online ? "在线" : "不可用",
-      note: sourceHealth.source,
-      level: booleanLevel(sourceHealth.online),
-    },
-    {
-      label: "赛事映射",
-      value: `${sourceHealth.overlayCount}/${sourceHealth.parsedMatchCount || "—"}`,
-      note: `${mappingRate}% 对阵已匹配`,
-      level: sourceHealth.eventAccepted ? "ok" : "warning" as HealthLevel,
-    },
-    {
-      label: "进行中比赛",
-      value: String(activeMatches.length),
-      note: activeMatches.length ? (sourceHealth.liveAccepted ? "逐局实时已接入" : "逐局源待恢复") : "当前没有进行中比赛",
-      level: activeMatches.length === 0 || sourceHealth.liveAccepted ? "ok" : "warning" as HealthLevel,
-    },
-    {
-      label: "源响应耗时",
-      value: `${sourceHealth.latencyMs} ms`,
-      note: sourceHealth.latencyMs <= 3000 ? "当前响应正常" : "响应偏慢",
-      level: sourceHealth.latencyMs <= 3000 ? "ok" : "warning" as HealthLevel,
-    },
-    {
-      label: "最近同步",
-      value: formatChinaTime(sourceHealth.fetchedAt).split(" ").at(-1) ?? "—",
-      note: formatChinaTime(sourceHealth.fetchedAt),
-      level: "ok" as HealthLevel,
-    },
+    { label: "整体状态", value: error ? "接口异常" : healthLabel(level), note: error ?? "WST → 服务端 → 页面", level },
+    { label: "WST 数据源", value: sourceHealth.online ? "在线" : "不可用", note: sourceHealth.source, level: booleanLevel(sourceHealth.online) },
+    { label: "赛事映射", value: `${sourceHealth.overlayCount}/${sourceHealth.parsedMatchCount || "—"}`, note: `${mappingRate}% 对阵已匹配`, level: sourceHealth.eventAccepted ? "ok" : "warning" as HealthLevel },
+    { label: "进行中比赛", value: String(activeMatches.length), note: activeMatches.length ? (sourceHealth.liveAccepted ? "逐局实时已接入" : "逐局源待恢复") : "当前没有进行中比赛", level: activeMatches.length === 0 || sourceHealth.liveAccepted ? "ok" : "warning" as HealthLevel },
+    { label: "源响应耗时", value: `${sourceHealth.latencyMs} ms`, note: sourceHealth.latencyMs <= 3000 ? "当前响应正常" : "响应偏慢", level: sourceHealth.latencyMs <= 3000 ? "ok" : "warning" as HealthLevel },
+    { label: "最近同步", value: formatChinaTime(sourceHealth.fetchedAt).split(" ").at(-1) ?? "—", note: formatChinaTime(sourceHealth.fetchedAt), level: "ok" as HealthLevel },
   ];
 
   return (
@@ -161,17 +131,13 @@ export default function SnookerSiteMonitor({ initialSnapshot, initialSourceHealt
           <div>
             <div className={styles.titleLine}>
               <h1 className={styles.title}>斯诺克数据监测</h1>
-              <span className={`${styles.overallBadge} ${styles[`badge_${level}`]}`}>
-                <StatusDot level={level} />
-                {error ? "监测异常" : healthLabel(level)}
-              </span>
+              <span className={`${styles.overallBadge} ${styles[`badge_${level}`]}`}><StatusDot level={level} />{error ? "监测异常" : healthLabel(level)}</span>
             </div>
-            <p className={styles.subtitle}>POC 阶段 · WST 官方数据源、赛事比分与 Match Centre 逐局实时同步监测</p>
+            <p className={styles.subtitle}>管理员专用 · WST 官方数据源、赛事比分与 Match Centre 逐局实时同步监测</p>
           </div>
           <div className={styles.headerActions}>
-            <button className={styles.refreshButton} onClick={() => void refresh()} disabled={refreshing}>
-              {refreshing ? "检测中…" : "立即刷新"}
-            </button>
+            <button className={styles.refreshButton} onClick={() => void refresh()} disabled={refreshing}>{refreshing ? "检测中…" : "立即刷新"}</button>
+            <Link className={styles.back} href="/snooker/data-ops">数据运维中心</Link>
             <Link className={styles.back} href="/snooker">返回斯诺克首页</Link>
           </div>
         </header>
@@ -195,10 +161,7 @@ export default function SnookerSiteMonitor({ initialSnapshot, initialSourceHealt
         </section>
 
         <section className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <div><small>CURRENT EVENT</small><h2>当前赛事</h2></div>
-            <span className={styles.eventStatus}>{snapshot.event.statusLabelZh}</span>
-          </div>
+          <div className={styles.panelHeader}><div><small>CURRENT EVENT</small><h2>当前赛事</h2></div><span className={styles.eventStatus}>{snapshot.event.statusLabelZh}</span></div>
           <div className={styles.eventGrid}>
             <div><span>赛事</span><b>{snapshot.event.nameZh}</b></div>
             <div><span>赛季 / 类型</span><b>{snapshot.event.season} · {snapshot.event.typeZh}</b></div>
@@ -210,33 +173,17 @@ export default function SnookerSiteMonitor({ initialSnapshot, initialSourceHealt
         </section>
 
         <section className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <div><small>LIVE MATCHES</small><h2>正在进行的比赛</h2></div>
-            <span>{activeMatches.length ? `${activeMatches.length} 场` : "暂无"}</span>
-          </div>
-
+          <div className={styles.panelHeader}><div><small>LIVE MATCHES</small><h2>正在进行的比赛</h2></div><span>{activeMatches.length ? `${activeMatches.length} 场` : "暂无"}</span></div>
           {activeMatches.length ? (
             <div className={styles.tableWrap}>
               <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>轮次 / 时间</th>
-                    <th>对阵</th>
-                    <th>总比分</th>
-                    <th>当前局</th>
-                    <th>当前局比分</th>
-                    <th>50+ 单杆</th>
-                    <th>状态</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>轮次 / 时间</th><th>对阵</th><th>总比分</th><th>当前局</th><th>当前局比分</th><th>50+ 单杆</th><th>状态</th></tr></thead>
                 <tbody>
                   {activeMatches.map((match) => {
                     const p1 = playerMap.get(match.player1Id);
                     const p2 = playerMap.get(match.player2Id);
                     const latestFrame = match.frames?.[match.frames.length - 1];
-                    const breakText = latestFrame
-                      ? [latestFrame.break1, latestFrame.break2].filter((value): value is number => typeof value === "number").join(" / ") || "—"
-                      : "—";
+                    const breakText = latestFrame ? [latestFrame.break1, latestFrame.break2].filter((value): value is number => typeof value === "number").join(" / ") || "—" : "—";
                     return (
                       <tr key={match.id}>
                         <td><b>{match.roundLabelZh}</b><small>{match.timeLabelZh ?? "—"}</small></td>
@@ -252,37 +199,16 @@ export default function SnookerSiteMonitor({ initialSnapshot, initialSourceHealt
                 </tbody>
               </table>
             </div>
-          ) : (
-            <div className={styles.empty}>当前没有正在进行的比赛。已结束比赛不再进入实时同步队列；需要检查数据源时可点击“立即刷新”。</div>
-          )}
+          ) : <div className={styles.empty}>当前没有正在进行的比赛。已结束比赛不再进入实时同步队列；需要检查数据源时可点击“立即刷新”。</div>}
         </section>
 
         <section className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <div><small>DATA PIPELINE</small><h2>数据链路</h2></div>
-            <span>WST 官方源</span>
-          </div>
+          <div className={styles.panelHeader}><div><small>DATA PIPELINE</small><h2>数据链路</h2></div><span>WST 官方源</span></div>
           <div className={styles.healthRows}>
-            <div>
-              <span><StatusDot level={booleanLevel(sourceHealth.online)} />WST 网络连接</span>
-              <b>{sourceHealth.online ? "正常" : "异常"}</b>
-              <small>官方赛事服务可访问</small>
-            </div>
-            <div>
-              <span><StatusDot level={sourceHealth.eventAccepted ? "ok" : "warning"} />赛事 REST 数据</span>
-              <b>{sourceHealth.eventAccepted ? "已通过完整性校验" : "未通过完整性校验"}</b>
-              <small>{sourceHealth.overlayCount} 场已覆盖 · {sourceHealth.parsedMatchCount} 场源数据</small>
-            </div>
-            <div>
-              <span><StatusDot level={activeMatches.length === 0 ? "ok" : booleanLevel(sourceHealth.liveAccepted, true)} />Match Centre 逐局数据</span>
-              <b>{activeMatches.length === 0 ? "当前无需逐局源" : sourceHealth.liveAccepted ? "实时同步正常" : "暂未接入"}</b>
-              <small>仅用于进行中比赛的当前局比分与 50+ 单杆；已结束比赛停止请求</small>
-            </div>
-            <div>
-              <span><StatusDot level="ok" />页面实时接口</span>
-              <b>/api/snooker/v1/dashboard</b>
-              <small>比赛中前端约30秒读取一次；无进行中比赛时自动降频或停止</small>
-            </div>
+            <div><span><StatusDot level={booleanLevel(sourceHealth.online)} />WST 网络连接</span><b>{sourceHealth.online ? "正常" : "异常"}</b><small>官方赛事服务可访问</small></div>
+            <div><span><StatusDot level={sourceHealth.eventAccepted ? "ok" : "warning"} />赛事 REST 数据</span><b>{sourceHealth.eventAccepted ? "已通过完整性校验" : "未通过完整性校验"}</b><small>{sourceHealth.overlayCount} 场已覆盖 · {sourceHealth.parsedMatchCount} 场源数据</small></div>
+            <div><span><StatusDot level={activeMatches.length === 0 ? "ok" : booleanLevel(sourceHealth.liveAccepted, true)} />Match Centre 逐局数据</span><b>{activeMatches.length === 0 ? "当前无需逐局源" : sourceHealth.liveAccepted ? "实时同步正常" : "暂未接入"}</b><small>仅用于进行中比赛的当前局比分与 50+ 单杆；已结束比赛停止请求</small></div>
+            <div><span><StatusDot level="ok" />页面实时接口</span><b>/api/snooker/v1/dashboard</b><small>比赛中前端约30秒读取一次；无进行中比赛时自动降频或停止</small></div>
           </div>
           <div className={styles.sourceMessage}>
             <b>源状态说明</b>
@@ -291,7 +217,7 @@ export default function SnookerSiteMonitor({ initialSnapshot, initialSourceHealt
           </div>
         </section>
 
-        <footer className={styles.footer}>POC 监测页暂不设置访问密码，正式上线前再接入权限保护。</footer>
+        <footer className={styles.footer}>管理员权限页 · 使用与数据运维中心相同的 Snooker Admin 会话；未登录无法访问。</footer>
       </div>
     </main>
   );
