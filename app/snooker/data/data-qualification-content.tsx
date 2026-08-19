@@ -9,6 +9,7 @@ import {
   type SnookerQualificationRankingKey,
 } from "@/lib/snooker/qualification-hub";
 import styles from "./data.module.css";
+import qualificationStyles from "./data-qualification.module.css";
 
 let qualificationCache: SnookerQualificationHub | null = null;
 let qualificationInflight: Promise<SnookerQualificationHub | null> | null = null;
@@ -142,7 +143,7 @@ export function QualificationDetailContent({
       >{shortLabel(list)}</button>)}
     </div>
 
-    <div className={styles.qualificationMeta}>
+    <div className={qualificationStyles.qualificationMeta}>
       <strong>{selected.titleZh}</strong>
       <span>{limit ? `TOP ${limit} 资格线` : "资格线待官方确认"}</span>
       <small>截止 {dateLabel(selected.cutoffDate)}</small>
@@ -155,7 +156,7 @@ export function QualificationDetailContent({
           const player = row.playerSlug ? bySlug.get(row.playerSlug) : undefined;
           const gap = cutMoney === null || row.rank <= (limit ?? 0) ? null : Math.max(0, cutMoney - row.money);
           return <div key={`${selected.key}-${row.rank}-${row.playerUuid}`}>
-            {limit && row.rank === limit + 1 ? <div className={styles.qualificationCutLine}><span>资格线 · TOP {limit}</span></div> : null}
+            {limit && row.rank === limit + 1 ? <div className={qualificationStyles.qualificationCutLine}><span>资格线 · TOP {limit}</span></div> : null}
             <button type="button" onClick={() => row.playerSlug && onOpenPlayer(row.playerSlug)} disabled={!row.playerSlug}>
               <strong>{row.rank}</strong>
               <QualificationAvatar player={player} fallbackName={row.sourcePlayerName} />
