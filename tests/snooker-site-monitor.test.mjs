@@ -6,10 +6,11 @@ const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 
 test("snooker monitor is admin protected and switches between visitor and data source views", async () => {
-  const [page, dataPage, layout, switcher, visitorClient, dataClient, visitReader, tracker, visitRoute, adminVisitRoute] = await Promise.all([
+  const [page, dataPage, layout, login, switcher, visitorClient, dataClient, visitReader, tracker, visitRoute, adminVisitRoute] = await Promise.all([
     read("app/snooker/site-monitor/page.tsx"),
     read("app/snooker/site-monitor/data/page.tsx"),
     read("app/snooker/site-monitor/layout.tsx"),
+    read("app/snooker/site-monitor/monitor-login.tsx"),
     read("app/snooker/site-monitor/monitor-mode-nav.tsx"),
     read("app/snooker/site-monitor/snooker-visit-monitor.tsx"),
     read("app/snooker/site-monitor/snooker-site-monitor.tsx"),
@@ -29,9 +30,16 @@ test("snooker monitor is admin protected and switches between visitor and data s
   assert.match(dataPage, /robots: \{ index: false, follow: false \}/);
 
   assert.match(layout, /getSnookerOpsViewer/);
-  assert.match(layout, /redirect\("\/snooker\/data-ops"\)/);
+  assert.match(layout, /if \(!viewer\) return <MonitorLogin \/>/);
   assert.match(layout, /viewer\.mustChangePassword/);
+  assert.match(layout, /redirect\("\/snooker\/data-ops"\)/);
   assert.match(layout, /MonitorModeNav/);
+
+  assert.match(login, /PROTECTED MONITOR/);
+  assert.match(login, /Snooker Admin/);
+  assert.match(login, /\/api\/snooker\/data-ops\/auth\/login/);
+  assert.match(login, /window\.location\.reload\(\)/);
+  assert.match(login, /完整 IP/);
 
   assert.match(switcher, /用户访问监测/);
   assert.match(switcher, /数据源监测/);
@@ -73,6 +81,7 @@ test("snooker monitor is admin protected and switches between visitor and data s
   assert.match(visitRoute, /->>'pageLabel'=\$\{pageLabel\}/);
 
   assert.match(dataClient, /斯诺克数据监测/);
+  assert.match(dataClient, /管理员专用/);
   assert.match(dataClient, /\/api\/snooker\/v1\/dashboard\?monitor=/);
   assert.match(dataClient, /120_000/);
   assert.match(dataClient, /document\.hidden/);
@@ -87,4 +96,5 @@ test("snooker monitor is admin protected and switches between visitor and data s
   assert.match(dataClient, /已结束比赛不再进入实时同步队列/);
   assert.match(dataClient, /sourceHealth\.latencyMs/);
   assert.match(dataClient, /sourceHealth\.message/);
+  assert.match(dataClient, /未登录无法访问/);
 });
