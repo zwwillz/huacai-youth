@@ -17,6 +17,8 @@ const ALLOWED_ACTIONS = new Set([
   "live_sync",
   "upcoming_sync",
   "event_sync",
+  "sync_task",
+  "sync_policy_update",
 ]);
 
 export async function POST(request: Request) {
