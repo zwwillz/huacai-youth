@@ -5,8 +5,8 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 
-test("snooker monitor switches between visitor and data source views", async () => {
-  const [page, dataPage, layout, switcher, visitorClient, dataClient, visitReader, tracker, visitRoute] = await Promise.all([
+test("snooker monitor is admin protected and switches between visitor and data source views", async () => {
+  const [page, dataPage, layout, switcher, visitorClient, dataClient, visitReader, tracker, visitRoute, adminVisitRoute] = await Promise.all([
     read("app/snooker/site-monitor/page.tsx"),
     read("app/snooker/site-monitor/data/page.tsx"),
     read("app/snooker/site-monitor/layout.tsx"),
@@ -16,25 +16,30 @@ test("snooker monitor switches between visitor and data source views", async () 
     read("db/snooker-visit-monitor.ts"),
     read("app/public-visit-tracker.tsx"),
     read("app/api/public/visit/route.ts"),
+    read("app/api/snooker/v1/visits/route.ts"),
   ]);
 
   assert.match(page, /SnookerVisitMonitor/);
   assert.match(page, /dynamic = "force-dynamic"/);
   assert.match(page, /robots: \{ index: false, follow: false \}/);
-  assert.doesNotMatch(page, /getAdminViewer|redirect\(|notFound\(/);
 
   assert.match(dataPage, /getCachedDashboardWithLiveOverlay/);
   assert.match(dataPage, /SnookerSiteMonitor/);
   assert.match(dataPage, /dynamic = "force-dynamic"/);
   assert.match(dataPage, /robots: \{ index: false, follow: false \}/);
 
+  assert.match(layout, /getSnookerOpsViewer/);
+  assert.match(layout, /redirect\("\/snooker\/data-ops"\)/);
+  assert.match(layout, /viewer\.mustChangePassword/);
   assert.match(layout, /MonitorModeNav/);
+
   assert.match(switcher, /用户访问监测/);
   assert.match(switcher, /数据源监测/);
   assert.match(switcher, /href="\/snooker\/site-monitor"/);
   assert.match(switcher, /href="\/snooker\/site-monitor\/data"/);
 
   assert.match(visitorClient, /用户访问监测/);
+  assert.match(visitorClient, /管理员专用访问日志/);
   assert.match(visitorClient, /今天/);
   assert.match(visitorClient, /近7天/);
   assert.match(visitorClient, /近30天/);
@@ -46,13 +51,20 @@ test("snooker monitor switches between visitor and data source views", async () 
   assert.match(visitorClient, /每 2 分钟刷新一次/);
   assert.match(visitorClient, /每页 \{pageSize\} 条/);
   assert.match(visitorClient, /前台访问/);
-  assert.match(visitorClient, /POC 公开监测页仅展示脱敏 IP/);
+  assert.match(visitorClient, /IP 完整展示/);
+  assert.doesNotMatch(visitorClient, /公开监测页仅展示脱敏 IP/);
+
+  assert.match(adminVisitRoute, /getSnookerOpsViewer/);
+  assert.match(adminVisitRoute, /status: 401/);
+  assert.match(adminVisitRoute, /status: 428/);
+  assert.match(adminVisitRoute, /请先登录数据运维中心/);
 
   assert.match(visitReader, /module_type='public_visit'/);
   assert.match(visitReader, /like '\/snooker%'/);
   assert.match(visitReader, /not like '\/snooker\/site-monitor%'/);
   assert.match(visitReader, /PAGE_SIZE = 100/);
-  assert.match(visitReader, /function maskIp/);
+  assert.match(visitReader, /function fullIp/);
+  assert.doesNotMatch(visitReader, /function maskIp/);
 
   assert.match(tracker, /"\/snooker\/site-monitor"/);
   assert.match(tracker, /snookerPageContext/);
