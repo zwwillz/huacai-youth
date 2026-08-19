@@ -2,6 +2,8 @@
 .qualificationMeta strong{min-width:0;color:var(--text);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .qualificationMeta span{justify-self:end;color:var(--accent-strong);font-size:8px;font-weight:850}
 .qualificationMeta small{grid-column:1/-1;font-size:7px}
+.qualificationRows>div>button{border-top:1px solid var(--line)}
+.qualificationRows>div:first-child>button{border-top:0}
 .qualificationCutLine{height:24px;margin:0 -2px;display:flex;align-items:center;gap:8px;color:var(--accent-strong);font-size:7px;font-weight:850;letter-spacing:.04em}
 .qualificationCutLine::before,.qualificationCutLine::after{content:"";height:1px;flex:1;background:color-mix(in srgb,var(--accent) 26%,var(--line))}
 .qualificationCutLine span{flex:0 0 auto}
