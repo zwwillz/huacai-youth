@@ -107,8 +107,11 @@ async function execute(sql: postgres.Sql, message: QueryMessage) {
 }
 
 function createDatabaseClient() {
-  const databaseUrl = Deno.env.get("SUPABASE_DB_URL");
-  if (!databaseUrl) throw new Error("SUPABASE_DB_URL is unavailable.");
+  // Edge Functions are bursty/serverless. Always use Supavisor transaction
+  // pooling here instead of the default direct SUPABASE_DB_URL connection so
+  // concurrent EdgeOne requests cannot exhaust PostgreSQL client slots.
+  const databaseUrl = Deno.env.get("HUACAI_DB_POOL_URL");
+  if (!databaseUrl) throw new Error("HUACAI_DB_POOL_URL is unavailable.");
   return postgres(databaseUrl, {
     max: 1,
     prepare: false,
