@@ -431,6 +431,7 @@ export default function SnookerDataCenterV2({
   const signatures = useRef(new Map(initialDatabaseEvents.flatMap((event) => allMatches(event)).map((match) => [match.id, matchSignature(match)])));
   const dataVersion = useRef(initialSourceHealth?.fetchedAt ?? initialSnapshot.builtAt);
   const eventDetailInflight = useRef(new Map<string, Promise<void>>());
+  const eventDetailRequestIds = useRef(new Map<string, symbol>());
   const playerDirectoryScrollY = useRef(0);
 
   const players = useMemo(() => playerMap(snapshot), [snapshot]);
@@ -461,8 +462,9 @@ export default function SnookerDataCenterV2({
     if (existing && !force) return existing;
 
     setEventLoading((current) => ({ ...current, [slug]: true }));
-    let promise!: Promise<void>;
-    promise = (async () => {
+    const requestId = Symbol(slug);
+    eventDetailRequestIds.current.set(slug, requestId);
+    const promise = (async () => {
       try {
         const response = await fetch(`/api/snooker/v1/event-detail?slug=${encodeURIComponent(slug)}${force ? `&ts=${Date.now()}` : ""}`, {
           cache: force ? "no-store" : "force-cache",
@@ -477,8 +479,11 @@ export default function SnookerDataCenterV2({
       } catch {
         // Event detail is optional enrichment. Keep the core/LKG data on failure.
       } finally {
-        setEventLoading((current) => ({ ...current, [slug]: false }));
-        if (eventDetailInflight.current.get(slug) === promise) eventDetailInflight.current.delete(slug);
+        if (eventDetailRequestIds.current.get(slug) === requestId) {
+          eventDetailRequestIds.current.delete(slug);
+          eventDetailInflight.current.delete(slug);
+          setEventLoading((current) => ({ ...current, [slug]: false }));
+        }
       }
     })();
     eventDetailInflight.current.set(slug, promise);
