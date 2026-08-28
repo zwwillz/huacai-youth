@@ -1,0 +1,32 @@
+name: One-off Snooker dashboard resilience patch
+
+on:
+  push:
+    branches:
+      - agent/snooker-dashboard-resilience-core
+    paths:
+      - scripts/patch-snooker-dashboard-resilience.mjs
+      - .github/workflows/oneoff-snooker-dashboard-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/snooker-dashboard-resilience-core
+          fetch-depth: 0
+      - name: Apply deterministic client patch
+        run: node scripts/patch-snooker-dashboard-resilience.mjs
+      - name: Remove one-off patch machinery
+        run: rm scripts/patch-snooker-dashboard-resilience.mjs .github/workflows/oneoff-snooker-dashboard-patch.yml
+      - name: Commit patched client
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/snooker/snooker-data-center-v2.tsx scripts/patch-snooker-dashboard-resilience.mjs .github/workflows/oneoff-snooker-dashboard-patch.yml
+          git commit -m "feat: make Snooker dashboard resilient and hydrate event details"
+          git push origin HEAD:agent/snooker-dashboard-resilience-core
