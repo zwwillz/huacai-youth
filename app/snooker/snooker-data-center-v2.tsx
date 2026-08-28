@@ -461,7 +461,8 @@ export default function SnookerDataCenterV2({
     if (existing && !force) return existing;
 
     setEventLoading((current) => ({ ...current, [slug]: true }));
-    const promise = (async () => {
+    let promise!: Promise<void>;
+    promise = (async () => {
       try {
         const response = await fetch(`/api/snooker/v1/event-detail?slug=${encodeURIComponent(slug)}${force ? `&ts=${Date.now()}` : ""}`, {
           cache: force ? "no-store" : "force-cache",
