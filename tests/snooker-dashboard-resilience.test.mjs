@@ -49,6 +49,7 @@ test("event rich data is loaded on demand with bounded batching", () => {
   assert.match(eventDetailRoute, /loadSnookerEventPublic/);
   assert.match(client, /\/api\/snooker\/v1\/event-detail\?slug=/);
   assert.match(client, /void loadEventDetail\(slug\)/);
+  assert.match(client, /正在加载逐局比分与对阵数据/);
   assert.match(eventLoader, /const BATCH_SIZE = 64/);
   assert.match(eventLoader, /const CONCURRENCY = 3/);
   assert.match(eventLoader, /limit=\$\{PAGE_SIZE\}&offset=\$\{offset\}/);
